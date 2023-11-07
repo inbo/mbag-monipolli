@@ -1,3 +1,4 @@
+<!-- spell-check: ignore:start -->
 <!-- badges: start -->
 ![GitHub](https://img.shields.io/github/license/inbo/mbag-bodem)
 ![GitHub repo size](https://img.shields.io/github/repo-size/inbo/mbag-bodem)
@@ -17,13 +18,11 @@ Research Institute for Nature and Forest (INBO)[^cph][^fnd]
 [^inbo.be]: Instituut voor Natuur- en Bosonderzoek (INBO)
 
 **keywords**: MBAG; meetnet
+<!-- spell-check: ignore:end -->
 
 <!-- community: inbo -->
 
 <!-- description: start -->
-Replace this with a short description of the project.
-It becomes the abstract of the project in the citation information.
-And the project description at https://zenodo.org
+Dit pilootproject maakt deel uit van de opstart van het Meetnet Biodiversiteit Agrarisch Gebied (MBAG). INBO zal in samenwerking met ILVO een toestandsmeetnet voor bodembiodiversiteit opstarten. We onderzoeken hiervoor de bodemstalen genomen via het bodemkoolstofmeetnet (Cmon).
+Op 450 reeds ingevroren Cmon stalen voeren we een eDNA metabarcoding analyse uit. Hiervoor worden internationale protocols (LUCAS, SoilBON) gebruikt zodat we de data van bacteriën, schimmels en macro-invertebraten kunnen vergelijken.
 <!-- description: end -->
-
-Anything below here is visible in the README but not in the citation.
