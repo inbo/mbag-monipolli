@@ -1,0 +1,46 @@
+{
+  "access_right": "open",
+  "title": "MBAG - Bodem",
+  "description": "<p>Replace this with a short description of the project. It becomes the\nabstract of the project in the citation information. And the project\ndescription at https://zenodo.org<\/p>",
+  "keywords": [
+    "MBAG",
+    "meetnet"
+  ],
+  "upload_type": "software",
+  "license": "CC-BY-4.0",
+  "language": "nld",
+  "contributors": [
+    {
+      "name": "Cartuyvels, Emma",
+      "affiliation": "Instituut voor Natuur- en Bosonderzoek (INBO)",
+      "orcid": "0000-0001-7856-6360",
+      "type": "ContactPerson"
+    },
+    {
+      "name": "Research Institute for Nature and Forest (INBO)",
+      "type": "RightsHolder"
+    }
+  ],
+  "creators": [
+    {
+      "name": "Cartuyvels, Emma",
+      "affiliation": "Instituut voor Natuur- en Bosonderzoek (INBO)",
+      "orcid": "0000-0001-7856-6360"
+    },
+    {
+      "name": "Langeraert, Ward",
+      "affiliation": "Instituut voor Natuur- en Bosonderzoek (INBO)",
+      "orcid": "0000-0002-5900-8109"
+    },
+    {
+      "name": "Van Calster, Hans",
+      "affiliation": "Instituut voor Natuur- en Bosonderzoek (INBO)",
+      "orcid": "0000-0001-8595-8426"
+    }
+  ],
+  "communities": [
+    {
+      "identifier": "inbo"
+    }
+  ]
+}

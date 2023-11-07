@@ -1,7 +1,6 @@
 <!-- badges: start -->
-![GitHub](https://img.shields.io/github/license//mbag-bodem)
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status//mbag-bodem/check-project)
-![GitHub repo size](https://img.shields.io/github/repo-size//mbag-bodem)
+![GitHub](https://img.shields.io/github/license/inbo/mbag-bodem)
+![GitHub repo size](https://img.shields.io/github/repo-size/inbo/mbag-bodem)
 <!-- badges: end -->
 
 # MBAG - Bodem
