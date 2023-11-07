@@ -1,7 +1,7 @@
 <!-- spell-check: ignore:start -->
 <!-- badges: start -->
-![GitHub](https://img.shields.io/github/license/inbo/mbag-bodem)
-![GitHub repo size](https://img.shields.io/github/repo-size/inbo/mbag-bodem)
+![GitHub](https://img.shields.io/github/license/inbo/mbag-monipolli)
+![GitHub repo size](https://img.shields.io/github/repo-size/inbo/mbag-monipolli)
 <!-- badges: end -->
 
 # MBAG - MONIPOLLI
