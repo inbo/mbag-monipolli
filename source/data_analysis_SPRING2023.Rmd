@@ -1,0 +1,235 @@
+---
+title: "Exploratory data analysis SPRING"
+author: "Emma Cartuyvels, Hans Van Calster"
+date: "2024-02-21"
+output:
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(RODBC)
+library(readxl)
+library(ggvenn)
+library(vegan)
+library(crosstalk)
+library(tidyverse)
+```
+
+```{r load data}
+conn <- odbcConnectAccess2007("../data/SPRING.accdb")
+
+identifications <- sqlFetch(conn, "identifications")
+samples <- sqlFetch(conn, "samples")
+sampling_sites <- sqlFetch(conn, "sampling_sites")
+naturalhistorytraits <- sqlFetch(conn, "Wildbees_naturalhistorytraits")
+```
+
+```{r}
+identifications %>% 
+  group_by(order, familiy, `species_nm author + year`) %>% 
+  summarise(total_observations = sum(`no_males+females`)) %>% 
+  arrange(`species_nm author + year`) %>% 
+  DT::datatable()
+```
+
+# Wilde bijen (Apoidea)
+
+```{r}
+apidae <- identifications %>% 
+  filter(familiy == "Apidae") %>% 
+  left_join(samples, by = "sample_id")
+```
+
+```{r}
+apidae %>% 
+  group_by(`species_nm author + year`) %>% 
+  summarise(total_observations = sum(`no_males+females`),
+            males = sum(no_males),
+            females = sum(no_females)) %>% 
+  arrange(`species_nm author + year`) %>% 
+  DT::datatable()
+```
+
+Er werden 5 verschillende monitoringsmethoden getest:
+
+-  2 transecttypen. Een transect beslaat 500m en is verdeeld in 10 secties:
+  - SPRING s.s.: waargenomen of op het zicht verzameld (TS - s.s.)
+  - MP: verzameld via het afslepen van de vegetatie of bodem (TS - MP)
+- 3 pan traps opstellingen. Eén pan trap sample is de gecombineerde vangst
+van één pan trap unit bestaande uit één blauwe, één witte en één gele val. Per transect worden
+steeds 10 units geplaatst, dus één per sectie:
+  - UV-reflecterende pan traps op vegetatiehoogte geplaatst (PT - s.s.)
+  - identieke samenstelling maar op de bodem geplaatst (PT - SSL)
+  - niet-UV-reflecterende pan trap unit (wat grotere valtypes) (PT - MP)
+
+```{r}
+methods <- unique(apidae$method_cd)
+
+x <- list()
+
+for (i in methods) {
+  int <- unique(apidae %>% 
+                  filter(`time series?` == 0,
+                         method_cd == i) %>% 
+                  select(`species_nm author + year`))
+  colnames(int) <- c(i)
+  x <- append(x, int)
+}
+
+ggvenn(x)
+```
+
+```{r}
+submet <- unique(apidae %>% 
+                   filter(method_cd == "TS") %>% 
+                   pull(SPRING_code))
+
+x <- list()
+
+for (i in submet) {
+  int <- unique(apidae %>% 
+                  filter(`time series?` == 0,
+                         method_cd == "TS",
+                         SPRING_code == i) %>% 
+                  select(`species_nm author + year`))
+  colnames(int) <- c(i)
+  x <- append(x, int)
+}
+
+ggvenn(x)
+```
+
+```{r}
+submet <- unique(apidae %>% 
+                   filter(method_cd == "PT") %>% 
+                   pull(SPRING_code))
+
+x <- list()
+
+for (i in submet) {
+  int <- unique(apidae %>% 
+                  filter(`time series?` == 0,
+                         method_cd == "PT",
+                         SPRING_code == i) %>% 
+                  select(`species_nm author + year`))
+  colnames(int) <- c(i)
+  x <- append(x, int)
+}
+
+ggvenn(x)
+```
+
+```{r}
+days <- apidae %>%
+  filter(method_cd == "PT") %>% 
+  mutate(days = as.factor(difftime(date_e, date_b, units = "days")),
+         month = month(date_b)) %>% 
+  group_by(sample_code.y, location_code, SPRING_code, month, days) %>% 
+  summarise(n_species = n_distinct(`species_nm author + year`))
+
+table(days[,2:5])
+
+days %>% 
+  filter(month %in% c(6, 9),
+         days != 4) %>% 
+  ggplot(aes(x = days, y = n_species)) +
+  geom_boxplot(aes(fill = SPRING_code)) +
+  facet_grid(month ~ location_code)
+```
+
+```{r}
+apidae %>%
+  filter(method_cd == "PT",
+         SPRING_code == "s.s.",
+         `time series?` == 0) %>%
+  arrange(sampling_site_cd) %>%
+  group_by(location_code, `species_nm author + year`) %>%
+  mutate(var_temp = ifelse(row_number() == 1,1,0)) %>%
+  group_by(location_code) %>%
+  mutate(var2 = cumsum(var_temp)) %>%
+  select(-var_temp) %>% 
+  group_by(location_code, sampling_site_cd) %>% 
+  summarise(cumsum = max(var2)) %>%
+  mutate(point = str_sub(sampling_site_cd, -4, -1)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = point,
+             y = cumsum,
+             group = location_code,
+             color = location_code)) +
+  geom_point() +
+  geom_line()
+```
+
+```{r}
+apidae %>%
+  filter(method_cd == "PT",
+         SPRING_code == "s.s.",
+         `time series?` == 0) %>%
+  arrange(date_b) %>%
+  group_by(location_code, `species_nm author + year`) %>%
+  mutate(var_temp = ifelse(row_number() == 1,1,0)) %>%
+  group_by(location_code) %>%
+  mutate(var2 = cumsum(var_temp)) %>%
+  select(-var_temp) %>% 
+  group_by(location_code, date_b) %>% 
+  summarise(cumsum = max(var2)) %>%
+  ungroup() %>% 
+  ggplot(aes(x = date_b,
+             y = cumsum,
+             group = location_code,
+             color = location_code)) +
+  geom_point() +
+  geom_line()
+```
+
+
+```{r}
+apidae %>%
+  filter(`time series?` == 0) %>%
+  group_by(date_b) %>% 
+  mutate(n_species = n_distinct(`species_nm author + year`)) %>% 
+  ggplot(aes(x = date_b,
+             y = n_species,
+             group = location_code,
+             color = location_code)) +
+  geom_point() +
+  geom_line()
+```
+
+
+1) Leveren transecttellingen een andere diversiteit op dan pan trap opstellingen (mogelijk
+kan hiervoor een alpha biodiversity index toegepast worden)? exp shannon
+2) Leveren transsecttellingen on sight (visual) een hogere diversiteit op dan de MP-
+transecttellingen?
+3) Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-
+pan traps op grondniveau?
+4) Leveren de UV-pan trap units een hogere diversiteit op dan de niet-UV-reflecterende pan
+traps? (eventueel kan er ook naar het gecombineerd effect vegetatiehoogte*UV-reflectie
+gekeken worden)
+5) Hoe complementair zijn de verschillende protocols, op gebied van soorten?
+6) Na hoeveel tijd wordt een saturatie bereikt bij de pan trap opstellingen, zowel in tijd (zie
+tijdsreeksen) als in aantal pan traps (van 1 tot 10 per monitoringsronde)?
+7) Hoe is het verloop van de diversiteit aan pollinatoren in de loop van het jaar (mei-
+september)?
+8) Is de pollinatorgemeenschap van landbouwgebied (MVS01 - ILVO) armer of rijker dan
+die van meer natuurlijk landschap (MVS02 en 03)?
+
+rarefaction: vegan spec.accum, inext
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
