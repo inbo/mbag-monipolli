@@ -1,20 +1,23 @@
 ---
 title: "Exploratory data analysis SPRING"
 author: "Emma Cartuyvels, Hans Van Calster"
-date: "2024-02-21"
+date: "2024-02-28"
 output:
   html_document:
     code_folding: hide
+    toc: true
+    toc_float: true
 ---
+# Inleiding
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
 library(RODBC)
 library(readxl)
 library(ggvenn)
 library(vegan)
-library(crosstalk)
+library(plotly)
 library(tidyverse)
 ```
 
@@ -27,6 +30,75 @@ sampling_sites <- sqlFetch(conn, "sampling_sites")
 naturalhistorytraits <- sqlFetch(conn, "Wildbees_naturalhistorytraits")
 ```
 
+### Proefopzet
+
+Er werden 5 verschillende monitoringsmethoden getest:
+
+-  2 transecttypen. Een transect beslaat 500m en is verdeeld in 10 secties:
+  - SPRING s.s.: waargenomen of op het zicht verzameld (TS - s.s.)
+  - MP: verzameld via het afslepen van de vegetatie of bodem (TS - MP)
+
+- 3 pan traps opstellingen. Eén pan trap sample is de gecombineerde vangst
+van één pan trap unit bestaande uit één blauwe, één witte en één gele val. Per transect worden
+steeds 10 units geplaatst, dus één per sectie:
+  - UV-reflecterende pan traps op vegetatiehoogte geplaatst (PT - s.s.)
+  - identieke samenstelling maar op de bodem geplaatst (PT - SSL)
+  - niet-UV-reflecterende pan trap unit (wat grotere valtypes), zowel op vegetatiehoogte als op de bodem (PT - MP)
+  
+### Tijdsreeksen
+
+Een subset van de pan trap opstellingen werd langer in het veld gelaten.
+
+Voor locatie 1 en 2 hebben we een tijdsreek per één of twee dagen. Voor locatie 3 hebben we geen tussenstappen, deze locatie kan dus niet gebruikt worden voor de rarefaction analyse.
+
+```{r}
+samples %>% 
+  filter(`time series?` == 1) %>% 
+  group_by(location_code, date_b, date_e) %>% 
+  summarise(n_distinct(sample_code)) %>% 
+  DT::datatable()
+```
+
+# General overview
+
+```{r}
+identifications %>% 
+  group_by(order) %>% 
+  summarise(n_species = n_distinct(`species_nm author + year`)) %>%
+  plot_ly(x = ~order, y = ~n_species, type = 'bar', marker = list(color = 'blue'))
+```
+
+### Number of species per family
+
+```{r}
+identifications %>% 
+  group_by(familiy) %>% 
+  summarise(n_species = n_distinct(`species_nm author + year`)) %>%
+  dplyr::arrange(desc(n_species)) %>% 
+  plot_ly(x = ~familiy, y = ~n_species, type = 'bar', marker = list(color = 'blue')) %>%
+  layout(xaxis = list(tickangle = -45))
+
+```
+
+### Number of individuals per order
+```{r}
+identifications %>% 
+  group_by(order) %>% 
+  summarise(n_individuals = sum(`no_males+females`)) %>%
+  plot_ly(x = ~order, y = ~n_individuals, type = 'bar', marker = list(color = 'blue'))
+```
+
+### Number of individuals per family
+
+```{r}
+identifications %>% 
+  group_by(familiy) %>% 
+  summarise(n_individuals = sum(`no_males+females`)) %>%
+  plot_ly(x = ~familiy, y = ~n_individuals, type = 'bar', marker = list(color = 'blue')) %>%
+  layout(xaxis = list(tickangle = -45))
+
+```
+
 ```{r}
 identifications %>% 
   group_by(order, familiy, `species_nm author + year`) %>% 
@@ -35,6 +107,7 @@ identifications %>%
   DT::datatable()
 ```
 
+
 # Wilde bijen (Apoidea)
 
 ```{r}
@@ -42,6 +115,8 @@ apidae <- identifications %>%
   filter(familiy == "Apidae") %>% 
   left_join(samples, by = "sample_id")
 ```
+
+### Data verkenning
 
 ```{r}
 apidae %>% 
@@ -53,17 +128,26 @@ apidae %>%
   DT::datatable()
 ```
 
-Er werden 5 verschillende monitoringsmethoden getest:
+#### Aantal unieke soorten per locatie
 
--  2 transecttypen. Een transect beslaat 500m en is verdeeld in 10 secties:
-  - SPRING s.s.: waargenomen of op het zicht verzameld (TS - s.s.)
-  - MP: verzameld via het afslepen van de vegetatie of bodem (TS - MP)
-- 3 pan traps opstellingen. Eén pan trap sample is de gecombineerde vangst
-van één pan trap unit bestaande uit één blauwe, één witte en één gele val. Per transect worden
-steeds 10 units geplaatst, dus één per sectie:
-  - UV-reflecterende pan traps op vegetatiehoogte geplaatst (PT - s.s.)
-  - identieke samenstelling maar op de bodem geplaatst (PT - SSL)
-  - niet-UV-reflecterende pan trap unit (wat grotere valtypes) (PT - MP)
+```{r}
+locations <- unique(apidae$location_code)
+
+x <- list()
+
+for (i in locations) {
+  int <- unique(apidae %>% 
+                  filter(`time series?` == 0,
+                         location_code == i) %>% 
+                  select(`species_nm author + year`))
+  colnames(int) <- c(i)
+  x <- append(x, int)
+}
+
+ggvenn(x)
+```
+  
+#### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
 
 ```{r}
 methods <- unique(apidae$method_cd)
@@ -82,6 +166,7 @@ for (i in methods) {
 ggvenn(x)
 ```
 
+#### Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
 ```{r}
 submet <- unique(apidae %>% 
                    filter(method_cd == "TS") %>% 
@@ -101,6 +186,8 @@ for (i in submet) {
 
 ggvenn(x)
 ```
+
+#### Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
 
 ```{r}
 submet <- unique(apidae %>% 
@@ -122,23 +209,609 @@ for (i in submet) {
 ggvenn(x)
 ```
 
+### Exponent Shannon index
+
+Exponent Shannon index vs. aantal soorten per locatie
+
 ```{r}
-days <- apidae %>%
-  filter(method_cd == "PT") %>% 
-  mutate(days = as.factor(difftime(date_e, date_b, units = "days")),
-         month = month(date_b)) %>% 
-  group_by(sample_code.y, location_code, SPRING_code, month, days) %>% 
-  summarise(n_species = n_distinct(`species_nm author + year`))
+locations <- sort(unique(apidae$location_code))
 
-table(days[,2:5])
+exp_shannon <- apidae %>% 
+  group_by(location_code, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>% 
+  ungroup() %>% 
+  select(-location_code) %>% 
+  diversity() %>% 
+  exp()
 
-days %>% 
-  filter(month %in% c(6, 9),
-         days != 4) %>% 
-  ggplot(aes(x = days, y = n_species)) +
-  geom_boxplot(aes(fill = SPRING_code)) +
-  facet_grid(month ~ location_code)
+n_species <- apidae %>% 
+  group_by(location_code, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>% 
+  ungroup() %>% 
+  select(-location_code) %>% 
+  specnumber()
+
+data.frame(locations, exp_shannon, n_species) %>% 
+  DT::datatable()
 ```
+
+Exponent Shannon index vs. aantal soorten per methode
+
+```{r}
+methods <- sort(unique(apidae$method_cd))
+
+exp_shannon <- apidae %>% 
+  group_by(method_cd, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>% 
+  ungroup() %>% 
+  select(-method_cd) %>% 
+  diversity() %>% 
+  exp()
+
+n_species <- apidae %>% 
+  group_by(method_cd, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>% 
+  ungroup() %>% 
+  select(-method_cd) %>% 
+  specnumber()
+
+data.frame(methods, exp_shannon, n_species) %>% 
+  DT::datatable()
+```
+
+Exponent Shannon index vs. aantal soorten per submethode
+
+```{r}
+submethods <- sort(unique(apidae %>%
+  mutate(submethod = str_c(method_cd, "-", SPRING_code)) %>%
+    pull(submethod)))
+
+exp_shannon <- apidae %>%
+  mutate(submethod = str_c(method_cd, "-", SPRING_code)) %>% 
+  group_by(submethod, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>% 
+  ungroup() %>% 
+  select(-submethod) %>% 
+  diversity() %>% 
+  exp()
+
+n_species <- apidae %>% 
+  mutate(submethod = str_c(method_cd, "-", SPRING_code)) %>% 
+  group_by(submethod, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>% 
+  ungroup() %>% 
+  select(-submethod) %>% 
+  specnumber()
+
+data.frame(submethods, exp_shannon, n_species) %>% 
+  DT::datatable()
+```
+
+### Saturatie pan traps in tijd
+
+```{r}
+sp_tot <- apidae %>% 
+  filter(method_cd == "PT",
+         `time series?` == 1) %>%
+  group_by(date_b, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>%
+  ungroup() %>% 
+  select(-date_b) %>% 
+  specaccum("rarefaction")
+
+sp_tot <- data.frame(
+  days = sp_tot[["sites"]],
+  richness = sp_tot[["richness"]],
+  individuals = sp_tot[["individuals"]],
+  sd = sp_tot[["sd"]]) %>%
+  mutate(lwr = richness - 2 * sd,
+         upr = richness + 2 * sd)
+```
+
+```{r}
+sp_tot %>%
+  ggplot(aes(x = days, y = richness)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  xlab("Rarefied number of days") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+rarefaction_method <- function(data) {
+  rrf <- data %>%
+    pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fill = 0) %>%
+    select(-date_b) %>%
+    specaccum(method = "rarefaction")
+  
+  data.frame(
+    days = rrf[["sites"]],
+    richness = rrf[["richness"]],
+    individuals = rrf[["individuals"]],
+    sd = rrf[["sd"]]) %>%
+    mutate(lwr = richness - 2 * sd,
+           upr = richness + 2 * sd) #sd standard error of the estimate
+
+}
+```
+
+```{r}
+by_method <- apidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 1) %>%
+  group_by(location_code, date_b, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(location_code) %>%
+  nest() %>%
+  filter(location_code %in% c("BE_MVS01", "BE_MVS02")) %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = days, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue")) +
+  xlab("Rarefied number of days") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- apidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 1,
+         location_code %in% c("BE_MVS01", "BE_MVS02")) %>%
+  group_by(SPRING_code, date_b, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = days, y = richness)) +
+  geom_line(aes(colour = SPRING_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = SPRING_code), alpha = 0.2) +
+  scale_colour_manual(values = c("s.s." = "sienna",
+                                 "MP" = "steelblue",
+                                 "SSL" = "forestgreen")) +
+  scale_fill_manual(values = c("s.s." = "sienna",
+                               "MP" = "steelblue",
+                               "SSL" = "forestgreen")) +
+  xlab("Rarefied number of days") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- apidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 1) %>%
+  group_by(SPRING_code, location_code, date_b, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code, location_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = days, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue")) +
+  xlab("Rarefied number of days") + 
+  ylab("Number of (morpho)species") +
+  facet_grid(.~SPRING_code)
+```
+
+### Saturatie in aantal pan traps
+
+```{r}
+sp_tot <- apidae %>% 
+  filter(method_cd == "PT",
+         `time series?` == 0) %>% 
+  group_by(location_code) %>% 
+  mutate(numbered_value = dense_rank(sampling_site_cd)) %>% 
+  group_by(numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>% 
+  ungroup() %>% 
+  select(-numbered_value) %>% 
+  specaccum("rarefaction")
+
+sp_tot <- data.frame(
+  sites = sp_tot[["sites"]],
+  richness = sp_tot[["richness"]],
+  individuals = sp_tot[["individuals"]],
+  sd = sp_tot[["sd"]]) %>%
+  mutate(lwr = richness - 2 * sd,
+         upr = richness + 2 * sd)
+
+```
+
+```{r}
+sp_tot %>%
+  ggplot(aes(x = sites, y = richness)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  xlab("Rarefied number of samples") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+sp_tot %>%
+  ggplot(aes(x = individuals, y = richness)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  xlab("Rarefied number of specimens") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+rarefaction_method <- function(data) {
+  rrf <- data %>%
+    pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fill = 0) %>%
+    select(-numbered_value) %>%
+    specaccum(method = "rarefaction")
+  
+  data.frame(
+    pan_traps = rrf[["sites"]],
+    richness = rrf[["richness"]],
+    individuals = rrf[["individuals"]],
+    sd = rrf[["sd"]]) %>%
+    mutate(lwr = richness - 2 * sd,
+           upr = richness + 2 * sd) #sd standard error of the estimate
+
+}
+```
+
+```{r}
+by_method <- apidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 0) %>%
+  group_by(location_code) %>% 
+  mutate(numbered_value = dense_rank(sampling_site_cd)) %>%
+  group_by(location_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(location_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue",
+                                 "BE_MVS03" = "forestgreen")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                               "BE_MVS02" = "steelblue",
+                               "BE_MVS03" = "forestgreen")) +
+  xlab("Rarefied number of pan traps") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- apidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 0) %>%
+  group_by(location_code) %>% 
+  mutate(numbered_value = dense_rank(sampling_site_cd)) %>%
+  group_by(SPRING_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = SPRING_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = SPRING_code), alpha = 0.2) +
+  scale_colour_manual(values = c("s.s." = "sienna",
+                                 "MP" = "steelblue",
+                                 "SSL" = "forestgreen")) +
+  scale_fill_manual(values = c("s.s." = "sienna",
+                               "MP" = "steelblue",
+                               "SSL" = "forestgreen")) +
+  xlab("Rarefied number of pan traps") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- apidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 0) %>%
+  group_by(location_code) %>% 
+  mutate(numbered_value = dense_rank(sampling_site_cd)) %>%
+  group_by(SPRING_code, location_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code, location_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue",
+                                 "BE_MVS03" = "forestgreen")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                               "BE_MVS02" = "steelblue",
+                               "BE_MVS03" = "forestgreen")) +
+  xlab("Rarefied number of pan traps") + 
+  ylab("Number of (morpho)species") +
+  facet_grid(.~SPRING_code)
+```
+
+### Saturatie in aantal deeltransecten
+
+```{r}
+sp_tot <- apidae %>% 
+  filter(method_cd == "TS") %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>% 
+  group_by(numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>% 
+  ungroup() %>% 
+  select(-numbered_value) %>% 
+  specaccum("rarefaction")
+
+sp_tot <- data.frame(
+  sites = sp_tot[["sites"]],
+  richness = sp_tot[["richness"]],
+  individuals = sp_tot[["individuals"]],
+  sd = sp_tot[["sd"]]) %>%
+  mutate(lwr = richness - 2 * sd,
+         upr = richness + 2 * sd)
+
+```
+
+```{r}
+sp_tot %>%
+  ggplot(aes(x = sites, y = richness)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  xlab("Rarefied number of samples") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+sp_tot %>%
+  ggplot(aes(x = individuals, y = richness)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  xlab("Rarefied number of specimens") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- apidae %>%
+  filter(method_cd == "TS") %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>% 
+  group_by(location_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(location_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue",
+                                 "BE_MVS03" = "forestgreen")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                               "BE_MVS02" = "steelblue",
+                               "BE_MVS03" = "forestgreen")) +
+  xlab("Rarefied number of subtransects") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- apidae %>%
+  filter(method_cd == "TS") %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>% 
+  group_by(SPRING_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = SPRING_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = SPRING_code), alpha = 0.2) +
+  scale_colour_manual(values = c("s.s." = "sienna",
+                                 "MP" = "steelblue",
+                                 "SSL" = "forestgreen")) +
+  scale_fill_manual(values = c("s.s." = "sienna",
+                               "MP" = "steelblue",
+                               "SSL" = "forestgreen")) +
+  xlab("Rarefied number of subtransects") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- apidae %>%
+  filter(method_cd == "TS") %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>% 
+  group_by(SPRING_code, location_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code, location_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue",
+                                 "BE_MVS03" = "forestgreen")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                               "BE_MVS02" = "steelblue",
+                               "BE_MVS03" = "forestgreen")) +
+  xlab("Rarefied number of pan traps") + 
+  ylab("Number of (morpho)species") +
+  facet_grid(.~SPRING_code)
+```
+
+### Modelleren
+
+#### Soortenrijkdom
+
+```{r}
+ap_data_sp_rich <- apidae %>%
+  group_by(sample_id) %>% 
+  summarise(n_species = n_distinct(`species_nm author + year`)) %>% 
+  right_join(samples, by = "sample_id") %>% 
+  filter(`time series?` == 0) %>%
+  mutate(maand = month(date_b),
+         n_species = ifelse(is.na(n_species), 0, n_species)) %>% 
+  select(location_code, method_cd, SPRING_code, level, maand, n_species)
+```
+
+```{r}
+ggplot(ap_data_sp_rich, aes(x = n_species)) +
+  geom_histogram()
+```
+
+1) Leveren transecttellingen een andere diversiteit op dan pan trap opstellingen?
+
+```{r}
+model1 <- glm(n_species ~ method_cd + location_code + maand,
+    family = poisson,
+    data = ap_data_sp_rich)
+
+summary(model1)
+```
+
+2) Leveren transsecttellingen on sight (visual) een hogere diversiteit op dan de MP-
+transecttellingen?
+
+```{r}
+model2 <- glm(n_species ~ SPRING_code + location_code + maand,
+    family = poisson,
+    data = ap_data_sp_rich %>% filter(method_cd == "TS"))
+
+summary(model2)
+```
+
+3) Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-pan traps op grondniveau?
+
+y ~ methode + submethode (+ interactie?)   + maand + locatie + eventuele interacties
+
+4) Leveren de UV-pan trap units een hogere diversiteit op dan de niet-UV-reflecterende pan traps? (eventueel kan er ook naar het gecombineerd effect vegetatiehoogte*UV-reflectie gekeken worden)
+
+```{r}
+
+```
+
+
+#### Shannon
+
+
+
+
+
+
+
 
 ```{r}
 apidae %>%
@@ -199,30 +872,150 @@ apidae %>%
   geom_line()
 ```
 
+Modelleren:
+shannon: normale, log-normale, gamma verdeling
+soortendiv: poisson verdeling
+
 
 1) Leveren transecttellingen een andere diversiteit op dan pan trap opstellingen (mogelijk
 kan hiervoor een alpha biodiversity index toegepast worden)? exp shannon
+
+tijdsreeks == 0
+y ~ methode + maand + locatie + eventuele interacties
+
 2) Leveren transsecttellingen on sight (visual) een hogere diversiteit op dan de MP-
 transecttellingen?
+
+tijdsreeks == 0
+y ~ methode + submethode (+ interactie?) + maand + locatie + eventuele interacties
+
 3) Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-
 pan traps op grondniveau?
+
+y ~ methode + submethode (+ interactie?)   + maand + locatie + eventuele interacties
+
 4) Leveren de UV-pan trap units een hogere diversiteit op dan de niet-UV-reflecterende pan
 traps? (eventueel kan er ook naar het gecombineerd effect vegetatiehoogte*UV-reflectie
 gekeken worden)
+
+subset = pantraps
+y ~ methode + is_bodem + is_uv  + maand + locatie + eventuele interacties
+
 5) Hoe complementair zijn de verschillende protocols, op gebied van soorten?
-6) Na hoeveel tijd wordt een saturatie bereikt bij de pan trap opstellingen, zowel in tijd (zie
-tijdsreeksen) als in aantal pan traps (van 1 tot 10 per monitoringsronde)?
+
+- per soortengroep
+    - vendiagram
+    - tabel unieke soorten per methode + gemeenschappelijke soorten
+    - indirecte ordinatie (CA + achteraf visualiseren kleur = methode )
+
+
+6) Na hoeveel tijd wordt een saturatie bereikt bij de pan trap opstellingen, zowel in tijd (zie tijdsreeksen) als in aantal pan traps (van 1 tot 10 per monitoringsronde)?
+
+subset = pantrap | tijdsreeksen
+wellicht best apart per locatie
+
+rarefaction curves per maandxlocatie
+
 7) Hoe is het verloop van de diversiteit aan pollinatoren in de loop van het jaar (mei-
 september)?
+
+
+
 8) Is de pollinatorgemeenschap van landbouwgebied (MVS01 - ILVO) armer of rijker dan
 die van meer natuurlijk landschap (MVS02 en 03)?
+
+tijdsreeks == 0
+y ~ methode + maand + locatie + eventuele interacties
 
 rarefaction: vegan spec.accum, inext
 
 
 
 
+Zweefvliegen (Apoidea)
+================================================================================
+```{r}
+syrphidae <- identifications %>% 
+  filter(familiy == "Syrphidae") %>% 
+  left_join(samples, by = "sample_id")
+```
 
+### Data overzicht
+
+```{r}
+syrphidae %>% 
+  group_by(`species_nm author + year`) %>% 
+  summarise(total_observations = sum(`no_males+females`),
+            males = sum(no_males),
+            females = sum(no_females)) %>% 
+  arrange(`species_nm author + year`) %>% 
+  DT::datatable()
+```
+
+### Proefopzet
+
+ 
+### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
+
+```{r}
+methods <- unique(syrphidae$method_cd)
+
+x <- list()
+
+for (i in methods) {
+  int <- unique(syrphidae %>% 
+                  filter(`time series?` == 0,
+                         method_cd == i) %>% 
+                  select(`species_nm author + year`))
+  colnames(int) <- c(i)
+  x <- append(x, int)
+}
+
+ggvenn(x)
+```
+
+### Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
+```{r}
+submet <- unique(syrphidae %>% 
+                   filter(method_cd == "TS") %>% 
+                   pull(SPRING_code))
+
+x <- list()
+
+for (i in submet) {
+  int <- unique(syrphidae %>% 
+                  filter(`time series?` == 0,
+                         method_cd == "TS",
+                         SPRING_code == i) %>% 
+                  select(`species_nm author + year`))
+  colnames(int) <- c(i)
+  x <- append(x, int)
+}
+
+ggvenn(x)
+```
+
+### Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
+
+```{r}
+submet <- unique(syrphidae %>% 
+                   filter(method_cd == "PT") %>% 
+                   pull(SPRING_code))
+
+x <- list()
+
+for (i in submet) {
+  int <- unique(syrphidae %>% 
+                  filter(`time series?` == 0,
+                         method_cd == "PT",
+                         SPRING_code == i) %>% 
+                  select(`species_nm author + year`))
+  colnames(int) <- c(i)
+  x <- append(x, int)
+}
+
+ggvenn(x)
+```
 
 
 
