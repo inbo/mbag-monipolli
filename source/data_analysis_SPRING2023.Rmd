@@ -7,6 +7,8 @@ output:
     code_folding: hide
     toc: true
     toc_float: true
+editor_options: 
+  chunk_output_type: console
 ---
 # Inleiding
 
@@ -15,14 +17,16 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
 library(RODBC)
 library(readxl)
+library(dataMaid)
 library(ggvenn)
 library(vegan)
 library(plotly)
 library(tidyverse)
+library(here)
 ```
 
 ```{r load data}
-conn <- odbcConnectAccess2007("../data/SPRING.accdb")
+conn <- odbcConnectAccess2007(here("data/SPRING.accdb"))
 
 identifications <- sqlFetch(conn, "identifications")
 samples <- sqlFetch(conn, "samples")
@@ -762,14 +766,35 @@ ap_data_sp_rich <- apidae %>%
   summarise(n_species = n_distinct(`species_nm author + year`)) %>% 
   right_join(samples, by = "sample_id") %>% 
   filter(`time series?` == 0) %>%
-  mutate(maand = month(date_b),
+  mutate(maand = as.factor(month(date_b)),
          n_species = ifelse(is.na(n_species), 0, n_species)) %>% 
-  select(location_code, method_cd, SPRING_code, level, maand, n_species)
+  select(location_code, method_cd, SPRING_code, level, maand, n_species) %>%
+  mutate(uv = ifelse(SPRING_code == "MP", "non-uv", "uv"))
 ```
 
 ```{r}
 ggplot(ap_data_sp_rich, aes(x = n_species)) +
   geom_histogram()
+```
+
+```{r}
+model0 <- glm(n_species ~ location_code + maand,
+    family = poisson,
+    data = ap_data_sp_rich)
+
+summary(model0)
+```
+
+```{r, fig.height=10}
+performance::check_model(model0)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model0,
+  condition = c("maand", "location_code"),
+  type = "response"
+)
 ```
 
 1) Leveren transecttellingen een andere diversiteit op dan pan trap opstellingen?
@@ -780,6 +805,14 @@ model1 <- glm(n_species ~ method_cd + location_code + maand,
     data = ap_data_sp_rich)
 
 summary(model1)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model1,
+  condition = c("method_cd"),
+  type = "response"
+)
 ```
 
 2) Leveren transsecttellingen on sight (visual) een hogere diversiteit op dan de MP-
@@ -793,21 +826,65 @@ model2 <- glm(n_species ~ SPRING_code + location_code + maand,
 summary(model2)
 ```
 
-3) Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-pan traps op grondniveau?
+```{r}
+marginaleffects::plot_predictions(
+  model2,
+  condition = c("SPRING_code"),
+  type = "response"
+)
+```
 
-y ~ methode + submethode (+ interactie?)   + maand + locatie + eventuele interacties
+3) Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-pan traps op grondniveau?
 
 4) Leveren de UV-pan trap units een hogere diversiteit op dan de niet-UV-reflecterende pan traps? (eventueel kan er ook naar het gecombineerd effect vegetatiehoogte*UV-reflectie gekeken worden)
 
-```{r}
+Interactie kan niet onderzocht worden omdat er geen niet-uv traps op vegetatieniveau geplaatst werden.
 
+```{r}
+model3 <- glm(n_species ~  uv + level + location_code + maand,
+    family = poisson,
+    data = ap_data_sp_rich %>% filter(method_cd == "PT",
+                                      level %in% c("vegetation",
+                                                   "soil surface" )))
+
+summary(model3)
 ```
 
+```{r}
+marginaleffects::plot_predictions(
+  model3,
+  condition = c("level", "uv"),
+  type = "response"
+)
+```
 
 #### Shannon
 
+```{r}
+ap_data_exp_sh <- apidae %>%
+  group_by(sample_id) %>% 
+  mutate(tot_ind = sum(`no_males+females`)) %>% 
+  group_by(sample_id, `species_nm author + year`, tot_ind) %>% 
+  summarise(n_ind = sum(`no_males+females`)) %>% 
+  mutate(prop = (n_ind/tot_ind) * log(n_ind/tot_ind)) %>% 
+  group_by(sample_id) %>% 
+  summarise(exp_sh = exp(-sum(prop))) %>% 
+  right_join(samples, by = "sample_id") %>% 
+  filter(`time series?` == 0) %>%
+  mutate(maand = month(date_b),
+         exp_sh = ifelse(is.na(exp_sh), 0, exp_sh)) %>% 
+  select(location_code, method_cd, SPRING_code, level, maand, exp_sh)
+```
 
+```{r}
+ggplot(ap_data_exp_sh, aes(x = exp_sh)) +
+  geom_histogram()
+```
 
+```{r}
+ggplot(ap_data_exp_sh %>% filter(exp_sh > 1), aes(x = exp_sh)) +
+  geom_histogram()
+```
 
 
 
@@ -932,15 +1009,15 @@ rarefaction: vegan spec.accum, inext
 
 
 
-Zweefvliegen (Apoidea)
-================================================================================
+# Zweefvliegen (Apoidea)
+
+### Data verkenning
+
 ```{r}
 syrphidae <- identifications %>% 
   filter(familiy == "Syrphidae") %>% 
   left_join(samples, by = "sample_id")
 ```
-
-### Data overzicht
 
 ```{r}
 syrphidae %>% 
@@ -952,10 +1029,26 @@ syrphidae %>%
   DT::datatable()
 ```
 
-### Proefopzet
+#### Aantal unieke soorten per locatie
 
- 
-### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
+```{r}
+locations <- unique(syrphidae$location_code)
+
+x <- list()
+
+for (i in locations) {
+  int <- unique(syrphidae %>% 
+                  filter(`time series?` == 0,
+                         location_code == i) %>% 
+                  select(`species_nm author + year`))
+  colnames(int) <- c(i)
+  x <- append(x, int)
+}
+
+ggvenn(x)
+```
+
+#### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
 
 ```{r}
 methods <- unique(syrphidae$method_cd)
@@ -974,7 +1067,8 @@ for (i in methods) {
 ggvenn(x)
 ```
 
-### Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
+#### Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
+
 ```{r}
 submet <- unique(syrphidae %>% 
                    filter(method_cd == "TS") %>% 
@@ -995,7 +1089,7 @@ for (i in submet) {
 ggvenn(x)
 ```
 
-### Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
+#### Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
 
 ```{r}
 submet <- unique(syrphidae %>% 
@@ -1017,12 +1111,549 @@ for (i in submet) {
 ggvenn(x)
 ```
 
+### Saturatie pan traps in tijd
+
+```{r}
+sp_tot <- syrphidae %>% 
+  filter(method_cd == "PT",
+         `time series?` == 1) %>%
+  group_by(date_b, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>%
+  ungroup() %>% 
+  select(-date_b) %>% 
+  specaccum("rarefaction")
+
+sp_tot <- data.frame(
+  days = sp_tot[["sites"]],
+  richness = sp_tot[["richness"]],
+  individuals = sp_tot[["individuals"]],
+  sd = sp_tot[["sd"]]) %>%
+  mutate(lwr = richness - 2 * sd,
+         upr = richness + 2 * sd)
+```
+
+```{r}
+sp_tot %>%
+  ggplot(aes(x = days, y = richness)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  xlab("Rarefied number of days") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+rarefaction_method <- function(data) {
+  rrf <- data %>%
+    pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fill = 0) %>%
+    select(-date_b) %>%
+    specaccum(method = "rarefaction")
+  
+  data.frame(
+    days = rrf[["sites"]],
+    richness = rrf[["richness"]],
+    individuals = rrf[["individuals"]],
+    sd = rrf[["sd"]]) %>%
+    mutate(lwr = richness - 2 * sd,
+           upr = richness + 2 * sd) #sd standard error of the estimate
+
+}
+```
+
+```{r}
+by_method <- syrphidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 1) %>%
+  group_by(location_code, date_b, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(location_code) %>%
+  nest() %>%
+  filter(location_code %in% c("BE_MVS01", "BE_MVS02")) %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = days, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue")) +
+  xlab("Rarefied number of days") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- syrphidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 1,
+         location_code %in% c("BE_MVS01", "BE_MVS02")) %>%
+  group_by(SPRING_code, date_b, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = days, y = richness)) +
+  geom_line(aes(colour = SPRING_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = SPRING_code), alpha = 0.2) +
+  scale_colour_manual(values = c("s.s." = "sienna",
+                                 "MP" = "steelblue",
+                                 "SSL" = "forestgreen")) +
+  scale_fill_manual(values = c("s.s." = "sienna",
+                               "MP" = "steelblue",
+                               "SSL" = "forestgreen")) +
+  xlab("Rarefied number of days") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- syrphidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 1) %>%
+  group_by(SPRING_code, location_code, date_b, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code, location_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = days, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue")) +
+  xlab("Rarefied number of days") + 
+  ylab("Number of (morpho)species") +
+  facet_grid(.~SPRING_code)
+```
+
+### Saturatie in aantal pan traps
+
+```{r}
+sp_tot <- syrphidae %>% 
+  filter(method_cd == "PT",
+         `time series?` == 0) %>% 
+  group_by(location_code) %>% 
+  mutate(numbered_value = dense_rank(sampling_site_cd)) %>% 
+  group_by(numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>% 
+  ungroup() %>% 
+  select(-numbered_value) %>% 
+  specaccum("rarefaction")
+
+sp_tot <- data.frame(
+  sites = sp_tot[["sites"]],
+  richness = sp_tot[["richness"]],
+  individuals = sp_tot[["individuals"]],
+  sd = sp_tot[["sd"]]) %>%
+  mutate(lwr = richness - 2 * sd,
+         upr = richness + 2 * sd)
+
+```
+
+```{r}
+sp_tot %>%
+  ggplot(aes(x = sites, y = richness)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  xlab("Rarefied number of samples") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+sp_tot %>%
+  ggplot(aes(x = individuals, y = richness)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  xlab("Rarefied number of specimens") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+rarefaction_method <- function(data) {
+  rrf <- data %>%
+    pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fill = 0) %>%
+    select(-numbered_value) %>%
+    specaccum(method = "rarefaction")
+  
+  data.frame(
+    pan_traps = rrf[["sites"]],
+    richness = rrf[["richness"]],
+    individuals = rrf[["individuals"]],
+    sd = rrf[["sd"]]) %>%
+    mutate(lwr = richness - 2 * sd,
+           upr = richness + 2 * sd) #sd standard error of the estimate
+
+}
+```
+
+```{r}
+by_method <- syrphidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 0) %>%
+  group_by(location_code) %>% 
+  mutate(numbered_value = dense_rank(sampling_site_cd)) %>%
+  group_by(location_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(location_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue",
+                                 "BE_MVS03" = "forestgreen")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                               "BE_MVS02" = "steelblue",
+                               "BE_MVS03" = "forestgreen")) +
+  xlab("Rarefied number of pan traps") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- syrphidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 0) %>%
+  group_by(location_code) %>% 
+  mutate(numbered_value = dense_rank(sampling_site_cd)) %>%
+  group_by(SPRING_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = SPRING_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = SPRING_code), alpha = 0.2) +
+  scale_colour_manual(values = c("s.s." = "sienna",
+                                 "MP" = "steelblue",
+                                 "SSL" = "forestgreen")) +
+  scale_fill_manual(values = c("s.s." = "sienna",
+                               "MP" = "steelblue",
+                               "SSL" = "forestgreen")) +
+  xlab("Rarefied number of pan traps") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- syrphidae %>%
+  filter(method_cd == "PT",
+         `time series?` == 0) %>%
+  group_by(location_code) %>% 
+  mutate(numbered_value = dense_rank(sampling_site_cd)) %>%
+  group_by(SPRING_code, location_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code, location_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue",
+                                 "BE_MVS03" = "forestgreen")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                               "BE_MVS02" = "steelblue",
+                               "BE_MVS03" = "forestgreen")) +
+  xlab("Rarefied number of pan traps") + 
+  ylab("Number of (morpho)species") +
+  facet_grid(.~SPRING_code)
+```
+
+### Saturatie in aantal deeltransecten
+
+```{r}
+sp_tot <- syrphidae %>% 
+  filter(method_cd == "TS") %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>% 
+  group_by(numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  pivot_wider(names_from = `species_nm author + year`,
+                values_from = n,
+                values_fn = sum,
+                values_fill = 0) %>% 
+  ungroup() %>% 
+  select(-numbered_value) %>% 
+  specaccum("rarefaction")
+
+sp_tot <- data.frame(
+  sites = sp_tot[["sites"]],
+  richness = sp_tot[["richness"]],
+  individuals = sp_tot[["individuals"]],
+  sd = sp_tot[["sd"]]) %>%
+  mutate(lwr = richness - 2 * sd,
+         upr = richness + 2 * sd)
+
+```
+
+```{r}
+sp_tot %>%
+  ggplot(aes(x = sites, y = richness)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  xlab("Rarefied number of samples") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+sp_tot %>%
+  ggplot(aes(x = individuals, y = richness)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
+  xlab("Rarefied number of specimens") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- syrphidae %>%
+  filter(method_cd == "TS") %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>% 
+  group_by(location_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(location_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue",
+                                 "BE_MVS03" = "forestgreen")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                               "BE_MVS02" = "steelblue",
+                               "BE_MVS03" = "forestgreen")) +
+  xlab("Rarefied number of subtransects") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- syrphidae %>%
+  filter(method_cd == "TS") %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>% 
+  group_by(SPRING_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = SPRING_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = SPRING_code), alpha = 0.2) +
+  scale_colour_manual(values = c("s.s." = "sienna",
+                                 "MP" = "steelblue",
+                                 "SSL" = "forestgreen")) +
+  scale_fill_manual(values = c("s.s." = "sienna",
+                               "MP" = "steelblue",
+                               "SSL" = "forestgreen")) +
+  xlab("Rarefied number of subtransects") + 
+  ylab("Number of (morpho)species")
+```
+
+```{r}
+by_method <- syrphidae %>%
+  filter(method_cd == "TS") %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>% 
+  group_by(SPRING_code, location_code, numbered_value, `species_nm author + year`) %>% 
+  summarise(n = sum(`no_males+females`)) %>% 
+  group_by(SPRING_code, location_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~rarefaction_method(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+
+```
+
+```{r}
+by_method %>%
+  ggplot(aes(x = pan_traps, y = richness)) +
+  geom_line(aes(colour = location_code)) + 
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
+  scale_colour_manual(values = c("BE_MVS01" = "sienna",
+                                 "BE_MVS02" = "steelblue",
+                                 "BE_MVS03" = "forestgreen")) +
+  scale_fill_manual(values = c("BE_MVS01" = "sienna",
+                               "BE_MVS02" = "steelblue",
+                               "BE_MVS03" = "forestgreen")) +
+  xlab("Rarefied number of pan traps") + 
+  ylab("Number of (morpho)species") +
+  facet_grid(.~SPRING_code)
+```
+
+### Modelleren
+
+#### Soortenrijkdom
+
+```{r}
+syr_data_sp_rich <- syrphidae %>%
+  group_by(sample_id) %>% 
+  summarise(n_species = n_distinct(`species_nm author + year`)) %>% 
+  right_join(samples, by = "sample_id") %>% 
+  filter(`time series?` == 0) %>%
+  mutate(maand = as.factor(month(date_b)),
+         n_species = ifelse(is.na(n_species), 0, n_species)) %>% 
+  select(location_code, method_cd, SPRING_code, level, maand, n_species) %>%
+  mutate(uv = ifelse(SPRING_code == "MP", "non-uv", "uv"))
+```
+
+```{r}
+ggplot(syr_data_sp_rich, aes(x = n_species)) +
+  geom_histogram()
+```
+
+```{r}
+model0 <- glm(n_species ~ location_code + maand,
+    family = poisson,
+    data = syr_data_sp_rich)
+
+summary(model0)
+```
+
+```{r, fig.height=10}
+performance::check_model(model0)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model0,
+  condition = c("maand", "location_code"),
+  type = "response"
+)
+```
+
+1) Leveren transecttellingen een andere diversiteit op dan pan trap opstellingen?
+
+```{r}
+model1 <- glm(n_species ~ method_cd + location_code + maand,
+    family = poisson,
+    data = syr_data_sp_rich)
+
+summary(model1)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model1,
+  condition = c("method_cd"),
+  type = "response"
+)
+```
+
+2) Leveren transsecttellingen on sight (visual) een hogere diversiteit op dan de MP-
+transecttellingen?
+
+```{r}
+model2 <- glm(n_species ~ SPRING_code + location_code + maand,
+    family = poisson,
+    data = syr_data_sp_rich %>% filter(method_cd == "TS"))
+
+summary(model2)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model2,
+  condition = c("SPRING_code"),
+  type = "response"
+)
+```
+
+3) Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-pan traps op grondniveau?
+
+4) Leveren de UV-pan trap units een hogere diversiteit op dan de niet-UV-reflecterende pan traps? (eventueel kan er ook naar het gecombineerd effect vegetatiehoogte*UV-reflectie gekeken worden)
+
+Interactie kan niet onderzocht worden omdat er geen niet-uv traps op vegetatieniveau geplaatst werden.
+
+```{r}
+model3 <- glm(n_species ~  uv + level + location_code + maand,
+    family = poisson,
+    data = syr_data_sp_rich %>% filter(method_cd == "PT",
+                                      level %in% c("vegetation",
+                                                   "soil surface" )))
+
+summary(model3)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model3,
+  condition = c("level", "uv"),
+  type = "response"
+)
+```
 
 
-
-
-
-
-
-
+#### Shannon
 
