@@ -114,10 +114,21 @@ identifications %>%
 
 # Wilde bijen (Apoidea)
 
+We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 11de pantrap op de site van ILVO niet wordt meegenomen in verdere analyses.
+
 ```{r}
 apidae <- identifications %>% 
-  filter(familiy == "Apidae") %>% 
-  left_join(samples, by = "sample_id")
+  filter(familiy %in% c("Apidae", "Andrenidae",
+                        "Colletidae", "Halictidae",
+                        "Melittidae", "Megachilidae")) %>% 
+  full_join(samples, by = "sample_id") %>% 
+  mutate(`no_males+females` = ifelse(is.na(`no_males+females`),
+                                           0,
+                                           `no_males+females`)) %>% 
+  group_by(location_code) %>% 
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>%
+  filter(numbered_value < 11) %>% 
+  ungroup()
 ```
 
 ### Data verkenning
@@ -464,8 +475,6 @@ by_method %>%
 sp_tot <- apidae %>% 
   filter(method_cd == "PT",
          `time series?` == 0) %>% 
-  group_by(location_code) %>% 
-  mutate(numbered_value = dense_rank(sampling_site_cd)) %>% 
   group_by(numbered_value, `species_nm author + year`) %>% 
   summarise(n = sum(`no_males+females`)) %>% 
   pivot_wider(names_from = `species_nm author + year`,
@@ -529,7 +538,8 @@ by_method <- apidae %>%
   filter(method_cd == "PT",
          `time series?` == 0) %>%
   group_by(location_code) %>% 
-  mutate(numbered_value = dense_rank(sampling_site_cd)) %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>%
+  filter(numbered_value < 11) %>% 
   group_by(location_code, numbered_value, `species_nm author + year`) %>% 
   summarise(n = sum(`no_males+females`)) %>% 
   group_by(location_code) %>%
@@ -561,7 +571,8 @@ by_method <- apidae %>%
   filter(method_cd == "PT",
          `time series?` == 0) %>%
   group_by(location_code) %>% 
-  mutate(numbered_value = dense_rank(sampling_site_cd)) %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>%
+  filter(numbered_value < 11) %>% 
   group_by(SPRING_code, numbered_value, `species_nm author + year`) %>% 
   summarise(n = sum(`no_males+females`)) %>% 
   group_by(SPRING_code) %>%
@@ -593,7 +604,8 @@ by_method <- apidae %>%
   filter(method_cd == "PT",
          `time series?` == 0) %>%
   group_by(location_code) %>% 
-  mutate(numbered_value = dense_rank(sampling_site_cd)) %>%
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>%
+  filter(numbered_value < 11) %>% 
   group_by(SPRING_code, location_code, numbered_value, `species_nm author + year`) %>% 
   summarise(n = sum(`no_males+females`)) %>% 
   group_by(SPRING_code, location_code) %>%
@@ -1016,7 +1028,13 @@ rarefaction: vegan spec.accum, inext
 ```{r}
 syrphidae <- identifications %>% 
   filter(familiy == "Syrphidae") %>% 
-  left_join(samples, by = "sample_id")
+  full_join(samples, by = "sample_id") %>% 
+  mutate(`no_males+females` = ifelse(is.na(`no_males+females`),
+                                     0,
+                                     `no_males+females`)) %>% 
+  group_by(location_code) %>% 
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>%
+  filter(numbered_value < 11)
 ```
 
 ```{r}
@@ -1261,7 +1279,8 @@ sp_tot <- syrphidae %>%
   filter(method_cd == "PT",
          `time series?` == 0) %>% 
   group_by(location_code) %>% 
-  mutate(numbered_value = dense_rank(sampling_site_cd)) %>% 
+  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>%
+  filter(numbered_value < 11) %>%  
   group_by(numbered_value, `species_nm author + year`) %>% 
   summarise(n = sum(`no_males+females`)) %>% 
   pivot_wider(names_from = `species_nm author + year`,
@@ -1656,4 +1675,17 @@ marginaleffects::plot_predictions(
 
 
 #### Shannon
+
+
+Moreover, some rarefaction
+and extrapolation curves may cross one or more times,
+so that the rank order of diversity measured among
+samples could change depending on the sampling effort
+that is used for standardized comparisons (Chao and
+Jost 2012). For these reasons, simple point comparisons
+of diversity at particular sample levels, which often use
+parametric statistics and assume a symmetric Gaussian
+distribution (Payton et al. 2003), may not be satisfactory.
+
+
 
