@@ -38,22 +38,27 @@ identifications <- sqlFetch(conn, "identifications")
 samples <- sqlFetch(conn, "samples")
 sampling_sites <- sqlFetch(conn, "sampling_sites")
 naturalhistorytraits <- sqlFetch(conn, "Wildbees_naturalhistorytraits")
+RODBC::odbcClose(conn)
 ```
 
 ```{r}
 identifications <- identifications %>% 
-  janitor::clean_names() %>% 
+  janitor::clean_names() %>%
+  as_tibble() %>%
   rename(no_ind = "no_males_females",
          species_nm = "species_nm_author_year")
 
 samples <- samples %>% 
-  janitor::clean_names()
+  janitor::clean_names() %>%
+  as_tibble()
 
 sampling_sites <- sampling_sites %>% 
-  janitor::clean_names()
+  janitor::clean_names() %>%
+  as_tibble()
 
 naturalhistorytraits <- naturalhistorytraits %>% 
-  janitor::clean_names()
+  janitor::clean_names() %>%
+  as_tibble()
 ```
 
 ### Proefopzet
@@ -146,8 +151,8 @@ apidae <- identifications %>%
                         "Melittidae", "Megachilidae")) %>% 
   full_join(samples, by = c("sample_id", "sample_code")) %>% 
   mutate(no_ind = ifelse(is.na(no_ind),
-                                           0,
-                                           no_ind)) %>% 
+                         0,
+                         no_ind)) %>% 
   mutate(numbered_value = as.numeric(str_sub(sampling_site_cd,-2,-1))) %>%
   filter(numbered_value < 11)
 ```
@@ -180,7 +185,8 @@ for (i in locations) {
   x <- append(x, int)
 }
 
-ggvenn(x)
+ggVennDiagram::ggVennDiagram(x) +
+  scale_x_continuous(expand = c(0.2, 0.2))
 ```
   
 #### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
