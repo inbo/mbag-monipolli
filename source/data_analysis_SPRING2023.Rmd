@@ -73,11 +73,46 @@ sampling_sites <- sampling_sites %>%
 naturalhistorytraits <- naturalhistorytraits %>%
   janitor::clean_names() %>%
   as_tibble()
+
+identifications_basic <- identifications %>%
+  as_tibble() %>%
+  select(
+    sample_code,
+    species_nm,
+    family,
+    order,
+    functional_group,
+    no_ind
+  ) %>%
+  group_by(sample_code,
+    species_nm,
+    family,
+    order,
+    functional_group) %>%
+  summarise(
+    no_ind = sum(no_ind),
+    .groups = "drop"
+  )
+
+samples_basic <- samples %>%
+  distinct(
+    sample_code,
+    location_code,
+    sampling_site_cd,
+    method_cd,
+    spring_code,
+    time_series,
+    level,
+    date_b,
+    date_e
+  )
 ```
 
 ```{r}
 glimpse(identifications)
+glimpse(identifications_basic)
 glimpse(samples)
+glimpse(samples_basic)
 glimpse(sampling_sites)
 glimpse(naturalhistorytraits)
 ```
@@ -296,26 +331,26 @@ identifications %>%
 We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 11de pantrap op de site van ILVO niet wordt meegenomen in verdere analyses.
 
 ```{r apoidea}
-apoidea <- identifications %>%
-  as_tibble() %>%
+apoidea <- identifications_basic %>%
   filter(family %in% c(
     "Apidae", "Andrenidae",
     "Colletidae", "Halictidae",
     "Melittidae", "Megachilidae"
   )) %>%
-  full_join(samples, by = c("sample_id", "sample_code")) %>%
+  full_join(samples_basic, by = c("sample_code")) %>%
   mutate(no_ind = ifelse(
     is.na(no_ind),
     0,
     no_ind
   )) %>%
-  mutate(numbered_value = as.numeric(str_sub(sampling_site_cd, -2, -1))) %>%
-  filter(!(numbered_value == 11 & method_cd == "PT"))
+  filter(!(stringr::str_detect(sampling_site_cd, "PT11")))
 ```
 
 ## Data verkenning
 
-### Aantal unieke soorten per locatie
+### Gamma diversiteit
+
+Aantal unieke soorten per locatie
 
 ```{r venn-function}
 venn <- function(data, group) {
@@ -347,13 +382,13 @@ venn <- function(data, group) {
 venn(apoidea, "location_code")
 ```
   
-### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
+Aantal unieke soorten voor transecten (TS) en pan traps (PT)
 
 ```{r}
 venn(apoidea, "method_cd")
 ```
 
-### Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
+Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
 
 ```{r}
 venn(
@@ -362,7 +397,7 @@ venn(
 )
 ```
 
-### Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
+Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
 
 ```{r}
 venn(
@@ -371,119 +406,50 @@ venn(
 )
 ```
 
-### Exponent Shannon index
+### Alpha diversiteit
 
-Exponent Shannon index vs. aantal soorten per locatie
-
-```{r}
-locations <- sort(unique(apoidea$location_code))
-
-exp_shannon <- apoidea %>%
-  group_by(location_code, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  pivot_wider(
-    names_from = species_nm,
-    values_from = n,
-    values_fn = sum,
-    values_fill = 0
+```{r apoidea-richness}
+apoidea_richness <- apoidea %>%
+  group_by(
+    location_code,
+    sampling_site_cd,
+    method_cd,
+    spring_code,
+    time_series,
+    level,
+    date_b,
+    date_e,
+    sample_code
   ) %>%
-  ungroup() %>%
-  select(-location_code) %>%
-  diversity() %>%
-  exp()
-
-n_species <- apoidea %>%
-  group_by(location_code, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  pivot_wider(
-    names_from = species_nm,
-    values_from = n,
-    values_fn = sum,
-    values_fill = 0
-  ) %>%
-  ungroup() %>%
-  select(-location_code) %>%
-  specnumber()
-
-data.frame(locations, exp_shannon, n_species) %>%
-  DT::datatable()
+  mutate(p_i = no_ind / sum(no_ind)) %>%
+  summarise(
+    n_species = sum(no_ind > 0),
+    exp_shannon = exp(-sum(p_i * log(p_i), na.rm = TRUE)),
+    .groups = "drop")
 ```
 
-Exponent Shannon index vs. aantal soorten per methode
-
-```{r}
-methods <- sort(unique(apoidea$method_cd))
-
-exp_shannon <- apoidea %>%
-  group_by(method_cd, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  pivot_wider(
-    names_from = species_nm,
-    values_from = n,
-    values_fn = sum,
-    values_fill = 0
-  ) %>%
-  ungroup() %>%
-  select(-method_cd) %>%
-  diversity() %>%
-  exp()
-
-n_species <- apoidea %>%
-  group_by(method_cd, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  pivot_wider(
-    names_from = species_nm,
-    values_from = n,
-    values_fn = sum,
-    values_fill = 0
-  ) %>%
-  ungroup() %>%
-  select(-method_cd) %>%
-  specnumber()
-
-data.frame(methods, exp_shannon, n_species) %>%
-  DT::datatable()
+```{r apoidea-n-species}
+apoidea_richness %>%
+  ggplot() +
+  geom_boxplot(
+    aes(y = n_species,
+        x = spring_code,
+        fill = factor(time_series))
+  ) +
+  facet_wrap(~method_cd, scales = "free_x")
 ```
 
-Exponent Shannon index vs. aantal soorten per submethode
-
-```{r}
-submethods <- sort(unique(apoidea %>%
-  mutate(submethod = str_c(method_cd, "-", spring_code)) %>%
-  pull(submethod)))
-
-exp_shannon <- apoidea %>%
-  mutate(submethod = str_c(method_cd, "-", spring_code)) %>%
-  group_by(submethod, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  pivot_wider(
-    names_from = species_nm,
-    values_from = n,
-    values_fn = sum,
-    values_fill = 0
-  ) %>%
-  ungroup() %>%
-  select(-submethod) %>%
-  diversity() %>%
-  exp()
-
-n_species <- apoidea %>%
-  mutate(submethod = str_c(method_cd, "-", spring_code)) %>%
-  group_by(submethod, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  pivot_wider(
-    names_from = species_nm,
-    values_from = n,
-    values_fn = sum,
-    values_fill = 0
-  ) %>%
-  ungroup() %>%
-  select(-submethod) %>%
-  specnumber()
-
-data.frame(submethods, exp_shannon, n_species) %>%
-  DT::datatable()
+```{r apoidea-exp-shannon}
+apoidea_richness %>%
+  ggplot() +
+  geom_boxplot(
+    aes(y = exp_shannon,
+        x = spring_code,
+        fill = factor(time_series))
+  ) +
+  facet_wrap(~method_cd, scales = "free_x")
 ```
+
 
 ### Saturatie pan traps in tijd
 
