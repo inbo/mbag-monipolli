@@ -295,7 +295,7 @@ identifications %>%
 
 We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 11de pantrap op de site van ILVO niet wordt meegenomen in verdere analyses.
 
-```{r}
+```{r apidae}
 apidae <- identifications %>%
   as_tibble() %>%
   filter(family %in% c(
@@ -313,19 +313,8 @@ apidae <- identifications %>%
   filter(!(numbered_value == 11 & method_cd == "PT"))
 ```
 
-### Data verkenning
+## Data verkenning
 
-```{r}
-apidae %>%
-  group_by(species_nm) %>%
-  summarise(
-    total_observations = sum(no_ind),
-    males = sum(no_males),
-    females = sum(no_females)
-  ) %>%
-  arrange(species_nm) %>%
-  DT::datatable()
-```
 
 #### Aantal unieke soorten per locatie
 
