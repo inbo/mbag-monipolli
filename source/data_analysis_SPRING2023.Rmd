@@ -606,7 +606,7 @@ rarefaction_result_2 %>%
   geom_ribbon(
     aes(
       ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
-  xlab("Rarefied number of sampling sites") +
+  xlab("Rarefied number of pan trap sampling sites") +
   ylab("Number of (morpho)species") +
   facet_grid(paste("maand:", month) ~ location_code, scales = "free")
 ```
@@ -633,146 +633,58 @@ rarefaction_result_2 %>%
 #### Saturatie in aantal deeltransecten
 
 ```{r}
-sp_tot <- apoidea %>%
+rarefaction_result_3 <- apoidea %>%
   filter(method_cd == "TS") %>%
-  group_by(numbered_value, species_nm) %>%
+  group_by(location_code, method_cd, spring_code,
+           sampling_site_cd, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
-  pivot_wider(
-    names_from = species_nm,
-    values_from = n,
-    values_fn = sum,
-    values_fill = 0
-  ) %>%
-  ungroup() %>%
-  select(-numbered_value) %>%
-  specaccum("rarefaction")
-
-sp_tot <- data.frame(
-  sites = sp_tot[["sites"]],
-  richness = sp_tot[["richness"]],
-  individuals = sp_tot[["individuals"]],
-  sd = sp_tot[["sd"]]
-) %>%
-  mutate(
-    lwr = richness - 2 * sd,
-    upr = richness + 2 * sd
-  )
-```
-
-```{r}
-sp_tot %>%
-  ggplot(aes(x = sites, y = richness)) +
-  geom_line() +
-  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
-  xlab("Rarefied number of samples") +
-  ylab("Number of (morpho)species")
-```
-
-```{r}
-sp_tot %>%
-  ggplot(aes(x = individuals, y = richness)) +
-  geom_line() +
-  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
-  xlab("Rarefied number of specimens") +
-  ylab("Number of (morpho)species")
-```
-
-```{r}
-by_method <- apoidea %>%
-  filter(method_cd == "TS") %>%
-  group_by(location_code, numbered_value, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  group_by(location_code) %>%
+  filter(!is.na(species_nm)) %>%
+  group_by(location_code, method_cd, spring_code) %>%
   nest() %>%
-  mutate(rarefaction = map(data, ~ rarefaction_method(.x))) %>%
+  mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
   select(-data) %>%
   unnest(rarefaction) %>%
   ungroup()
 ```
 
-```{r}
-by_method %>%
-  ggplot(aes(x = pan_traps, y = richness)) +
-  geom_line(aes(colour = location_code)) +
-  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
-  scale_colour_manual(values = c(
-    "BE_MVS01" = "sienna",
-    "BE_MVS02" = "steelblue",
-    "BE_MVS03" = "forestgreen"
-  )) +
-  scale_fill_manual(values = c(
-    "BE_MVS01" = "sienna",
-    "BE_MVS02" = "steelblue",
-    "BE_MVS03" = "forestgreen"
-  )) +
-  xlab("Rarefied number of subtransects") +
-  ylab("Number of (morpho)species")
-```
+
 
 ```{r}
-by_method <- apoidea %>%
-  filter(method_cd == "TS") %>%
-  group_by(spring_code, numbered_value, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  group_by(spring_code) %>%
-  nest() %>%
-  mutate(rarefaction = map(data, ~ rarefaction_method(.x))) %>%
-  select(-data) %>%
-  unnest(rarefaction) %>%
-  ungroup()
-```
-
-```{r}
-by_method %>%
-  ggplot(aes(x = pan_traps, y = richness)) +
-  geom_line(aes(colour = spring_code)) +
-  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
-  scale_colour_manual(values = c(
-    "s.s." = "sienna",
-    "MP" = "steelblue",
-    "SSL" = "forestgreen"
-  )) +
-  scale_fill_manual(values = c(
-    "s.s." = "sienna",
-    "MP" = "steelblue",
-    "SSL" = "forestgreen"
-  )) +
-  xlab("Rarefied number of subtransects") +
-  ylab("Number of (morpho)species")
-```
-
-```{r}
-by_method <- apoidea %>%
-  filter(method_cd == "TS") %>%
-  group_by(spring_code, location_code, numbered_value, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  group_by(spring_code, location_code) %>%
-  nest() %>%
-  mutate(rarefaction = map(data, ~ rarefaction_method(.x))) %>%
-  select(-data) %>%
-  unnest(rarefaction) %>%
-  ungroup()
-```
-
-```{r}
-by_method %>%
-  ggplot(aes(x = pan_traps, y = richness)) +
-  geom_line(aes(colour = location_code)) +
-  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
-  scale_colour_manual(values = c(
-    "BE_MVS01" = "sienna",
-    "BE_MVS02" = "steelblue",
-    "BE_MVS03" = "forestgreen"
-  )) +
-  scale_fill_manual(values = c(
-    "BE_MVS01" = "sienna",
-    "BE_MVS02" = "steelblue",
-    "BE_MVS03" = "forestgreen"
-  )) +
-  xlab("Rarefied number of subtransects") +
+rarefaction_result_3 %>%
+  ggplot(
+    aes(
+      x = sites, y = richness)
+    ) +
+  geom_line(
+    aes(
+      colour = spring_code)) +
+  geom_ribbon(
+    aes(
+      ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
+  xlab("Rarefied number of transect 50m segments") +
   ylab("Number of (morpho)species") +
-  facet_grid(. ~ spring_code)
+  facet_grid(~ location_code, scales = "free")
 ```
+
+```{r}
+rarefaction_result_3 %>%
+  ggplot(
+    aes(
+      x = individuals, y = richness)
+    ) +
+  geom_line(
+    aes(
+      colour = spring_code)) +
+  geom_ribbon(
+    aes(
+      ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
+  xlab("Rarefied number of individuals") +
+  ylab("Number of (morpho)species") +
+  facet_grid(~ location_code, scales = "free")
+```
+
+
+
 
 ## Modelleren
 
