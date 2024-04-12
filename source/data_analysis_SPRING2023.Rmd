@@ -50,6 +50,9 @@ identifications <- identifications %>%
   rename(
     no_ind = "no_males_females",
     species_nm = "species_nm_author_year"
+  ) %>%
+  rename(
+    family = familiy
   )
 
 samples <- samples %>%
@@ -215,54 +218,75 @@ Voor locatie 1 en 2 hebben we een tijdsreeks per één of twee dagen. Voor locat
 ```{r}
 samples %>%
   filter(time_series == 1) %>%
-  group_by(location_code, date_b, date_e) %>%
-  summarise(n_distinct(sample_code)) %>%
+  group_by(location_code, spring_code, level, date_b, date_e) %>%
+  summarise(aantal_samples = n_distinct(sample_code)) %>%
   kableExtra::kable()
 ```
 
 # General overview
 
+## Numbers per order
+
 ```{r}
 identifications %>%
   group_by(order) %>%
   summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
-  plot_ly(x = ~order, y = ~n_species, type = "bar", marker = list(color = "blue"))
+  mutate(order = reorder(order, desc(n_species))) %>%
+  plot_ly(
+    x = ~order,
+    y = ~n_species,
+    type = "bar",
+    marker = list(color = "blue"))
 ```
 
-### Number of species per family
-
-```{r}
-identifications %>%
-  group_by(familiy) %>%
-  summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
-  dplyr::arrange(desc(n_species)) %>%
-  plot_ly(x = ~familiy, y = ~n_species, type = "bar", marker = list(color = "blue")) %>%
-  layout(xaxis = list(tickangle = -45))
-```
-
-### Number of individuals per order
 ```{r}
 identifications %>%
   group_by(order) %>%
   summarise(n_individuals = sum(no_ind)) %>%
-  plot_ly(x = ~order, y = ~n_individuals, type = "bar", marker = list(color = "blue"))
+  mutate(order = reorder(order, desc(n_individuals))) %>%
+  plot_ly(
+    x = ~order,
+    y = ~n_individuals,
+    type = "bar",
+    marker = list(color = "blue"))
 ```
 
-### Number of individuals per family
+
+## Numbers per family
 
 ```{r}
 identifications %>%
-  group_by(familiy) %>%
-  summarise(n_individuals = sum(no_ind)) %>%
-  plot_ly(x = ~familiy, y = ~n_individuals, type = "bar", marker = list(color = "blue")) %>%
+  group_by(family) %>%
+  summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
+  mutate(family = reorder(family, desc(n_species))) %>%
+  plot_ly(
+    x = ~family,
+    y = ~n_species,
+    type = "bar",
+    marker = list(color = "blue")) %>%
   layout(xaxis = list(tickangle = -45))
 ```
 
 ```{r}
 identifications %>%
-  group_by(order, familiy, species_nm) %>%
-  summarise(total_observations = sum(no_ind)) %>%
-  arrange(species_nm) %>%
+  group_by(family) %>%
+  summarise(n_individuals = sum(no_ind)) %>%
+  mutate(family = reorder(family, desc(n_individuals))) %>%
+  plot_ly(
+    x = ~family,
+    y = ~n_individuals,
+    type = "bar",
+    marker = list(color = "blue")) %>%
+  layout(xaxis = list(tickangle = -45))
+```
+
+## Numbers per species
+
+```{r}
+identifications %>%
+  group_by(order, family, species_nm) %>%
+  summarise(n_individuals = sum(no_ind)) %>%
+  arrange(desc(n_individuals), species_nm) %>%
   DT::datatable()
 ```
 
@@ -274,7 +298,7 @@ We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 1
 ```{r}
 apidae <- identifications %>%
   as_tibble() %>%
-  filter(familiy %in% c(
+  filter(family %in% c(
     "Apidae", "Andrenidae",
     "Colletidae", "Halictidae",
     "Melittidae", "Megachilidae"
@@ -1511,7 +1535,7 @@ marginaleffects::plot_predictions(
 library("FactoMineR")
 library("factoextra")
 
-cont_ap <- xtabs(no_ind ~ sample_id + familiy, apidae)
+cont_ap <- xtabs(no_ind ~ sample_id + family, apidae)
 
 chisq.test(cont_ap)
 
@@ -1673,7 +1697,7 @@ rarefaction: vegan spec.accum, inext
 
 ```{r}
 syrphidae <- identifications %>%
-  filter(familiy == "Syrphidae") %>%
+  filter(family == "Syrphidae") %>%
   full_join(samples, by = "sample_id") %>%
   mutate(no_ind = ifelse(is.na(no_ind),
     0,
@@ -2443,13 +2467,13 @@ expanded_samples <- samples %>%
 
 
 polli <- identifications %>%
-  filter(familiy %in% c(
+  filter(family %in% c(
     "Apidae", "Andrenidae",
     "Colletidae", "Halictidae",
     "Melittidae", "Megachilidae",
     "Syrphidae"
   )) %>%
-  mutate(group = ifelse(familiy == "Syrphidae", "Syrphidae", "Apoidae")) %>%
+  mutate(group = ifelse(family == "Syrphidae", "Syrphidae", "Apoidae")) %>%
   full_join(expanded_samples, by = c("sample_id", "sample_code", "group")) %>%
   mutate(
     no_ind = ifelse(is.na(no_ind), 0, no_ind),
