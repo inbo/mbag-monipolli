@@ -54,7 +54,11 @@ identifications <- identifications %>%
 
 samples <- samples %>%
   janitor::clean_names() %>%
-  as_tibble()
+  as_tibble() %>%
+  mutate(
+    date_b = lubridate::as_date(date_b),
+    date_e = lubridate::as_date(date_e)
+  )
 
 sampling_sites <- sampling_sites %>%
   janitor::clean_names() %>%
@@ -206,14 +210,14 @@ pantraps %>%
 
 Een subset van de pan trap opstellingen werd langer in het veld gelaten.
 
-Voor locatie 1 en 2 hebben we een tijdsreek per één of twee dagen. Voor locatie 3 hebben we geen tussenstappen, deze locatie kan dus niet gebruikt worden voor de rarefaction analyse.
+Voor locatie 1 en 2 hebben we een tijdsreeks per één of twee dagen. Voor locatie 3 hebben we geen tussenstappen, deze locatie kan dus niet gebruikt worden voor de rarefaction analyse.
 
 ```{r}
 samples %>%
   filter(time_series == 1) %>%
   group_by(location_code, date_b, date_e) %>%
   summarise(n_distinct(sample_code)) %>%
-  DT::datatable()
+  kableExtra::kable()
 ```
 
 # General overview
