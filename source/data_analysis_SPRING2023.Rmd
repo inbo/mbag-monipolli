@@ -295,8 +295,8 @@ identifications %>%
 
 We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 11de pantrap op de site van ILVO niet wordt meegenomen in verdere analyses.
 
-```{r apidae}
-apidae <- identifications %>%
+```{r apoidea}
+apoidea <- identifications %>%
   as_tibble() %>%
   filter(family %in% c(
     "Apidae", "Andrenidae",
@@ -344,20 +344,20 @@ venn <- function(data, group) {
 ```
 
 ```{r}
-venn(apidae, "location_code")
+venn(apoidea, "location_code")
 ```
   
 ### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
 
 ```{r}
-venn(apidae, "method_cd")
+venn(apoidea, "method_cd")
 ```
 
 ### Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
 
 ```{r}
 venn(
-  apidae %>% filter(method_cd == "TS"),
+  apoidea %>% filter(method_cd == "TS"),
   "spring_code"
 )
 ```
@@ -366,7 +366,7 @@ venn(
 
 ```{r}
 venn(
-  apidae %>% filter(method_cd == "PT"),
+  apoidea %>% filter(method_cd == "PT"),
   "spring_code"
 )
 ```
@@ -376,9 +376,9 @@ venn(
 Exponent Shannon index vs. aantal soorten per locatie
 
 ```{r}
-locations <- sort(unique(apidae$location_code))
+locations <- sort(unique(apoidea$location_code))
 
-exp_shannon <- apidae %>%
+exp_shannon <- apoidea %>%
   group_by(location_code, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
   pivot_wider(
@@ -392,7 +392,7 @@ exp_shannon <- apidae %>%
   diversity() %>%
   exp()
 
-n_species <- apidae %>%
+n_species <- apoidea %>%
   group_by(location_code, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
   pivot_wider(
@@ -412,9 +412,9 @@ data.frame(locations, exp_shannon, n_species) %>%
 Exponent Shannon index vs. aantal soorten per methode
 
 ```{r}
-methods <- sort(unique(apidae$method_cd))
+methods <- sort(unique(apoidea$method_cd))
 
-exp_shannon <- apidae %>%
+exp_shannon <- apoidea %>%
   group_by(method_cd, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
   pivot_wider(
@@ -428,7 +428,7 @@ exp_shannon <- apidae %>%
   diversity() %>%
   exp()
 
-n_species <- apidae %>%
+n_species <- apoidea %>%
   group_by(method_cd, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
   pivot_wider(
@@ -448,11 +448,11 @@ data.frame(methods, exp_shannon, n_species) %>%
 Exponent Shannon index vs. aantal soorten per submethode
 
 ```{r}
-submethods <- sort(unique(apidae %>%
+submethods <- sort(unique(apoidea %>%
   mutate(submethod = str_c(method_cd, "-", spring_code)) %>%
   pull(submethod)))
 
-exp_shannon <- apidae %>%
+exp_shannon <- apoidea %>%
   mutate(submethod = str_c(method_cd, "-", spring_code)) %>%
   group_by(submethod, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
@@ -467,7 +467,7 @@ exp_shannon <- apidae %>%
   diversity() %>%
   exp()
 
-n_species <- apidae %>%
+n_species <- apoidea %>%
   mutate(submethod = str_c(method_cd, "-", spring_code)) %>%
   group_by(submethod, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
@@ -490,7 +490,7 @@ data.frame(submethods, exp_shannon, n_species) %>%
 Moreover, some rarefaction and extrapolation curves may cross one or more times, so that the rank order of diversity measured among samples could change depending on the sampling effort that is used for standardized comparisons (Chao and Jost 2012). 
 
 ```{r}
-sp_tot <- apidae %>%
+sp_tot <- apoidea %>%
   filter(
     method_cd == "PT",
     time_series == 1
@@ -553,7 +553,7 @@ rarefaction_method <- function(data) {
 ```
 
 ```{r}
-by_method <- apidae %>%
+by_method <- apoidea %>%
   filter(
     method_cd == "PT",
     time_series == 1
@@ -587,7 +587,7 @@ by_method %>%
 ```
 
 ```{r}
-by_method <- apidae %>%
+by_method <- apoidea %>%
   filter(
     method_cd == "PT",
     time_series == 1,
@@ -623,7 +623,7 @@ by_method %>%
 ```
 
 ```{r}
-by_method <- apidae %>%
+by_method <- apoidea %>%
   filter(
     method_cd == "PT",
     time_series == 1
@@ -659,7 +659,7 @@ by_method %>%
 ### Saturatie in aantal pan traps
 
 ```{r}
-sp_tot <- apidae %>%
+sp_tot <- apoidea %>%
   filter(
     method_cd == "PT",
     time_series == 0
@@ -731,7 +731,7 @@ rarefaction_method <- function(data) {
 ```
 
 ```{r}
-by_method <- apidae %>%
+by_method <- apoidea %>%
   filter(
     method_cd == "PT",
     time_series == 0
@@ -766,7 +766,7 @@ by_method %>%
 ```
 
 ```{r}
-by_method <- apidae %>%
+by_method <- apoidea %>%
   filter(
     method_cd == "PT",
     time_series == 0
@@ -801,7 +801,7 @@ by_method %>%
 ```
 
 ```{r}
-by_method <- apidae %>%
+by_method <- apoidea %>%
   filter(
     method_cd == "PT",
     time_series == 0
@@ -839,7 +839,7 @@ by_method %>%
 ### Saturatie in aantal deeltransecten
 
 ```{r}
-sp_tot <- apidae %>%
+sp_tot <- apoidea %>%
   filter(method_cd == "TS") %>%
   group_by(numbered_value, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
@@ -884,7 +884,7 @@ sp_tot %>%
 ```
 
 ```{r}
-by_method <- apidae %>%
+by_method <- apoidea %>%
   filter(method_cd == "TS") %>%
   group_by(location_code, numbered_value, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
@@ -916,7 +916,7 @@ by_method %>%
 ```
 
 ```{r}
-by_method <- apidae %>%
+by_method <- apoidea %>%
   filter(method_cd == "TS") %>%
   group_by(spring_code, numbered_value, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
@@ -948,7 +948,7 @@ by_method %>%
 ```
 
 ```{r}
-by_method <- apidae %>%
+by_method <- apoidea %>%
   filter(method_cd == "TS") %>%
   group_by(spring_code, location_code, numbered_value, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
@@ -985,7 +985,7 @@ by_method %>%
 ### Soortenrijkdom
 
 ```{r}
-ap_data_sp_rich <- apidae %>%
+ap_data_sp_rich <- apoidea %>%
   group_by(sample_id) %>%
   mutate(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
   filter(time_series == 0) %>%
@@ -1110,7 +1110,7 @@ marginaleffects::plot_predictions(
 ### Aantal individuen (met honingbijen)
 
 ```{r}
-ap_data_n_ind <- apidae %>%
+ap_data_n_ind <- apoidea %>%
   filter(time_series == 0) %>%
   mutate(maand = as.factor(month(date_b))) %>%
   group_by(location_code, method_cd, spring_code, level, maand, sample_id) %>%
@@ -1226,7 +1226,7 @@ marginaleffects::plot_predictions(
 ### Aantal individuen (zonder honingbijen)
 
 ```{r}
-ap_data_n_ind <- apidae %>%
+ap_data_n_ind <- apoidea %>%
   filter(time_series == 0) %>%
   mutate(
     maand = as.factor(month(date_b)),
@@ -1347,7 +1347,7 @@ marginaleffects::plot_predictions(
 ### Soortenrijkdom met aantal individuen als covariabele
 
 ```{r}
-ap_data_sp_rich_n_ind <- apidae %>%
+ap_data_sp_rich_n_ind <- apoidea %>%
   group_by(sample_id) %>%
   mutate(
     n_species = n_distinct(species_nm, na.rm = TRUE),
@@ -1490,7 +1490,7 @@ marginaleffects::plot_predictions(
 library("FactoMineR")
 library("factoextra")
 
-cont_ap <- xtabs(no_ind ~ sample_id + family, apidae)
+cont_ap <- xtabs(no_ind ~ sample_id + family, apoidea)
 
 chisq.test(cont_ap)
 
@@ -1504,7 +1504,7 @@ ca_ap <- cca(cont_ap)
 
 inboggvegan::ggbiplot_vegan(ca_ap)
 
-ap <- apidae %>%
+ap <- apoidea %>%
   filter(!is.na(species_nm)) %>%
   arrange(sample_id) %>%
   distinct(method_cd, sample_id)
@@ -1518,7 +1518,7 @@ inboggvegan::ggbiplot_vegan(ca_ap)
 ## Extra grafieken
 
 ```{r}
-apidae %>%
+apoidea %>%
   filter(
     method_cd == "PT",
     spring_code == "s.s.",
@@ -1545,7 +1545,7 @@ apidae %>%
 ```
 
 ```{r}
-apidae %>%
+apoidea %>%
   filter(
     method_cd == "PT",
     spring_code == "s.s.",
@@ -1572,7 +1572,7 @@ apidae %>%
 
 
 ```{r}
-apidae %>%
+apoidea %>%
   filter(time_series == 0) %>%
   group_by(date_b) %>%
   mutate(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
