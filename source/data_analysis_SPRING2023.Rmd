@@ -105,7 +105,20 @@ samples_basic <- samples %>%
     level,
     date_b,
     date_e
-  )
+  ) %>%
+  group_by(
+    location_code, sampling_site_cd, method_cd, spring_code, level
+  ) %>%
+  mutate(
+    month = lubridate::month(date_b),
+    duration = date_e - date_b,
+    time_order = order(date_b)
+  ) %>%
+  arrange(time_order, .by_group = TRUE) %>%
+  mutate(
+    time_since_previous = date_b - dplyr::lag(date_e),
+    time_till_next = dplyr::lead(date_b) - date_e) %>%
+  ungroup()
 ```
 
 ```{r}
@@ -451,16 +464,30 @@ apoidea_richness %>%
 ```
 
 
-### Saturatie pan traps in tijd
+### Soortenaccumulatie
 
-Moreover, some rarefaction and extrapolation curves may cross one or more times, so that the rank order of diversity measured among samples could change depending on the sampling effort that is used for standardized comparisons (Chao and Jost 2012). 
+#### Saturatie pan traps in tijd
+
+>Moreover, some rarefaction and extrapolation curves may cross one or more times, so that the rank order of diversity measured among samples could change depending on the sampling effort that is used for standardized comparisons (Chao and Jost 2012). 
 
 ```{r}
-sp_tot <- apoidea %>%
+sampling_sites_timeseries <- apoidea %>%
   filter(
     method_cd == "PT",
     time_series == 1
   ) %>%
+  distinct(sampling_site_cd) %>%
+  pull(sampling_site_cd)
+
+apoidea %>%
+  filter(sampling_site_cd %in% sampling_sites_timeseries) %>%
+  group_by(sample_code)
+  mutate(
+    sampling_event = 
+  )
+
+sp_tot <- apoidea %>%
+  filter(sampling_site_cd %in% sampling_sites_timeseries) %>%
   group_by(date_b, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
   pivot_wider(
@@ -622,7 +649,7 @@ by_method %>%
   facet_grid(. ~ spring_code)
 ```
 
-### Saturatie in aantal pan traps
+#### Saturatie in aantal pan traps
 
 ```{r}
 sp_tot <- apoidea %>%
@@ -802,7 +829,7 @@ by_method %>%
   facet_grid(. ~ spring_code)
 ```
 
-### Saturatie in aantal deeltransecten
+#### Saturatie in aantal deeltransecten
 
 ```{r}
 sp_tot <- apoidea %>%
