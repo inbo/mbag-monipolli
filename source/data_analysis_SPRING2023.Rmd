@@ -315,95 +315,60 @@ apidae <- identifications %>%
 
 ## Data verkenning
 
+### Aantal unieke soorten per locatie
 
-#### Aantal unieke soorten per locatie
+```{r venn-function}
+venn <- function(data, group) {
+  groups <- data %>%
+    distinct(!!sym(group)) %>%
+    pull(!!sym(group))
+  
+  x <- vector(mode = "list", length = length(groups))
+  x <- setNames(x, groups)
+  
+  for (i in groups) {
+    int <- data %>%
+      filter(
+        time_series == 0,
+        !!sym(group) == i
+      ) %>%
+      distinct(species_nm) %>%
+      filter(!is.na(species_nm)) %>%
+      pull(species_nm)
+    x[[i]] <- int
+  }
+  
+  ggVennDiagram::ggVennDiagram(x) +
+    scale_x_continuous(expand = c(0.2, 0.2))
+}
+```
 
 ```{r}
-locations <- unique(apidae$location_code)
-
-x <- list()
-
-for (i in locations) {
-  int <- unique(apidae %>%
-    filter(
-      time_series == 0,
-      location_code == i
-    ) %>%
-    select(species_nm))
-  colnames(int) <- c(i)
-  x <- append(x, int)
-}
-
-ggVennDiagram::ggVennDiagram(x) +
-  scale_x_continuous(expand = c(0.2, 0.2))
+venn(apidae, "location_code")
 ```
   
-#### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
+### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
 
 ```{r}
-methods <- unique(apidae$method_cd)
-
-x <- list()
-
-for (i in methods) {
-  int <- unique(apidae %>%
-    filter(
-      time_series == 0,
-      method_cd == i
-    ) %>%
-    select(species_nm))
-  colnames(int) <- c(i)
-  x <- append(x, int)
-}
-
-ggvenn(x)
+venn(apidae, "method_cd")
 ```
 
-#### Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
+### Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
+
 ```{r}
-submet <- unique(apidae %>%
-  filter(method_cd == "TS") %>%
-  pull(spring_code))
-
-x <- list()
-
-for (i in submet) {
-  int <- unique(apidae %>%
-    filter(
-      time_series == 0,
-      method_cd == "TS",
-      spring_code == i
-    ) %>%
-    select(species_nm))
-  colnames(int) <- c(i)
-  x <- append(x, int)
-}
-
-ggvenn(x)
+venn(
+  apidae %>% filter(method_cd == "TS"),
+  "spring_code"
+)
 ```
 
-#### Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
+### Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
 
 ```{r}
-submet <- unique(apidae %>%
-  filter(method_cd == "PT") %>%
-  pull(spring_code))
-
-x <- list()
-
-for (i in submet) {
-  int <- unique(apidae %>%
-    filter(
-      time_series == 0,
-      method_cd == "PT",
-      spring_code == i
-    ) %>%
-    select(species_nm))
-  colnames(int) <- c(i)
-  x <- append(x, int)
-}
-
-ggvenn(x)
+venn(
+  apidae %>% filter(method_cd == "PT"),
+  "spring_code"
+)
 ```
 
 ### Exponent Shannon index
