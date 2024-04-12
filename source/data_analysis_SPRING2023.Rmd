@@ -26,6 +26,7 @@ library(glmmTMB)
 library(sf)
 library(dplyr)
 library(tidyr)
+library(purrr)
 library(here)
 
 conflicted::conflict_prefer("select", "dplyr")
@@ -470,59 +471,12 @@ apoidea_richness %>%
 
 >Moreover, some rarefaction and extrapolation curves may cross one or more times, so that the rank order of diversity measured among samples could change depending on the sampling effort that is used for standardized comparisons (Chao and Jost 2012). 
 
-```{r}
-sampling_sites_timeseries <- apoidea %>%
-  filter(
-    method_cd == "PT",
-    time_series == 1
-  ) %>%
-  distinct(sampling_site_cd) %>%
-  pull(sampling_site_cd)
 
-apoidea %>%
-  filter(sampling_site_cd %in% sampling_sites_timeseries) %>%
-  group_by(sample_code)
-  mutate(
-    sampling_event = 
-  )
+Voor de volgende analyse selecteren we de tijdreeksen. Als we hiervan een "rarefaction" curve berekenen zal dit geen beeld geven van het cumulatief aantal soorten in de tijd, maar zal het weergeven hoe het aantal soorten toeneemt als je meerdere sampling events uit de tijdreeks combineert.
+Als de x-as "rarefied number of days" gelijk aan 3 weergeeft, zijn dit dus niet noodzakelijk drie opeenvolgende dagen.
 
-sp_tot <- apoidea %>%
-  filter(sampling_site_cd %in% sampling_sites_timeseries) %>%
-  group_by(date_b, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  pivot_wider(
-    names_from = species_nm,
-    values_from = n,
-    values_fn = sum,
-    values_fill = 0
-  ) %>%
-  ungroup() %>%
-  select(-date_b) %>%
-  specaccum("rarefaction")
-
-sp_tot <- data.frame(
-  days = sp_tot[["sites"]],
-  richness = sp_tot[["richness"]],
-  individuals = sp_tot[["individuals"]],
-  sd = sp_tot[["sd"]]
-) %>%
-  mutate(
-    lwr = richness - 2 * sd,
-    upr = richness + 2 * sd
-  )
-```
-
-```{r}
-sp_tot %>%
-  ggplot(aes(x = days, y = richness)) +
-  geom_line() +
-  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2) +
-  xlab("Rarefied number of days") +
-  ylab("Number of (morpho)species")
-```
-
-```{r}
-rarefaction_method <- function(data) {
+```{r fun-rarefaction}
+rarefaction <- function(data) {
   rrf <- data %>%
     pivot_wider(
       names_from = species_nm,
@@ -546,108 +500,78 @@ rarefaction_method <- function(data) {
 ```
 
 ```{r}
-by_method <- apoidea %>%
+rarefaction_result <- apoidea %>%
   filter(
-    method_cd == "PT",
-    time_series == 1
+    time_since_previous == 0 | time_till_next == 0
   ) %>%
-  group_by(location_code, date_b, species_nm) %>%
+  group_by(location_code, method_cd, spring_code, level, date_b, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
-  group_by(location_code) %>%
+  filter(!is.na(species_nm)) %>%
+  group_by(location_code, method_cd, spring_code, level) %>%
   nest() %>%
-  filter(location_code %in% c("BE_MVS01", "BE_MVS02")) %>%
-  mutate(rarefaction = map(data, ~ rarefaction_method(.x))) %>%
+  mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
   select(-data) %>%
   unnest(rarefaction) %>%
   ungroup()
 ```
 
 ```{r}
-by_method %>%
-  ggplot(aes(x = days, y = richness)) +
-  geom_line(aes(colour = location_code)) +
-  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
-  scale_colour_manual(values = c(
-    "BE_MVS01" = "sienna",
-    "BE_MVS02" = "steelblue"
-  )) +
-  scale_fill_manual(values = c(
-    "BE_MVS01" = "sienna",
-    "BE_MVS02" = "steelblue"
-  )) +
-  xlab("Rarefied number of days") +
-  ylab("Number of (morpho)species")
-```
-
-```{r}
-by_method <- apoidea %>%
-  filter(
-    method_cd == "PT",
-    time_series == 1,
-    location_code %in% c("BE_MVS01", "BE_MVS02")
-  ) %>%
-  group_by(spring_code, date_b, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  group_by(spring_code) %>%
-  nest() %>%
-  mutate(rarefaction = map(data, ~ rarefaction_method(.x))) %>%
-  select(-data) %>%
-  unnest(rarefaction) %>%
-  ungroup()
-```
-
-```{r}
-by_method %>%
-  ggplot(aes(x = days, y = richness)) +
-  geom_line(aes(colour = spring_code)) +
-  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
-  scale_colour_manual(values = c(
-    "s.s." = "sienna",
-    "MP" = "steelblue",
-    "SSL" = "forestgreen"
-  )) +
-  scale_fill_manual(values = c(
-    "s.s." = "sienna",
-    "MP" = "steelblue",
-    "SSL" = "forestgreen"
-  )) +
-  xlab("Rarefied number of days") +
-  ylab("Number of (morpho)species")
-```
-
-```{r}
-by_method <- apoidea %>%
-  filter(
-    method_cd == "PT",
-    time_series == 1
-  ) %>%
-  group_by(spring_code, location_code, date_b, species_nm) %>%
-  summarise(n = sum(no_ind)) %>%
-  group_by(spring_code, location_code) %>%
-  nest() %>%
-  mutate(rarefaction = map(data, ~ rarefaction_method(.x))) %>%
-  select(-data) %>%
-  unnest(rarefaction) %>%
-  ungroup()
-```
-
-```{r}
-by_method %>%
-  ggplot(aes(x = days, y = richness)) +
-  geom_line(aes(colour = location_code)) +
-  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
-  scale_colour_manual(values = c(
-    "BE_MVS01" = "sienna",
-    "BE_MVS02" = "steelblue"
-  )) +
-  scale_fill_manual(values = c(
-    "BE_MVS01" = "sienna",
-    "BE_MVS02" = "steelblue"
-  )) +
+rarefaction_result %>%
+  filter(location_code != "BE_MVS03") %>%
+  ggplot(
+    aes(
+      x = days, y = richness)
+    ) +
+  geom_line(
+    aes(
+      colour = spring_code)) +
+  geom_ribbon(
+    aes(
+      ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
   xlab("Rarefied number of days") +
   ylab("Number of (morpho)species") +
-  facet_grid(. ~ spring_code)
+  facet_wrap(~location_code)
 ```
+
+
+Om wel rekening te houden met de tijdsvolgorden gaan we anders te werk.
+Voor een bepaalde plaats waarvan er een tijdreeks is, berekenen we het cumulatief aantal soorten in de tijd.
+
+```{r}
+apoidea_cumulative <- apoidea %>%
+  filter(
+    time_since_previous == 0 | time_till_next == 0
+  ) %>%
+  group_by(
+    location_code, sampling_site_cd, method_cd, spring_code
+  ) %>%
+  arrange(time_order, .by_group = TRUE) %>%
+  group_by(
+    location_code, sampling_site_cd, method_cd, spring_code, time_order
+  ) %>%
+  summarise(
+    species_list = list(species_nm[!is.na(species_nm)]),
+    duration = mean(duration)
+  ) %>%
+  mutate(
+    duration = ifelse(duration == 0, 6/24, duration),
+    accumulated_species_list = accumulate(
+      species_list, union, .simplify = FALSE),
+    cumulative_n_species = map_dbl(accumulated_species_list, length),
+    cumulative_days = cumsum(duration)
+  ) %>%
+  ungroup()
+```
+
+```{r}
+apoidea_cumulative %>%
+  ggplot(aes(x = cumulative_days, y = cumulative_n_species)) +
+  geom_point(alpha = 0.2) +
+  stat_summary(fun.data = mean_cl_boot, colour = "blue") +
+  facet_grid(location_code ~ spring_code)
+```
+
+
 
 #### Saturatie in aantal pan traps
 
