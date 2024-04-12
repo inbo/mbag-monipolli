@@ -18,16 +18,17 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 library(RODBC)
 library(readxl)
 library(dataMaid)
-library(ggvenn)
 library(vegan)
+library(ggvenn)
 library(plotly)
-library(MASS)
 library(glmmTMB)
 library(sf)
 library(dplyr)
 library(tidyr)
 library(purrr)
 library(here)
+library(lubridate)
+library(stringr)
 
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
@@ -692,7 +693,7 @@ rarefaction_result_3 %>%
 
 ```{r}
 ap_data_sp_rich <- apoidea %>%
-  group_by(sample_id) %>%
+  group_by(sample_code) %>%
   mutate(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
   filter(time_series == 0) %>%
   mutate(maand = as.factor(month(date_b))) %>%
@@ -819,7 +820,7 @@ marginaleffects::plot_predictions(
 ap_data_n_ind <- apoidea %>%
   filter(time_series == 0) %>%
   mutate(maand = as.factor(month(date_b))) %>%
-  group_by(location_code, method_cd, spring_code, level, maand, sample_id) %>%
+  group_by(location_code, method_cd, spring_code, level, maand, sample_code) %>%
   summarise(n_ind = sum(no_ind)) %>%
   mutate(uv = ifelse(spring_code == "MP", "non-uv", "uv")) %>%
   filter(n_ind < 500)
@@ -942,7 +943,7 @@ ap_data_n_ind <- apoidea %>%
       no_ind
     )
   ) %>%
-  group_by(location_code, method_cd, spring_code, level, maand, sample_id) %>%
+  group_by(location_code, method_cd, spring_code, level, maand, sample_code) %>%
   summarise(n_ind = sum(no_ind)) %>%
   mutate(uv = ifelse(spring_code == "MP", "non-uv", "uv"))
 ```
@@ -1054,7 +1055,7 @@ marginaleffects::plot_predictions(
 
 ```{r}
 ap_data_sp_rich_n_ind <- apoidea %>%
-  group_by(sample_id) %>%
+  group_by(sample_code) %>%
   mutate(
     n_species = n_distinct(species_nm, na.rm = TRUE),
     n_ind = sum(no_ind)
@@ -1196,7 +1197,7 @@ marginaleffects::plot_predictions(
 library("FactoMineR")
 library("factoextra")
 
-cont_ap <- xtabs(no_ind ~ sample_id + family, apoidea)
+cont_ap <- xtabs(no_ind ~ sample_code + family, apoidea)
 
 chisq.test(cont_ap)
 
@@ -1205,15 +1206,15 @@ ca_ap <- CA(cont_ap)
 fviz_ca_row(ca_ap)
 ```
 
-```{r}
+```{r eval=FALSE}
 ca_ap <- cca(cont_ap)
 
 inboggvegan::ggbiplot_vegan(ca_ap)
 
 ap <- apoidea %>%
   filter(!is.na(species_nm)) %>%
-  arrange(sample_id) %>%
-  distinct(method_cd, sample_id)
+  arrange(sample_code) %>%
+  distinct(method_cd, sample_code)
 
 ca_ap <- cca(cont_ap ~ method_cd, data = ap)
 
@@ -2107,7 +2108,7 @@ ca_ap <- CA(cont_ap)
 fviz_ca_row(ca_ap)
 ```
 
-```{r}
+```{r eval=FALSE}
 syr <- syrphidae %>%
   filter(!is.na(species_nm)) %>%
   arrange(sample_id) %>%
