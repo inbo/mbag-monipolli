@@ -23,7 +23,9 @@ library(vegan)
 library(plotly)
 library(MASS)
 library(glmmTMB)
-library(tidyverse)
+library(sf)
+library(dplyr)
+library(tidyr)
 library(here)
 
 conflicted::conflict_prefer("select", "dplyr")
@@ -54,12 +56,23 @@ samples <- samples %>%
 
 sampling_sites <- sampling_sites %>% 
   janitor::clean_names() %>%
-  as_tibble()
+  as_tibble() %>%
+  mutate(
+    method_cd = stringr::str_extract(sampling_site_cd, "(TS|PT)")
+  )
 
 naturalhistorytraits <- naturalhistorytraits %>% 
   janitor::clean_names() %>%
   as_tibble()
 ```
+
+```{r}
+glimpse(identifications)
+glimpse(samples)
+glimpse(sampling_sites)
+glimpse(naturalhistorytraits)
+```
+
 
 ### Proefopzet
 
@@ -69,13 +82,119 @@ Er werden 5 verschillende monitoringsmethoden getest:
   - SPRING s.s.: waargenomen of op het zicht verzameld (TS - s.s.)
   - MP: verzameld via het afslepen van de vegetatie of bodem (TS - MP)
 
-- 3 pan traps opstellingen. Eén pan trap sample is de gecombineerde vangst
-van één pan trap unit bestaande uit één blauwe, één witte en één gele val. Per transect worden
-steeds 10 units geplaatst, dus één per sectie:
+- 3 pan traps opstellingen. Eén pan trap sample is de gecombineerde vangst van één pan trap unit bestaande uit één blauwe, één witte en één gele val. Per transect worden steeds 10 units geplaatst, dus één per sectie:
   - UV-reflecterende pan traps op vegetatiehoogte geplaatst (PT - s.s.)
   - identieke samenstelling maar op de bodem geplaatst (PT - SSL)
   - niet-UV-reflecterende pan trap unit (wat grotere valtypes), zowel op vegetatiehoogte als op de bodem (PT - MP)
-  
+
+```{r}
+angle2dec <- function(x) {
+  x <- stringr::str_extract_all(x, pattern = "[\\d\\.]+")
+  x <- lapply(x, as.numeric)
+  x <- lapply(x, function(x) x[1] + x[2] / 60 + x[3] / 3600)
+  x <- unlist(x)
+  return(x)
+}
+
+transecten <- sampling_sites %>%
+  filter(method_cd == "TS") %>%
+  select(
+    -sampling_site_id,
+    -alt_exact_position,
+    -alt_start_section,
+    -alt_end_section,
+    -lat_exact_position,
+    -long_exact_position
+  ) %>%
+  mutate(
+    long_start_section = angle2dec(long_start_section),
+    lat_start_section = angle2dec(lat_start_section),
+    long_end_section = angle2dec(long_end_section),
+    lat_end_section = angle2dec(lat_end_section),
+    geometry = sprintf(
+      "LINESTRING (%s %s, %s %s)",
+    long_start_section, lat_start_section, long_end_section, lat_end_section),
+    geometry = st_as_sfc(geometry)
+  ) %>%
+  select(-ends_with("section"), transect_sectie = remarks) %>%
+  mutate(transect_sectie = factor(
+    transect_sectie,
+    levels = c(
+      "0-50m",
+      "50-100m",
+      "100-150m",
+      "150-200m",
+      "200-250m",
+      "250-300m",
+      "300-350m",
+      "350-400m",
+      "400-450m",
+      "450-500m")
+  )) %>%
+st_as_sf(crs = 4326)
+
+glimpse(transecten)
+
+pantraps <- sampling_sites %>%
+  filter(method_cd == "PT") %>%
+  select(
+    -sampling_site_id,
+    -alt_exact_position,
+    -alt_start_section,
+    -alt_end_section,
+    -long_start_section,
+    -lat_start_section,
+    -long_end_section,
+    -lat_end_section,
+  ) %>%
+  mutate(
+    long_exact_position = angle2dec(long_exact_position),
+    lat_exact_position = angle2dec(lat_exact_position),
+    geometry = sprintf(
+      "POINT (%s %s)",
+    long_exact_position, lat_exact_position),
+    geometry = st_as_sfc(geometry)
+  ) %>%
+  select(-ends_with("_position"), -remarks) %>%
+  st_as_sf(crs = 4326)
+
+glimpse(pantraps)
+```
+
+```{r map-transecten}
+plottransecten <- function(x) {
+  ggplot(x) +
+    geom_sf(aes(colour = transect_sectie)) +
+    labs(title = x$location_code[[1]])
+}
+
+transecten %>%
+  nest(data = everything(), .by = location_code) %>%
+  mutate(
+    plot = map(
+      .x = data,
+      .f = plottransecten)
+    ) %>%
+  pull(plot)
+```
+
+```{r map-pantraps}
+plotpantraps <- function(x) {
+  ggplot(x) +
+    geom_sf() +
+    labs(title = x$location_code[[1]])
+}
+pantraps %>%
+  nest(data = everything(), .by = location_code) %>%
+  mutate(
+    plot = map(
+      .x = data,
+      .f = plotpantraps)
+    ) %>%
+  pull(plot)
+```
+
+
 ### Tijdsreeksen
 
 Een subset van de pan trap opstellingen werd langer in het veld gelaten.
