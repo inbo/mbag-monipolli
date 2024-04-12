@@ -980,9 +980,9 @@ by_method %>%
   facet_grid(. ~ spring_code)
 ```
 
-### Modelleren
+## Modelleren
 
-#### Soortenrijkdom
+### Soortenrijkdom
 
 ```{r}
 ap_data_sp_rich <- apidae %>%
@@ -1107,7 +1107,7 @@ marginaleffects::plot_predictions(
 )
 ```
 
-#### Aantal individuen (met honingbijen)
+### Aantal individuen (met honingbijen)
 
 ```{r}
 ap_data_n_ind <- apidae %>%
@@ -1223,7 +1223,7 @@ marginaleffects::plot_predictions(
 ```
 
 
-#### Aantal individuen (zonder honingbijen)
+### Aantal individuen (zonder honingbijen)
 
 ```{r}
 ap_data_n_ind <- apidae %>%
@@ -1344,7 +1344,7 @@ marginaleffects::plot_predictions(
 )
 ```
 
-#### Soortenrijkdom met aantal individuen als covariabele
+### Soortenrijkdom met aantal individuen als covariabele
 
 ```{r}
 ap_data_sp_rich_n_ind <- apidae %>%
@@ -1484,7 +1484,7 @@ marginaleffects::plot_predictions(
 )
 ```
 
-### Correspondence Analysis
+## Correspondence Analysis
 
 ```{r, eval=FALSE}
 library("FactoMineR")
@@ -1515,7 +1515,7 @@ inboggvegan::ggbiplot_vegan(ca_ap)
 ```
 
 
-### Extra grafieken
+## Extra grafieken
 
 ```{r}
 apidae %>%
@@ -1648,7 +1648,7 @@ rarefaction: vegan spec.accum, inext
 
 # Zweefvliegen (Syrphidea)
 
-### Data verkenning
+## Data verkenning
 
 ```{r}
 syrphidae <- identifications %>%
@@ -1674,7 +1674,7 @@ syrphidae %>%
   DT::datatable()
 ```
 
-#### Aantal unieke soorten per locatie
+### Aantal unieke soorten per locatie
 
 ```{r}
 locations <- unique(syrphidae$location_code)
@@ -1695,7 +1695,7 @@ for (i in locations) {
 ggvenn(x)
 ```
 
-#### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
+### Aantal unieke soorten voor transecten (TS) en pan traps (PT)
 
 ```{r}
 methods <- unique(syrphidae$method_cd)
@@ -1716,7 +1716,7 @@ for (i in methods) {
 ggvenn(x)
 ```
 
-#### Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
+### Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
 
 ```{r}
 submet <- unique(syrphidae %>%
@@ -1740,7 +1740,7 @@ for (i in submet) {
 ggvenn(x)
 ```
 
-#### Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
+### Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
 
 ```{r}
 submet <- unique(syrphidae %>%
@@ -2257,9 +2257,9 @@ by_method %>%
   facet_grid(. ~ spring_code)
 ```
 
-### Modelleren
+## Modelleren
 
-#### Soortenrijkdom
+### Soortenrijkdom
 
 ```{r}
 syr_data_sp_rich <- syrphidae %>%
@@ -2386,7 +2386,7 @@ marginaleffects::plot_predictions(
 )
 ```
 
-#### Correspondence Analysis
+## Correspondence Analysis
 
 ```{r, eval=FALSE}
 library("FactoMineR")
