@@ -114,7 +114,16 @@ samples_basic <- samples %>%
   mutate(
     month = lubridate::month(date_b),
     duration = date_e - date_b,
-    time_order = order(date_b)
+    time_order = order(date_b),
+        uv = case_when(
+      spring_code == "MP" & method_cd == "PT" ~ "non-uv",
+      spring_code != "MP" & method_cd == "PT" ~ "uv",
+      TRUE ~ "not applicable"),
+    method_combi = ifelse(
+      method_cd == "PT",
+      paste(method_cd, uv, level),
+      paste(method_cd, spring_code)
+    )
   ) %>%
   arrange(time_order, .by_group = TRUE) %>%
   mutate(
@@ -353,11 +362,12 @@ apoidea <- identifications_basic %>%
     "Melittidae", "Megachilidae"
   )) %>%
   full_join(samples_basic, by = c("sample_code")) %>%
-  mutate(no_ind = ifelse(
-    is.na(no_ind),
-    0,
-    no_ind
-  )) %>%
+  mutate(
+    no_ind = ifelse(
+      is.na(no_ind),
+      0,
+      no_ind
+    )) %>%
   filter(!(stringr::str_detect(sampling_site_cd, "PT11")))
 ```
 
@@ -421,6 +431,13 @@ venn(
 )
 ```
 
+De combinatie van alles:
+
+```{r}
+venn(apoidea, "method_combi")
+```
+
+
 ### Alpha diversiteit
 
 ```{r apoidea-richness}
@@ -432,6 +449,8 @@ apoidea_richness <- apoidea %>%
     spring_code,
     time_series,
     level,
+    uv,
+    method_combi,
     date_b,
     date_e,
     sample_code
@@ -448,10 +467,10 @@ apoidea_richness %>%
   ggplot() +
   geom_boxplot(
     aes(y = n_species,
-        x = spring_code,
-        fill = factor(time_series))
+        x = method_cd,
+        fill = factor(method_combi))
   ) +
-  facet_wrap(~method_cd, scales = "free_x")
+  facet_wrap(~paste("time series: ", time_series), scales = "free_x")
 ```
 
 ```{r apoidea-exp-shannon}
@@ -459,10 +478,10 @@ apoidea_richness %>%
   ggplot() +
   geom_boxplot(
     aes(y = exp_shannon,
-        x = spring_code,
-        fill = factor(time_series))
+        x = method_cd,
+        fill = factor(method_combi))
   ) +
-  facet_wrap(~method_cd, scales = "free_x")
+  facet_wrap(~paste("time series: ", time_series), scales = "free_x")
 ```
 
 
@@ -507,14 +526,15 @@ rarefaction_result <- apoidea %>%
   ) %>%
   complete(
     nesting(
-      location_code, method_cd, spring_code, level, month,
+      location_code, method_cd, spring_code, level, uv, month,
       sampling_site_cd),
     species_nm,
     fill = list(no_ind = 0)) %>%
-  group_by(location_code, method_cd, spring_code, level, date_b, species_nm) %>%
+  group_by(location_code, method_cd, spring_code, level, uv, date_b,
+           species_nm) %>%
   summarise(n = sum(no_ind)) %>%
   filter(sum(n) > 0) %>%
-  group_by(location_code, method_cd, spring_code, level) %>%
+  group_by(location_code, method_cd, spring_code, level, uv) %>%
   nest() %>%
   mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
   select(-data) %>%
@@ -531,10 +551,10 @@ rarefaction_result %>%
     ) +
   geom_line(
     aes(
-      colour = spring_code)) +
+      colour = uv, linetype = level)) +
   geom_ribbon(
     aes(
-      ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
+      ymin = lwr, ymax = upr, fill = uv, linetype = level), alpha = 0.2) +
   xlab("Rarefied number of days") +
   ylab("Number of (morpho)species") +
   facet_wrap(~location_code)
@@ -554,7 +574,8 @@ apoidea_cumulative <- apoidea %>%
   ) %>%
   arrange(time_order, .by_group = TRUE) %>%
   group_by(
-    location_code, sampling_site_cd, method_cd, spring_code, time_order
+    location_code, sampling_site_cd, method_cd, spring_code,
+    level, uv, method_combi, time_order
   ) %>%
   summarise(
     species_list = list(species_nm[!is.na(species_nm)]),
@@ -577,7 +598,7 @@ apoidea_cumulative %>%
   ggplot(aes(x = cumulative_days, y = cumulative_n_species)) +
   geom_point(alpha = 0.2) +
   stat_summary(fun.data = mean_cl_boot, colour = "blue") +
-  facet_grid(location_code ~ spring_code)
+  facet_grid(location_code ~ method_combi)
 ```
 
 In de volgende figuur hebben we berekend hoeveel soorten er extra gevonden werden door de pantraps langer te laten staan. De vergelijking is telkens met de voorgaande lagere sampling effort op die site voor die methode. In de meeste gevallen is dit één dag langer, maar soms is het meer dan 1 dag. Het aantal extra dagen is weergegeven met een cijfer naast de schatting van het gemiddelde aantal extra soorten.
@@ -596,7 +617,7 @@ apoidea_cumulative %>%
   geom_point(alpha = 0.2) +
   geom_text(
     data = apoidea_cumulative %>%
-      group_by(cumulative_days, location_code, spring_code) %>%
+      group_by(cumulative_days, location_code, method_combi) %>%
       summarise(
         mean_extra_n_species = mean(extra_n_species, na.rm = TRUE),
         extra_n_days = mean(extra_n_days, na.rm = TRUE)),
@@ -607,7 +628,7 @@ apoidea_cumulative %>%
     alpha = 0.4
     ) +
   stat_summary(fun.data = mean_cl_boot, colour = "blue") +
-  facet_grid(location_code ~ spring_code, scales = "free_y") +
+  facet_grid(location_code ~ method_combi, scales = "free_y") +
   labs(y = "Aantal soorten extra t.o.v. één 'dag' minder laten staan")
 ```
 
@@ -624,14 +645,14 @@ rarefaction_result_2 <- apoidea %>%
   ) %>%
   complete(
     nesting(
-      location_code, method_cd, spring_code, level, month,
+      location_code, method_cd, spring_code, level, uv, month,
       sampling_site_cd),
     species_nm,
     fill = list(no_ind = 0)) %>%
-  group_by(location_code, method_cd, spring_code, level, month,
+  group_by(location_code, method_cd, spring_code, level, uv, month,
            sampling_site_cd, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
-  group_by(location_code, method_cd, spring_code, level, month) %>%
+  group_by(location_code, method_cd, spring_code, level, uv, month) %>%
   filter(sum(n) > 0) %>%
   nest() %>%
   mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
@@ -649,10 +670,11 @@ rarefaction_result_2 %>%
     ) +
   geom_line(
     aes(
-      colour = spring_code)) +
+      colour = uv,
+      linetype = level)) +
   geom_ribbon(
     aes(
-      ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
+      ymin = lwr, ymax = upr, fill = uv, linetype = level), alpha = 0.2) +
   xlab("Rarefied number of pan trap sampling sites") +
   ylab("Number of (morpho)species") +
   facet_grid(paste("maand:", month) ~ location_code, scales = "free")
@@ -666,10 +688,10 @@ rarefaction_result_2 %>%
     ) +
   geom_line(
     aes(
-      colour = spring_code)) +
+      colour = level, linetype = uv)) +
   geom_ribbon(
     aes(
-      ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
+      ymin = lwr, ymax = upr, fill = level, linetype = uv), alpha = 0.2) +
   xlab("Rarefied number of individuals") +
   ylab("Number of (morpho)species") +
   facet_grid(paste("maand:", month) ~ location_code, scales = "free")
@@ -749,17 +771,7 @@ rarefaction_result_3 %>%
 ap_data_sp_rich <- apoidea %>%
   filter(time_series == 0) %>%
   mutate(
-    maand = as.factor(month(date_b)),
-    uv = case_when(
-      spring_code == "MP" & method_cd == "PT" ~ "non-uv",
-      spring_code != "MP" & method_cd == "PT" ~ "uv",
-      TRUE ~ "not applicable"),
-    method_combi = ifelse(
-      method_cd == "PT",
-      paste(method_cd, uv, level),
-      paste(method_cd, spring_code)
-    )
-  ) %>%
+    maand = as.factor(month(date_b))) %>%
   group_by(
     sample_code, location_code, method_combi, 
     method_cd, spring_code, uv, level, maand) %>%
@@ -863,8 +875,6 @@ marginaleffects::plot_predictions(
   ) +
   labs(y = "Soortenrijkdom")
 ```
-
-
 
 ### Aantal individuen (met honingbijen)
 
