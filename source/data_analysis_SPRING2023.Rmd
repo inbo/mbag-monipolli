@@ -444,9 +444,9 @@ knit(text = rmd, quiet = TRUE) %>%
 
 ## Soortenrijkdom
 
-We corrigeren voor het aantal gevangen individuen in het model (log-getransformeerd want soortenrijkdom modelleren we in de log-link schaal).
-
 We fitten de modellen voor beide soortengroepen samengenomen in hetzelfde model, maar we laten elke covariaat in interactie gaan met de soortengroep zodat we aparte parameterschattingen per soortengroep bekomen.
+
+We maken geen correctie voor het aantal gevangen individuen (door dit toe te voegen als covariaat): omwille van het hoge aantal gevallen waar er 0 soorten zijn (en dus 0 individuen) geeft deze correctie problemen in het model (0 individuen is een perfecte, maar ook onzinnige, voorspeller voor 0 soorten).
 
 ```{r}
 data_sp_rich <- apoidea %>%
@@ -481,6 +481,10 @@ ggplot(data_sp_rich_spring, aes(x = n_species)) +
   geom_histogram(
     aes(fill = taxgroup),
     position = position_dodge())
+
+ggplot(data_sp_rich_spring) +
+  geom_point(aes(x = n_ind, y = n_species)) +
+  facet_wrap(~ taxgroup, scales = "free")
 ```
 
 ```{r}
@@ -488,8 +492,7 @@ model0 <- glmmTMB(
   n_species ~ 
     (location_code
   + maand
-  + method_cd
-  + log(n_ind + 1)) * taxgroup
+  + method_cd) * taxgroup
   ,
   family = "poisson",
   ziformula = ~ taxgroup,
@@ -526,14 +529,12 @@ model1 <- glmmTMB(
     (method_combi
   + location_code
   + maand
-  + log(n_ind + 1)) * taxgroup,
+  ) * taxgroup,
   ziformula = ~ taxgroup,
   family = "poisson", 
   na.action = na.exclude,
   data = data_sp_rich
 )
-
-summary(model1)
 ```
 
 De hoge waarden voor collineariteit zijn in dit geval geen probleem en zijn het gevolg van (verwachte) collineariteit t.g.v. toevoegen van interacties.
@@ -562,7 +563,7 @@ marginaleffects::plot_predictions(
     position = position_dodge(width = 0.5)
   ) +
   labs(y = "Soortenrijkdom") +
-  facet_wrap(~taxgroup)
+  facet_wrap(~taxgroup, scales = "free")
 ```
 
 <!--
