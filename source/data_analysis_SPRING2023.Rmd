@@ -505,9 +505,15 @@ rarefaction_result <- apoidea %>%
   filter(
     time_since_previous == 0 | time_till_next == 0
   ) %>%
+  complete(
+    nesting(
+      location_code, method_cd, spring_code, level, month,
+      sampling_site_cd),
+    species_nm,
+    fill = list(no_ind = 0)) %>%
   group_by(location_code, method_cd, spring_code, level, date_b, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
-  filter(!is.na(species_nm)) %>%
+  filter(sum(n) > 0) %>%
   group_by(location_code, method_cd, spring_code, level) %>%
   nest() %>%
   mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
@@ -616,18 +622,24 @@ rarefaction_result_2 <- apoidea %>%
     method_cd == "PT",
     time_series == 0
   ) %>%
+  complete(
+    nesting(
+      location_code, method_cd, spring_code, level, month,
+      sampling_site_cd),
+    species_nm,
+    fill = list(no_ind = 0)) %>%
   group_by(location_code, method_cd, spring_code, level, month,
            sampling_site_cd, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
-  filter(!is.na(species_nm)) %>%
   group_by(location_code, method_cd, spring_code, level, month) %>%
+  filter(sum(n) > 0) %>%
   nest() %>%
   mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
-  select(-data) %>%
   unnest(rarefaction) %>%
   ungroup()
-
 ```
+
+Noot: waar de lijn praktisch lineair is, gaat het om gevallen waar in totaal zeer weinig individuen werden geteld. De methode maakt dan een lineaire interpolatie tussen het aantal soorten in alle 10 pantraps en de oorsprong (0 sites, 0 soorten).
 
 ```{r}
 rarefaction_result_2 %>%
@@ -670,10 +682,16 @@ rarefaction_result_2 %>%
 ```{r}
 rarefaction_result_3 <- apoidea %>%
   filter(method_cd == "TS") %>%
+  complete(
+    nesting(
+      location_code, method_cd, spring_code, level, month,
+      sampling_site_cd),
+    species_nm,
+    fill = list(no_ind = 0)) %>%
   group_by(location_code, method_cd, spring_code,
            sampling_site_cd, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
-  filter(!is.na(species_nm)) %>%
+  filter(sum(n) > 0) %>%
   group_by(location_code, method_cd, spring_code) %>%
   nest() %>%
   mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
