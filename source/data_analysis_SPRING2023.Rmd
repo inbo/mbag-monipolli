@@ -444,6 +444,10 @@ knit(text = rmd, quiet = TRUE) %>%
 
 ## Soortenrijkdom
 
+We corrigeren voor het aantal gevangen individuen in het model (log-getransformeerd want soortenrijkdom modelleren we in de log-link schaal).
+
+We fitten de modellen voor beide soortengroepen samengenomen in hetzelfde model, maar we laten elke covariaat in interactie gaan met de soortengroep zodat we aparte parameterschattingen per soortengroep bekomen.
+
 ```{r}
 data_sp_rich <- apoidea %>%
   mutate(taxgroup = "Apoidea") %>%
@@ -523,14 +527,16 @@ model1 <- glmmTMB(
   + location_code
   + maand
   + log(n_ind + 1)) * taxgroup,
-  family = "poisson",
   ziformula = ~ taxgroup,
+  family = "poisson", 
   na.action = na.exclude,
   data = data_sp_rich
 )
 
 summary(model1)
 ```
+
+De hoge waarden voor collineariteit zijn in dit geval geen probleem en zijn het gevolg van (verwachte) collineariteit t.g.v. toevoegen van interacties.
 
 ```{r, fig.height=10}
 performance::check_model(model1)
@@ -559,329 +565,7 @@ marginaleffects::plot_predictions(
   facet_wrap(~taxgroup)
 ```
 
-## Aantal individuen (met honingbijen)
-
-```{r}
-ap_data_n_ind <- apoidea %>%
-  filter(time_series == 0) %>%
-  mutate(maand = as.factor(month(date_b))) %>%
-  group_by(
-    location_code, method_cd, method_combi,
-    spring_code, level, uv, maand, sample_code) %>%
-  summarise(
-    n_ind = sum(no_ind),
-    .groups = "drop") %>%
-  filter(n_ind < 500)
-```
-
-
-### SPRING protocol
-
-
-```{r}
-ap_data_n_ind_spring <- ap_data_n_ind %>%
-  filter(spring_code == "s.s.")
-```
-
-
-```{r}
-ggplot(ap_data_n_ind_spring, aes(x = n_ind)) +
-  geom_histogram()
-```
-
-
-```{r}
-model0 <- glmmTMB(
-  n_ind ~ 
-    location_code
-  + maand
-  + method_cd
-  ,
-  family = "nbinom1",
-  ziformula = ~1,
-  na.action = na.fail,
-  data = ap_data_n_ind_spring
-)
-```
-
-```{r, fig.height=10}
-performance::check_model(model0)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model0,
-  condition = c("maand", "method_cd"),
-  type = "response",
-  vcov = vcov(model0)
-) +
-  labs(y = "Aantal individuen (met honingbijen)")
-```
-
-### Alternatieve methoden
-
-```{r}
-model1 <- glmmTMB(
-  n_ind ~
-    method_combi
-  + location_code
-  + maand,
-  family = "poisson",
-  ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_n_ind
-)
-
-summary(model1)
-```
-
-```{r, fig.height=10}
-performance::check_model(model1)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model1,
-  condition = c("method_combi"),
-  type = "response",
-  vcov = vcov(model1),
-  draw = FALSE) %>%
-  left_join(
-    ap_data_n_ind %>%
-      distinct(method_cd, spring_code, uv, level, method_combi)
-  ) %>%
-  as_tibble() %>%
-  ggplot() +
-  geom_pointrange(
-    aes(
-      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
-      colour = method_combi),
-    position = position_dodge(width = 0.5)
-  ) +
-  labs(y = "Aantal individuen (met honingbijen)")
-```
-
-## Aantal individuen (zonder honingbijen)
-
-```{r}
-ap_data_n_ind <- apoidea %>%
-  filter(time_series == 0) %>%
-  mutate(
-    maand = as.factor(month(date_b)),
-    no_ind = ifelse(
-      species_nm == "Apis mellifera Linnaeus, 1758" | is.na(species_nm),
-      0,
-      no_ind
-    )
-  ) %>%
-  group_by(
-    location_code, method_cd, method_combi, spring_code, uv,
-    level, maand, sample_code) %>%
-  summarise(n_ind = sum(no_ind), .groups = "drop")
-```
-
-
-
-### SPRING protocol
-
-
-```{r}
-ap_data_n_ind_spring <- ap_data_n_ind %>%
-  filter(spring_code == "s.s.")
-```
-
-
-```{r}
-ggplot(ap_data_n_ind_spring, aes(x = n_ind)) +
-  geom_histogram()
-```
-
-
-```{r}
-model0 <- glmmTMB(
-  n_ind ~ 
-    location_code
-  + maand
-  + method_cd
-  ,
-  family = "poisson",
-  ziformula = ~1,
-  na.action = na.fail,
-  data = ap_data_n_ind_spring
-)
-```
-
-```{r, fig.height=10}
-performance::check_model(model0)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model0,
-  condition = c("maand", "method_cd"),
-  type = "response",
-  vcov = vcov(model0)
-) +
-  labs(y = "Aantal individuen (zonder honingbijen)")
-```
-
-### Alternatieve methoden
-
-```{r}
-model1 <- glmmTMB(
-  n_ind ~
-    method_combi
-  + location_code
-  + maand,
-  family = "poisson",
-  ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_n_ind
-)
-
-summary(model1)
-```
-
-```{r, fig.height=10}
-performance::check_model(model1)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model1,
-  condition = c("method_combi"),
-  type = "response",
-  vcov = vcov(model1),
-  draw = FALSE) %>%
-  left_join(
-    ap_data_n_ind %>%
-      distinct(method_cd, spring_code, uv, level, method_combi)
-  ) %>%
-  as_tibble() %>%
-  ggplot() +
-  geom_pointrange(
-    aes(
-      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
-      colour = method_combi),
-    position = position_dodge(width = 0.5)
-  ) +
-  labs(y = "Aantal individuen (zonder honingbijen)")
-```
-
-
-## Soortenrijkdom met aantal individuen als covariabele
-
-```{r}
-ap_data_sp_rich_n_ind <- apoidea %>%
-  filter(time_series == 0) %>%
-  mutate(
-    maand = as.factor(month(date_b))) %>%
-  group_by(
-    sample_code, location_code, method_combi, 
-    method_cd, spring_code, uv, level, maand) %>%
-  summarise(
-    n_species = n_distinct(species_nm, na.rm = TRUE),
-    n_ind = sum(no_ind),
-    .groups = "drop"
-  ) %>%
-  filter(n_ind < 500)
-```
-
-
-
-### SPRING protocol
-
-
-```{r}
-ap_data_sp_rich_n_ind_spring <- ap_data_sp_rich_n_ind %>%
-  filter(spring_code == "s.s.")
-```
-
-
-```{r}
-ggplot(ap_data_sp_rich_n_ind_spring, aes(x = n_species)) +
-  geom_histogram()
-ggplot(ap_data_sp_rich_n_ind_spring,
-       aes(x = n_ind)) +
-  geom_point(aes(y = n_species)) +
-  facet_wrap(~method_cd, scales = "free")
-```
-
-
-```{r}
-model0 <- glmmTMB(
-  n_species ~ 
-    location_code
-  + maand
-  + method_cd
-  + log(n_ind + 1)
-  ,
-  family = "poisson",
-  ziformula = ~1,
-  na.action = na.fail,
-  data = ap_data_sp_rich_n_ind_spring
-)
-```
-
-```{r, fig.height=10}
-performance::check_model(model0)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model0,
-  condition = c("maand", "method_cd"),
-  type = "response",
-  vcov = vcov(model0)
-) +
-  labs(y = "Aantal soorten")
-```
-
-### Alternatieve methoden
-
-```{r}
-model1 <- glmmTMB(
-  n_species ~
-    method_combi
-  + location_code
-  + maand
-  + log(n_ind + 1)
-  ,
-  family = "poisson",
-  ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_sp_rich_n_ind
-)
-
-summary(model1)
-```
-
-```{r, fig.height=10}
-performance::check_model(model1)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model1,
-  condition = c("method_combi"),
-  type = "response",
-  vcov = vcov(model1),
-  draw = FALSE) %>%
-  left_join(
-    ap_data_sp_rich_n_ind %>%
-      distinct(method_cd, spring_code, uv, level, method_combi)
-  ) %>%
-  as_tibble() %>%
-  ggplot() +
-  geom_pointrange(
-    aes(
-      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
-      colour = method_combi),
-    position = position_dodge(width = 0.5)
-  ) +
-  labs(y = "Aantal soorten")
-```
-
+<!--
 # Correspondence Analysis
 
 ```{r, eval=FALSE}
@@ -1393,3 +1077,5 @@ Vergelijk beste methode PT met beste methode TS
 
 
 
+
+-->
