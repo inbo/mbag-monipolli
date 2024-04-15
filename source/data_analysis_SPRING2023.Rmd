@@ -765,8 +765,6 @@ rarefaction_result_3 %>%
 
 ### Soortenrijkdom
 
-#### SPRING protocol
-
 ```{r}
 ap_data_sp_rich <- apoidea %>%
   filter(time_series == 0) %>%
@@ -781,6 +779,8 @@ ap_data_sp_rich <- apoidea %>%
   )
 ```
 
+#### SPRING protocol
+
 ```{r}
 ap_data_sp_rich_spring <- ap_data_sp_rich %>%
   filter(spring_code == "s.s.")
@@ -788,7 +788,7 @@ ap_data_sp_rich_spring <- ap_data_sp_rich %>%
 
 
 ```{r}
-ggplot(ap_data_sp_rich, aes(x = n_species)) +
+ggplot(ap_data_sp_rich_spring, aes(x = n_species)) +
   geom_histogram()
 ```
 
@@ -882,37 +882,68 @@ marginaleffects::plot_predictions(
 ap_data_n_ind <- apoidea %>%
   filter(time_series == 0) %>%
   mutate(maand = as.factor(month(date_b))) %>%
-  group_by(location_code, method_cd, spring_code, level, maand, sample_code) %>%
-  summarise(n_ind = sum(no_ind)) %>%
-  mutate(uv = ifelse(spring_code == "MP", "non-uv", "uv")) %>%
+  group_by(
+    location_code, method_cd, method_combi,
+    spring_code, level, uv, maand, sample_code) %>%
+  summarise(
+    n_ind = sum(no_ind),
+    .groups = "drop") %>%
   filter(n_ind < 500)
 ```
 
+
+#### SPRING protocol
+
+
 ```{r}
-ggplot(ap_data_n_ind, aes(x = n_ind)) +
+ap_data_n_ind_spring <- ap_data_n_ind %>%
+  filter(spring_code == "s.s.")
+```
+
+
+```{r}
+ggplot(ap_data_n_ind_spring, aes(x = n_ind)) +
   geom_histogram()
 ```
 
-```{r}
-model0 <- glmmTMB(n_ind ~ location_code + maand,
-  family = "nbinom2",
-  ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_n_ind
-)
 
-summary(model0)
+```{r}
+model0 <- glmmTMB(
+  n_ind ~ 
+    location_code
+  + maand
+  + method_cd
+  ,
+  family = "nbinom1",
+  ziformula = ~1,
+  na.action = na.fail,
+  data = ap_data_n_ind_spring
+)
 ```
 
 ```{r, fig.height=10}
 performance::check_model(model0)
 ```
 
-1) Leveren transecttellingen een ander aantal individuen op dan pan trap opstellingen?
+```{r}
+marginaleffects::plot_predictions(
+  model0,
+  condition = c("maand", "method_cd"),
+  type = "response",
+  vcov = vcov(model0)
+) +
+  labs(y = "Aantal individuen (met honingbijen)")
+```
+
+#### Alternatieve methoden
 
 ```{r}
-model1 <- glmmTMB(n_ind ~ method_cd + location_code + maand,
-  family = "nbinom2",
+model1 <- glmmTMB(
+  n_ind ~
+    method_combi
+  + location_code
+  + maand,
+  family = "poisson",
   ziformula = ~1,
   na.action = na.exclude,
   data = ap_data_n_ind
@@ -928,69 +959,24 @@ performance::check_model(model1)
 ```{r}
 marginaleffects::plot_predictions(
   model1,
-  condition = c("maand", "method_cd", "location_code"),
+  condition = c("method_combi"),
   type = "response",
-  vcov = vcov(model1)
-)
+  vcov = vcov(model1),
+  draw = FALSE) %>%
+  left_join(
+    ap_data_n_ind %>%
+      distinct(method_cd, spring_code, uv, level, method_combi)
+  ) %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_pointrange(
+    aes(
+      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
+      colour = method_combi),
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(y = "Aantal individuen (met honingbijen)")
 ```
-
-2) Leveren transsecttellingen on sight (visual) een hoger aantal individuen op dan de MP-transecttellingen?
-
-```{r}
-model2 <- glmmTMB(n_ind ~ spring_code + location_code + maand,
-  family = "nbinom2",
-  ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_n_ind %>% filter(method_cd == "TS")
-)
-
-
-summary(model2)
-```
-
-```{r, fig.height=10}
-performance::check_model(model2)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model2,
-  condition = c("maand", "spring_code", "location_code"),
-  type = "response",
-  vcov = vcov(model2)
-)
-```
-
-3) Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-pan traps op grondniveau?
-
-4) Leveren de UV-pan trap units een hogere diversiteit op dan de niet-UV-reflecterende pan traps? (eventueel kan er ook naar het gecombineerd effect vegetatiehoogte*UV-reflectie gekeken worden)
-
-Interactie kan niet onderzocht worden omdat er geen niet-uv traps op vegetatieniveau geplaatst werden.
-
-```{r}
-model3 <- glmmTMB(n_ind ~ uv + level + location_code + maand,
-  family = "nbinom2",
-  ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_n_ind %>% filter(method_cd == "PT")
-)
-
-summary(model3)
-```
-
-```{r, fig.height=10}
-performance::check_model(model3)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model3,
-  condition = c("level", "uv"),
-  type = "response",
-  vcov = vcov(model3)
-)
-```
-
 
 ### Aantal individuen (zonder honingbijen)
 
@@ -1005,35 +991,65 @@ ap_data_n_ind <- apoidea %>%
       no_ind
     )
   ) %>%
-  group_by(location_code, method_cd, spring_code, level, maand, sample_code) %>%
-  summarise(n_ind = sum(no_ind)) %>%
-  mutate(uv = ifelse(spring_code == "MP", "non-uv", "uv"))
+  group_by(
+    location_code, method_cd, method_combi, spring_code, uv,
+    level, maand, sample_code) %>%
+  summarise(n_ind = sum(no_ind), .groups = "drop")
 ```
 
+
+
+#### SPRING protocol
+
+
 ```{r}
-ggplot(ap_data_n_ind, aes(x = n_ind)) +
+ap_data_n_ind_spring <- ap_data_n_ind %>%
+  filter(spring_code == "s.s.")
+```
+
+
+```{r}
+ggplot(ap_data_n_ind_spring, aes(x = n_ind)) +
   geom_histogram()
 ```
 
+
 ```{r}
-model0 <- glmmTMB(n_ind ~ location_code + maand,
+model0 <- glmmTMB(
+  n_ind ~ 
+    location_code
+  + maand
+  + method_cd
+  ,
   family = "poisson",
   ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_n_ind
+  na.action = na.fail,
+  data = ap_data_n_ind_spring
 )
-
-summary(model0)
 ```
 
 ```{r, fig.height=10}
 performance::check_model(model0)
 ```
 
-1) Leveren transecttellingen een ander aantal individuen op dan pan trap opstellingen?
+```{r}
+marginaleffects::plot_predictions(
+  model0,
+  condition = c("maand", "method_cd"),
+  type = "response",
+  vcov = vcov(model0)
+) +
+  labs(y = "Aantal individuen (zonder honingbijen)")
+```
+
+#### Alternatieve methoden
 
 ```{r}
-model1 <- glmmTMB(n_ind ~ method_cd + location_code + maand,
+model1 <- glmmTMB(
+  n_ind ~
+    method_combi
+  + location_code
+  + maand,
   family = "poisson",
   ziformula = ~1,
   na.action = na.exclude,
@@ -1050,101 +1066,78 @@ performance::check_model(model1)
 ```{r}
 marginaleffects::plot_predictions(
   model1,
-  condition = c("maand", "method_cd", "location_code"),
+  condition = c("method_combi"),
   type = "response",
-  vcov = vcov(model1)
-)
+  vcov = vcov(model1),
+  draw = FALSE) %>%
+  left_join(
+    ap_data_n_ind %>%
+      distinct(method_cd, spring_code, uv, level, method_combi)
+  ) %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_pointrange(
+    aes(
+      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
+      colour = method_combi),
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(y = "Aantal individuen (zonder honingbijen)")
 ```
 
-2) Leveren transsecttellingen on sight (visual) een hoger aantal individuen op dan de MP-transecttellingen?
-
-```{r}
-model2 <- glmmTMB(n_ind ~ spring_code + location_code + maand,
-  family = "poisson",
-  ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_n_ind %>% filter(method_cd == "TS")
-)
-
-
-summary(model2)
-```
-
-```{r, fig.height=10}
-performance::check_model(model2)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model2,
-  condition = c("maand", "spring_code", "location_code"),
-  type = "response",
-  vcov = vcov(model2)
-)
-```
-
-3) Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-pan traps op grondniveau?
-
-4) Leveren de UV-pan trap units een hogere diversiteit op dan de niet-UV-reflecterende pan traps? (eventueel kan er ook naar het gecombineerd effect vegetatiehoogte*UV-reflectie gekeken worden)
-
-Interactie kan niet onderzocht worden omdat er geen niet-uv traps op vegetatieniveau geplaatst werden.
-
-```{r}
-model3 <- glmmTMB(n_ind ~ uv + level + location_code + maand,
-  family = "poisson",
-  ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_n_ind %>% filter(method_cd == "PT")
-)
-
-summary(model3)
-```
-
-```{r, fig.height=10}
-performance::check_model(model3)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model3,
-  condition = c("level", "uv"),
-  type = "response",
-  vcov = vcov(model3)
-)
-```
 
 ### Soortenrijkdom met aantal individuen als covariabele
 
 ```{r}
 ap_data_sp_rich_n_ind <- apoidea %>%
-  group_by(sample_code) %>%
-  mutate(
-    n_species = n_distinct(species_nm, na.rm = TRUE),
-    n_ind = sum(no_ind)
-  ) %>%
   filter(time_series == 0) %>%
-  mutate(maand = as.factor(month(date_b))) %>%
-  select(
-    location_code, method_cd, spring_code,
-    level, maand, n_species, n_ind
+  mutate(
+    maand = as.factor(month(date_b))) %>%
+  group_by(
+    sample_code, location_code, method_combi, 
+    method_cd, spring_code, uv, level, maand) %>%
+  summarise(
+    n_species = n_distinct(species_nm, na.rm = TRUE),
+    n_ind = sum(no_ind),
+    .groups = "drop"
   ) %>%
-  mutate(uv = ifelse(spring_code == "MP", "non-uv", "uv"))
+  filter(n_ind < 500)
 ```
 
+
+
+#### SPRING protocol
+
+
 ```{r}
-ggplot(ap_data_sp_rich, aes(x = n_species)) +
+ap_data_sp_rich_n_ind_spring <- ap_data_sp_rich_n_ind %>%
+  filter(spring_code == "s.s.")
+```
+
+
+```{r}
+ggplot(ap_data_sp_rich_n_ind_spring, aes(x = n_species)) +
   geom_histogram()
+ggplot(ap_data_sp_rich_n_ind_spring,
+       aes(x = n_ind)) +
+  geom_point(aes(y = n_species)) +
+  facet_wrap(~method_cd, scales = "free")
 ```
 
+
 ```{r}
-model0 <- glmmTMB(n_species ~ location_code + maand + n_ind,
+model0 <- glmmTMB(
+  n_species ~ 
+    location_code
+  + maand
+  + method_cd
+  + log(n_ind + 1)
+  ,
   family = "poisson",
   ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_sp_rich_n_ind
+  na.action = na.fail,
+  data = ap_data_sp_rich_n_ind_spring
 )
-
-summary(model0)
 ```
 
 ```{r, fig.height=10}
@@ -1154,25 +1147,23 @@ performance::check_model(model0)
 ```{r}
 marginaleffects::plot_predictions(
   model0,
-  condition = c("maand", "location_code"),
+  condition = c("maand", "method_cd"),
   type = "response",
   vcov = vcov(model0)
-)
+) +
+  labs(y = "Aantal soorten")
 ```
 
-```{r}
-marginaleffects::plot_predictions(
-  model0,
-  condition = c("n_ind", "location_code"),
-  type = "response",
-  vcov = vcov(model0)
-)
-```
-
-1) Leveren transecttellingen een andere diversiteit op dan pan trap opstellingen?
+#### Alternatieve methoden
 
 ```{r}
-model1 <- glmmTMB(n_species ~ method_cd + location_code + maand + n_ind,
+model1 <- glmmTMB(
+  n_species ~
+    method_combi
+  + location_code
+  + maand
+  + log(n_ind + 1)
+  ,
   family = "poisson",
   ziformula = ~1,
   na.action = na.exclude,
@@ -1189,68 +1180,23 @@ performance::check_model(model1)
 ```{r}
 marginaleffects::plot_predictions(
   model1,
-  condition = c("maand", "method_cd", "location_code"),
+  condition = c("method_combi"),
   type = "response",
-  vcov = vcov(model1)
-)
-```
-
-2) Leveren transsecttellingen on sight (visual) een hogere diversiteit op dan de MP-
-transecttellingen?
-
-```{r}
-model2 <- glmmTMB(n_species ~ spring_code + location_code + maand + n_ind,
-  family = "poisson",
-  ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_sp_rich_n_ind %>% filter(method_cd == "TS")
-)
-
-
-summary(model2)
-```
-
-```{r, fig.height=10}
-performance::check_model(model2)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model2,
-  condition = c("maand", "spring_code", "location_code"),
-  type = "response",
-  vcov = vcov(model2)
-)
-```
-
-3) Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-pan traps op grondniveau?
-
-4) Leveren de UV-pan trap units een hogere diversiteit op dan de niet-UV-reflecterende pan traps? (eventueel kan er ook naar het gecombineerd effect vegetatiehoogte*UV-reflectie gekeken worden)
-
-Interactie kan niet onderzocht worden omdat er geen niet-uv traps op vegetatieniveau geplaatst werden.
-
-```{r}
-model3 <- glmmTMB(n_species ~ uv + level + location_code + maand + n_ind,
-  family = "poisson",
-  ziformula = ~1,
-  na.action = na.exclude,
-  data = ap_data_sp_rich_n_ind %>% filter(method_cd == "PT")
-)
-
-summary(model3)
-```
-
-```{r, fig.height=10}
-performance::check_model(model3)
-```
-
-```{r}
-marginaleffects::plot_predictions(
-  model3,
-  condition = c("level", "uv"),
-  type = "response",
-  vcov = vcov(model3)
-)
+  vcov = vcov(model1),
+  draw = FALSE) %>%
+  left_join(
+    ap_data_sp_rich_n_ind %>%
+      distinct(method_cd, spring_code, uv, level, method_combi)
+  ) %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_pointrange(
+    aes(
+      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
+      colour = method_combi),
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(y = "Aantal soorten")
 ```
 
 ## Correspondence Analysis
