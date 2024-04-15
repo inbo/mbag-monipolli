@@ -559,7 +559,9 @@ apoidea_cumulative <- apoidea %>%
     accumulated_species_list = accumulate(
       species_list, union, .simplify = FALSE),
     cumulative_n_species = map_dbl(accumulated_species_list, length),
-    cumulative_days = cumsum(duration)
+    cumulative_days = cumsum(duration),
+    extra_n_species = cumulative_n_species - dplyr::lag(cumulative_n_species),
+    extra_n_days = cumulative_days - dplyr::lag(cumulative_days)
   ) %>%
   ungroup()
 ```
@@ -571,6 +573,38 @@ apoidea_cumulative %>%
   stat_summary(fun.data = mean_cl_boot, colour = "blue") +
   facet_grid(location_code ~ spring_code)
 ```
+
+In de volgende figuur hebben we berekend hoeveel soorten er extra gevonden werden door de pantraps langer te laten staan. De vergelijking is telkens met de voorgaande lagere sampling effort op die site voor die methode. In de meeste gevallen is dit één dag langer, maar soms is het meer dan 1 dag. Het aantal extra dagen is weergegeven met een cijfer naast de schatting van het gemiddelde aantal extra soorten.
+Om af te wegen of deze extra inspanning de moeite is, moeten we ook nog aangeven wat een relevante toename aan soorten (gemiddelde) is in de sets van telkens tien pantraps. In de figuur is dit ingesteld op +0.5 extra soorten per extra dag en weergegeven met een horizontale lijn. Als het 95% betrouwbaarheidsinterval volledig boven deze lijn ligt, mogen we de toename als relevant beschouwen.
+
+```{r}
+referentie_extra_soorten_per_dag <- 0.5
+
+apoidea_cumulative %>%
+  ggplot(aes(x = cumulative_days, y = extra_n_species)) +
+  geom_segment(
+    aes(x = cumulative_days - 0.5,
+        xend = cumulative_days + 0.5,
+        y = referentie_extra_soorten_per_dag * extra_n_days),
+    alpha = 0.05) +
+  geom_point(alpha = 0.2) +
+  geom_text(
+    data = apoidea_cumulative %>%
+      group_by(cumulative_days, location_code, spring_code) %>%
+      summarise(
+        mean_extra_n_species = mean(extra_n_species, na.rm = TRUE),
+        extra_n_days = mean(extra_n_days, na.rm = TRUE)),
+    aes(
+      y = mean_extra_n_species,
+      label = extra_n_days),
+    nudge_x = 0.5,
+    alpha = 0.4
+    ) +
+  stat_summary(fun.data = mean_cl_boot, colour = "blue") +
+  facet_grid(location_code ~ spring_code, scales = "free_y") +
+  labs(y = "Aantal soorten extra t.o.v. één 'dag' minder laten staan")
+```
+
 
 
 
