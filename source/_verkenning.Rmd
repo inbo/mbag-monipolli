@@ -1,0 +1,355 @@
+## {{title}}
+
+We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 11de pantrap op de site van ILVO niet wordt meegenomen in verdere analyses.
+
+```{r {{group}}-dataset}
+{{group}} <- identifications_basic %>%
+  filter(family %in% {{familyvec}}) %>%
+  full_join(samples_basic, by = c("sample_code")) %>%
+  mutate(
+    no_ind = ifelse(
+      is.na(no_ind),
+      0,
+      no_ind
+    )) %>%
+  filter(!(stringr::str_detect(sampling_site_cd, "PT11")))
+```
+
+### Gamma diversiteit
+
+Aantal unieke soorten per locatie
+
+
+```{r}
+venn({{group}}, "location_code")
+```
+  
+Aantal unieke soorten voor transecten (TS) en pan traps (PT)
+
+```{r}
+venn({{group}}, "method_cd")
+```
+
+Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
+
+```{r}
+venn(
+  {{group}} %>% filter(method_cd == "TS"),
+  "spring_code"
+)
+```
+
+Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
+
+```{r}
+venn(
+  {{group}} %>% filter(method_cd == "PT"),
+  "spring_code"
+)
+```
+
+De combinatie van alles:
+
+```{r}
+venn({{group}}, "method_combi")
+```
+
+
+### Alpha diversiteit
+
+```{r {{group}}-richness}
+{{group}}_richness <- {{group}} %>%
+  group_by(
+    location_code,
+    sampling_site_cd,
+    method_cd,
+    spring_code,
+    time_series,
+    level,
+    uv,
+    method_combi,
+    date_b,
+    date_e,
+    sample_code
+  ) %>%
+  mutate(p_i = no_ind / sum(no_ind)) %>%
+  summarise(
+    n_species = sum(no_ind > 0),
+    exp_shannon = exp(-sum(p_i * log(p_i), na.rm = TRUE)),
+    .groups = "drop")
+```
+
+```{r {{group}}-n-species}
+{{group}}_richness %>%
+  ggplot() +
+  geom_boxplot(
+    aes(y = n_species,
+        x = method_cd,
+        fill = factor(method_combi))
+  ) +
+  facet_wrap(~paste("time series: ", time_series), scales = "free_x")
+```
+
+```{r {{group}}-exp-shannon}
+{{group}}_richness %>%
+  ggplot() +
+  geom_boxplot(
+    aes(y = exp_shannon,
+        x = method_cd,
+        fill = factor(method_combi))
+  ) +
+  facet_wrap(~paste("time series: ", time_series), scales = "free_x")
+```
+
+
+### Soortenaccumulatie
+
+#### Saturatie pan traps in tijd
+
+>Moreover, some rarefaction and extrapolation curves may cross one or more times, so that the rank order of diversity measured among samples could change depending on the sampling effort that is used for standardized comparisons (Chao and Jost 2012). 
+
+
+Voor de volgende analyse selecteren we de tijdreeksen. Als we hiervan een "rarefaction" curve berekenen zal dit geen beeld geven van het cumulatief aantal soorten in de tijd, maar zal het weergeven hoe het aantal soorten toeneemt als je meerdere sampling events uit de tijdreeks combineert.
+Als de x-as "rarefied number of days" gelijk aan 3 weergeeft, zijn dit dus niet noodzakelijk drie opeenvolgende dagen.
+
+
+```{r}
+rarefaction_result <- {{group}} %>%
+  filter(
+    time_since_previous == 0 | time_till_next == 0
+  ) %>%
+  complete(
+    nesting(
+      location_code, method_cd, spring_code, level, uv, month,
+      sampling_site_cd),
+    species_nm,
+    fill = list(no_ind = 0)) %>%
+  group_by(location_code, method_cd, spring_code, level, uv, date_b,
+           species_nm) %>%
+  summarise(n = sum(no_ind)) %>%
+  filter(sum(n) > 0) %>%
+  group_by(location_code, method_cd, spring_code, level, uv) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+```
+
+```{r}
+rarefaction_result %>%
+  filter(location_code != "BE_MVS03") %>%
+  ggplot(
+    aes(
+      x = sites, y = richness)
+    ) +
+  geom_line(
+    aes(
+      colour = uv, linetype = level)) +
+  geom_ribbon(
+    aes(
+      ymin = lwr, ymax = upr, fill = uv, linetype = level), alpha = 0.2) +
+  xlab("Rarefied number of days") +
+  ylab("Number of (morpho)species") +
+  facet_wrap(~location_code)
+```
+
+
+Om wel rekening te houden met de tijdsvolgorden gaan we anders te werk.
+Voor een bepaalde plaats waarvan er een tijdreeks is, berekenen we het cumulatief aantal soorten in de tijd.
+
+```{r}
+{{group}}_cumulative <- {{group}} %>%
+  filter(
+    time_since_previous == 0 | time_till_next == 0
+  ) %>%
+  group_by(
+    location_code, sampling_site_cd, method_cd, spring_code
+  ) %>%
+  arrange(time_order, .by_group = TRUE) %>%
+  group_by(
+    location_code, sampling_site_cd, method_cd, spring_code,
+    level, uv, method_combi, time_order
+  ) %>%
+  summarise(
+    species_list = list(species_nm[!is.na(species_nm)]),
+    duration = mean(duration)
+  ) %>%
+  mutate(
+    duration = ifelse(duration == 0, 6/24, duration),
+    accumulated_species_list = accumulate(
+      species_list, union, .simplify = FALSE),
+    cumulative_n_species = map_dbl(accumulated_species_list, length),
+    cumulative_days = cumsum(duration),
+    extra_n_species = cumulative_n_species - dplyr::lag(cumulative_n_species),
+    extra_n_days = cumulative_days - dplyr::lag(cumulative_days)
+  ) %>%
+  ungroup()
+```
+
+```{r}
+{{group}}_cumulative %>%
+  ggplot(aes(x = cumulative_days, y = cumulative_n_species)) +
+  geom_point(alpha = 0.2) +
+  stat_summary(fun.data = mean_cl_boot, colour = "blue") +
+  facet_grid(location_code ~ method_combi)
+```
+
+In de volgende figuur hebben we berekend hoeveel soorten er extra gevonden werden door de pantraps langer te laten staan. De vergelijking is telkens met de voorgaande lagere sampling effort op die site voor die methode. In de meeste gevallen is dit één dag langer, maar soms is het meer dan 1 dag. Het aantal extra dagen is weergegeven met een cijfer naast de schatting van het gemiddelde aantal extra soorten.
+Om af te wegen of deze extra inspanning de moeite is, moeten we ook nog aangeven wat een relevante toename aan soorten (gemiddelde) is in de sets van telkens tien pantraps. In de figuur is dit ingesteld op +0.5 extra soorten per extra dag en weergegeven met een horizontale lijn. Als het 95% betrouwbaarheidsinterval volledig boven deze lijn ligt, mogen we de toename als relevant beschouwen.
+
+```{r}
+referentie_extra_soorten_per_dag <- 0.5
+
+{{group}}_cumulative %>%
+  ggplot(aes(x = cumulative_days, y = extra_n_species)) +
+  geom_segment(
+    aes(x = cumulative_days - 0.5,
+        xend = cumulative_days + 0.5,
+        y = referentie_extra_soorten_per_dag * extra_n_days),
+    alpha = 0.05) +
+  geom_point(alpha = 0.2) +
+  geom_text(
+    data = {{group}}_cumulative %>%
+      group_by(cumulative_days, location_code, method_combi) %>%
+      summarise(
+        mean_extra_n_species = mean(extra_n_species, na.rm = TRUE),
+        extra_n_days = mean(extra_n_days, na.rm = TRUE)),
+    aes(
+      y = mean_extra_n_species,
+      label = extra_n_days),
+    nudge_x = 0.5,
+    alpha = 0.4
+    ) +
+  stat_summary(fun.data = mean_cl_boot, colour = "blue") +
+  facet_grid(location_code ~ method_combi, scales = "free_y") +
+  labs(y = "Aantal soorten extra t.o.v. één 'dag' minder laten staan")
+```
+
+
+
+
+#### Saturatie in aantal pan traps
+
+```{r}
+rarefaction_result_2 <- {{group}} %>%
+  filter(
+    method_cd == "PT",
+    time_series == 0
+  ) %>%
+  complete(
+    nesting(
+      location_code, method_cd, spring_code, level, uv, month,
+      sampling_site_cd),
+    species_nm,
+    fill = list(no_ind = 0)) %>%
+  group_by(location_code, method_cd, spring_code, level, uv, month,
+           sampling_site_cd, species_nm) %>%
+  summarise(n = sum(no_ind)) %>%
+  group_by(location_code, method_cd, spring_code, level, uv, month) %>%
+  filter(sum(n) > 0) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+```
+
+Noot: waar de lijn praktisch lineair is, gaat het om gevallen waar in totaal zeer weinig individuen werden geteld. De methode maakt dan een lineaire interpolatie tussen het aantal soorten in alle 10 pantraps en de oorsprong (0 sites, 0 soorten).
+
+```{r}
+rarefaction_result_2 %>%
+  ggplot(
+    aes(
+      x = sites, y = richness)
+    ) +
+  geom_line(
+    aes(
+      colour = uv,
+      linetype = level)) +
+  geom_ribbon(
+    aes(
+      ymin = lwr, ymax = upr, fill = uv, linetype = level), alpha = 0.2) +
+  xlab("Rarefied number of pan trap sampling sites") +
+  ylab("Number of (morpho)species") +
+  facet_grid(paste("maand:", month) ~ location_code, scales = "free")
+```
+
+```{r}
+rarefaction_result_2 %>%
+  ggplot(
+    aes(
+      x = individuals, y = richness)
+    ) +
+  geom_line(
+    aes(
+      colour = level, linetype = uv)) +
+  geom_ribbon(
+    aes(
+      ymin = lwr, ymax = upr, fill = level, linetype = uv), alpha = 0.2) +
+  xlab("Rarefied number of individuals") +
+  ylab("Number of (morpho)species") +
+  facet_grid(paste("maand:", month) ~ location_code, scales = "free")
+```
+
+
+
+#### Saturatie in aantal deeltransecten
+
+```{r}
+rarefaction_result_3 <- {{group}} %>%
+  filter(method_cd == "TS") %>%
+  complete(
+    nesting(
+      location_code, method_cd, spring_code, level, month,
+      sampling_site_cd),
+    species_nm,
+    fill = list(no_ind = 0)) %>%
+  group_by(location_code, method_cd, spring_code,
+           sampling_site_cd, species_nm) %>%
+  summarise(n = sum(no_ind)) %>%
+  filter(sum(n) > 0) %>%
+  group_by(location_code, method_cd, spring_code) %>%
+  nest() %>%
+  mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
+  select(-data) %>%
+  unnest(rarefaction) %>%
+  ungroup()
+```
+
+
+
+```{r}
+rarefaction_result_3 %>%
+  ggplot(
+    aes(
+      x = sites, y = richness)
+    ) +
+  geom_line(
+    aes(
+      colour = spring_code)) +
+  geom_ribbon(
+    aes(
+      ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
+  xlab("Rarefied number of transect 50m segments") +
+  ylab("Number of (morpho)species") +
+  facet_grid(~ location_code, scales = "free")
+```
+
+```{r}
+rarefaction_result_3 %>%
+  ggplot(
+    aes(
+      x = individuals, y = richness)
+    ) +
+  geom_line(
+    aes(
+      colour = spring_code)) +
+  geom_ribbon(
+    aes(
+      ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
+  xlab("Rarefied number of individuals") +
+  ylab("Number of (morpho)species") +
+  facet_grid(~ location_code, scales = "free")
+```
+
+
