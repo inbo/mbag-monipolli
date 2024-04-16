@@ -432,7 +432,7 @@ purrr::pmap(
 
 # onderstaande clipr code kan je gebruiken om de rmd naar klembord te schrijven
 # daarna kan je dit plakken in een tijdelijk bestand en de chunks runnen
-# enkel nodig indien je interactief werkt en de code vand deze chunks nodig hebt
+# enkel nodig indien je interactief werkt en de code van deze chunks nodig hebt
 # clipr::write_clip(rmd)
 
 knit(text = rmd, quiet = TRUE) %>%
@@ -510,7 +510,7 @@ marginaleffects::plot_predictions(
   model0,
   condition = c("maand", "method_cd",  "taxgroup"),
   type = "response",
-  vcov = vcov(model0)
+  vcov = TRUE
 )
 ```
 
@@ -548,7 +548,7 @@ marginaleffects::plot_predictions(
   model1,
   condition = c("method_combi", "taxgroup"),
   type = "response",
-  vcov = vcov(model1),
+  vcov = TRUE,
   draw = FALSE) %>%
   left_join(
     data_sp_rich %>%
@@ -773,7 +773,7 @@ marginaleffects::plot_predictions(
   model0,
   condition = c("maand", "location_code"),
   type = "response",
-  vcov = vcov(model0)
+  vcov = TRUE
 )
 ```
 
@@ -799,7 +799,7 @@ marginaleffects::plot_predictions(
   model1,
   condition = c("maand", "method_cd", "location_code"),
   type = "response",
-  vcov = vcov(model1)
+  vcov = TRUE
 )
 ```
 
@@ -826,7 +826,7 @@ marginaleffects::plot_predictions(
   model2,
   condition = c("maand", "spring_code", "location_code"),
   type = "response",
-  vcov = vcov(model2)
+  vcov = TRUE
 )
 ```
 
@@ -856,7 +856,7 @@ marginaleffects::plot_predictions(
   model3,
   condition = c("level", "uv"),
   type = "response",
-  vcov = vcov(model3)
+  vcov = TRUE
 )
 ```
 
@@ -944,7 +944,7 @@ marginaleffects::plot_predictions(
   model0,
   condition = c("maand", "location_code"),
   type = "response",
-  vcov = vcov(model0)
+  vcov = TRUE
 )
 ```
 
@@ -970,7 +970,7 @@ marginaleffects::plot_predictions(
   model1,
   condition = c("maand", "group", "method_cd"),
   type = "response",
-  vcov = vcov(model1)
+  vcov = TRUE
 )
 ```
 
@@ -999,7 +999,7 @@ marginaleffects::plot_predictions(
   model2,
   condition = c("maand", "group", "spring_code"),
   type = "response",
-  vcov = vcov(model2)
+  vcov = TRUE
 ) + facet_wrap("spring_code", scales = "fixed")
 ```
 
@@ -1031,7 +1031,7 @@ marginaleffects::plot_predictions(
   model3,
   condition = c("level", "uv", "group"),
   type = "response",
-  vcov = vcov(model3)
+  vcov = TRUE
 )
 ```
 
@@ -1062,7 +1062,7 @@ marginaleffects::plot_predictions(
   model4,
   condition = c("c_meth", "group"),
   type = "response",
-  vcov = vcov(model0)
+  vcov = TRUE
 )
 ```
 
