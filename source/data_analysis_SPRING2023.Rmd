@@ -30,6 +30,7 @@ library(purrr)
 library(here)
 library(lubridate)
 library(stringr)
+library(googlesheets4)
 
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
@@ -37,7 +38,7 @@ conflicted::conflict_prefer("layout", "plotly")
 ```
 
 ```{r venn-function}
-venn <- function(data, group) {
+venn <- function(data, group, count_id = "species_nm") {
   groups <- data %>%
     distinct(!!sym(group)) %>%
     pull(!!sym(group))
@@ -51,9 +52,9 @@ venn <- function(data, group) {
         time_series == 0,
         !!sym(group) == i
       ) %>%
-      distinct(species_nm) %>%
-      filter(!is.na(species_nm)) %>%
-      pull(species_nm)
+      distinct(!!sym(count_id)) %>%
+      filter(!is.na(!!sym(count_id))) %>%
+      pull(!!sym(count_id))
     x[[i]] <- int
   }
   
@@ -565,6 +566,122 @@ marginaleffects::plot_predictions(
   labs(y = "Soortenrijkdom") +
   facet_wrap(~taxgroup, scales = "free")
 ```
+
+## Alpha biodiversity
+
+```{r}
+sha <- apoidea %>%
+  mutate(taxgroup = "Apoidea") %>%
+  bind_rows(
+    syrphidae %>%
+      mutate(taxgroup = "Syrphidae")
+  ) %>% 
+  group_by(sampling_site_cd, spring_code, method_cd, taxgroup,
+           location_code, method_combi) %>% 
+  mutate(tot_ind = sum(no_ind)) %>% 
+  group_by(sampling_site_cd, spring_code, 
+           method_cd, species_nm, tot_ind,
+           taxgroup,
+           location_code, method_combi) %>% 
+  summarise(n_ind = sum(no_ind)) %>% 
+  mutate(prop = (n_ind/tot_ind) * log(n_ind/tot_ind)) %>% 
+  group_by(sampling_site_cd, spring_code, 
+           method_cd, taxgroup,
+           location_code, method_combi) %>% 
+  summarise(exp_sh = exp(-sum(prop, na.rm = TRUE)))
+```
+
+```{r}
+model0 <- glmmTMB(
+  exp_sh ~ 
+    (method_combi +
+       location_code) * taxgroup
+  ,
+  family = "Gamma",
+  ziformula = ~ taxgroup,
+  na.action = na.fail,
+  data = sha
+)
+```
+
+```{r, fig.height=10}
+performance::check_model(model0)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model0,
+  condition = c("method_combi",  "taxgroup"),
+  type = "response",
+  vcov = TRUE
+)
+```
+
+# Kosten
+
+```{r}
+cost_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z6MTw5S8oI8B5iYxRmbNoStl9Ywf0", 
+                        sheet = "Kosten")
+
+time_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z6MTw5S8oI8B5iYxRmbNoStl9Ywf0", 
+                        sheet = "Tijdsbesteding")
+
+time_data <- time_data %>% 
+  left_join(cost_data %>% 
+              select(ID, `prijs/min`),
+            by = join_by(uitvoerder == ID))
+
+time_data <- time_data %>% 
+  mutate(kost = minuten * `prijs/min`)
+
+```
+
+Vaste verplaatsingskost:
+```{r}
+cost_data %>% 
+  filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") %>% 
+  pull(prijs) *
+  cost_data %>% 
+  filter(Kostencategorie == "Km vergoeding") %>% 
+  pull(prijs)
+```
+
+
+Variabele kosten pan traps:
+```{r}
+time_data %>% 
+  filter(methode == "PT") %>% 
+  summarise(.by = submethode, prijs = sum(kost)) %>% 
+  add_row(cost_data %>% filter(!is.na(submethode)) %>% 
+            select(submethode, prijs)) %>% 
+  summarise(.by = submethode, prijs = sum(prijs)) %>%
+  kableExtra::kable()
+```
+
+
+Variabele kosten transecten:
+```{r}
+time_data %>% 
+  filter(methode == "TS") %>% 
+  summarise(.by = submethode, prijs = sum(kost)) %>%
+  kableExtra::kable()
+```
+
+
+# Natural history traits
+```{r}
+nat_ap <- apoidea %>% 
+  left_join(naturalhistorytraits, join_by(species_nm == species))
+```
+
+```{r}
+venn(nat_ap, "method_cd", "group")
+```
+
+```{r}
+venn(nat_ap, "method_combi", "group")
+```
+
 
 <!--
 # Correspondence Analysis
