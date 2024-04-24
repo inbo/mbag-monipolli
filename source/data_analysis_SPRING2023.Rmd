@@ -87,6 +87,14 @@ rarefaction <- function(data) {
 }
 ```
 
+Er zijn vier tabellen in de access database:
+
+- Identificaties van de soorten
+- Unieke samples
+- Sample locaties
+- Natural history traits van wilde bijsoorten
+
+Van de eerste twee tabellen wordt een versimpelde versie gemaakt.
 
 ```{r load-data}
 conn <- odbcConnectAccess2007(here("data/SPRING.accdb"))
@@ -147,7 +155,15 @@ identifications_basic <- identifications %>%
   summarise(
     no_ind = sum(no_ind),
     .groups = "drop"
-  )
+  ) %>% 
+  mutate(group = case_when(
+    family %in% c(
+        "Apidae", "Andrenidae",
+        "Colletidae", "Halictidae",
+        "Melittidae", "Megachilidae") ~ "Apoidea",
+    family == "Syrphidae" ~ "Syrphidae",
+    .default = "other"
+  ))
 
 samples_basic <- samples %>%
   distinct(
@@ -199,7 +215,7 @@ glimpse(naturalhistorytraits)
 
 Er werden 5 verschillende monitoringsmethoden getest:
 
--  2 transecttypen. Een transect beslaat 500m en is verdeeld in 10 secties:
+- 2 transecttypen. Een transect beslaat 500m en is verdeeld in 10 secties:
   - SPRING s.s.: waargenomen of op het zicht verzameld (TS - s.s.)
   - MP: verzameld via het afslepen van de vegetatie of bodem (TS - MP)
 
@@ -238,7 +254,8 @@ transecten <- sampling_sites %>%
     ),
     geometry = st_as_sfc(geometry)
   ) %>%
-  select(-ends_with("section"), transect_sectie = remarks) %>%
+  select(-ends_with("section")) %>%
+  mutate(transect_sectie = stringr::str_extract(remarks, "\\d*-\\d*m")) %>% 
   mutate(transect_sectie = factor(
     transect_sectie,
     levels = c(
@@ -285,6 +302,8 @@ pantraps <- sampling_sites %>%
 glimpse(pantraps)
 ```
 
+We plotten de locaties van de transecten en pan traps om te controleren dat alles correct in de databank zit.
+
 ```{r map-transecten}
 plottransecten <- function(x) {
   ggplot(x) +
@@ -325,7 +344,7 @@ pantraps %>%
 
 Een subset van de pan trap opstellingen werd langer in het veld gelaten.
 
-Voor locatie 1 en 2 hebben we een tijdsreeks per één of twee dagen. Voor locatie 3 hebben we geen tussenstappen, deze locatie kan dus niet gebruikt worden voor de rarefaction analyse.
+Voor locatie 1 en 2 hebben we een tijdsreeks per één of twee dagen. Van locatie 1 werd in September een tijdsreeks gemaakt, van locatie 2 in Juni. Voor locatie 3 hebben we geen tussenstappen, deze locatie kan dus niet gebruikt worden voor de rarefaction analyse.
 
 ```{r}
 samples %>%
@@ -340,55 +359,55 @@ samples %>%
 ## Numbers per order
 
 ```{r}
-identifications %>%
-  group_by(order) %>%
+identifications_basic %>%
+  group_by(group, order) %>%
   summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
   mutate(order = reorder(order, desc(n_species))) %>%
   plot_ly(
     x = ~order,
     y = ~n_species,
-    type = "bar",
-    marker = list(color = "blue"))
+    color = ~group,
+    type = "bar")
 ```
 
 ```{r}
-identifications %>%
-  group_by(order) %>%
+identifications_basic %>%
+  group_by(group, order) %>%
   summarise(n_individuals = sum(no_ind)) %>%
   mutate(order = reorder(order, desc(n_individuals))) %>%
   plot_ly(
     x = ~order,
     y = ~n_individuals,
-    type = "bar",
-    marker = list(color = "blue"))
+    color = ~group,
+    type = "bar")
 ```
 
 
 ## Numbers per family
 
 ```{r}
-identifications %>%
-  group_by(family) %>%
+identifications_basic %>%
+  group_by(group, family) %>%
   summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
   mutate(family = reorder(family, desc(n_species))) %>%
   plot_ly(
     x = ~family,
     y = ~n_species,
-    type = "bar",
-    marker = list(color = "blue")) %>%
+    color = ~group,
+    type = "bar") %>%
   layout(xaxis = list(tickangle = -45))
 ```
 
 ```{r}
-identifications %>%
-  group_by(family) %>%
+identifications_basic %>%
+  group_by(group, family) %>%
   summarise(n_individuals = sum(no_ind)) %>%
   mutate(family = reorder(family, desc(n_individuals))) %>%
   plot_ly(
     x = ~family,
     y = ~n_individuals,
-    type = "bar",
-    marker = list(color = "blue")) %>%
+    color = ~group,
+    type = "bar") %>%
   layout(xaxis = list(tickangle = -45))
 ```
 
@@ -646,6 +665,16 @@ cost_data %>%
   pull(prijs)
 ```
 
+Tijdskost verplaatsing:
+```{r}
+cost_data %>% 
+  filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") %>% 
+  pull(prijs) / 50 * 60 *
+  cost_data %>% 
+  filter(Kostencategorie == "Jaarloon veldmedewerker") %>% 
+  pull(`prijs/min`)
+```
+
 
 Variabele kosten pan traps:
 ```{r}
@@ -667,6 +696,56 @@ time_data %>%
   kableExtra::kable()
 ```
 
+## Scenario's
+
+```{r}
+calculate_costs <- function(points, method, submethod){
+  cost1 <- time_data %>% 
+  filter(methode == method,
+         submethode == submethod) %>% 
+  summarise(prijs = sum(kost)) %>% 
+    pull(prijs)
+  
+  cost2 <- cost_data %>% 
+    filter(!is.na(submethode),
+           methode == method,
+           submethode == submethod) %>% 
+    summarise(prijs = sum(prijs)) %>% 
+    pull(prijs)
+  
+  ((cost1 + cost2) * points)
+}
+```
+
+
+Scenario 1:
+- 650 meetpunten
+- 1 pan trap s.s. per locatie
+
+```{r}
+calculate_costs(650, "PT", "s.s.") +
+  (650 * 14.93543) + (650 * 36.27281)
+```
+
+Scenario 2:
+- 650 meetpunten
+- Transect (sweeping) van 250m
+
+```{r}
+calculate_costs(650, "TS", "MP") * 5 +
+  (650 * 14.93543) + (650 * 36.27281)
+```
+
+Scenario 3:
+- 650 meetpunten
+- 1 pan trap s.s. per locatie
+- Transect (sweeping) van 250m
+
+```{r}
+calculate_costs(650, "PT", "s.s.") +
+  calculate_costs(650, "TS", "MP") * 5 +
+  (650 * 14.93543) + (650 * 36.27281)
+```
 
 # Natural history traits
 ```{r}
@@ -675,13 +754,16 @@ nat_ap <- apoidea %>%
 ```
 
 ```{r}
-venn(nat_ap, "method_cd", "group")
+venn(nat_ap, "method_cd", "optional_functional_group")
 ```
 
 ```{r}
-venn(nat_ap, "method_combi", "group")
+venn(nat_ap, "method_combi", "optional_functional_group")
 ```
 
+```{r}
+venn(nat_ap, "month", "optional_functional_group")
+```
 
 <!--
 # Correspondence Analysis
