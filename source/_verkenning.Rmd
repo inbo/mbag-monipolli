@@ -2,6 +2,16 @@
 
 We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 11de pantrap op de site van ILVO niet wordt meegenomen in verdere analyses.
 
+```{r}
+tot_n_species <- identifications_basic %>%
+  filter(family %in% {{familyvec}}) %>%
+  pull(species_nm) %>%
+  n_distinct()
+```
+
+
+In totaal werden `r tot_n_species` soorten `{{group}}` gevonden.
+
 ```{r {{group}}-dataset}
 {{group}} <- identifications_basic %>%
   filter(family %in% {{familyvec}}) %>%
@@ -12,6 +22,7 @@ We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 1
       0,
       no_ind
     )) %>%
+  mutate(month = as.factor(month)) %>% 
   filter(!(stringr::str_detect(sampling_site_cd, "PT11")))
 ```
 
@@ -54,6 +65,12 @@ De combinatie van alles:
 venn({{group}}, "method_combi")
 ```
 
+Aantal unieke soorten per maand
+
+```{r}
+venn({{group}}, "month")
+```
+
 
 ### Alpha diversiteit
 
@@ -79,6 +96,8 @@ venn({{group}}, "method_combi")
     .groups = "drop")
 ```
 
+Gemiddeld aantal soorten per methode, waarbij elke pan trap of 50m transect als één observatie wordt beschouwd.
+
 ```{r {{group}}-n-species}
 {{group}}_richness %>%
   ggplot() +
@@ -89,6 +108,8 @@ venn({{group}}, "method_combi")
   ) +
   facet_wrap(~paste("time series: ", time_series), scales = "free_x")
 ```
+
+Gemiddelde Shannon index per methode, waarbij elke pan trap of 50m transect als één observatie wordt beschouwd.
 
 ```{r {{group}}-exp-shannon}
 {{group}}_richness %>%
@@ -120,15 +141,15 @@ rarefaction_result <- {{group}} %>%
   ) %>%
   complete(
     nesting(
-      location_code, method_cd, spring_code, level, uv, month,
+      location_code, method_cd, spring_code, method_combi, month,
       sampling_site_cd),
     species_nm,
     fill = list(no_ind = 0)) %>%
-  group_by(location_code, method_cd, spring_code, level, uv, date_b,
+  group_by(location_code, method_cd, spring_code, method_combi, date_b,
            species_nm) %>%
   summarise(n = sum(no_ind)) %>%
   filter(sum(n) > 0) %>%
-  group_by(location_code, method_cd, spring_code, level, uv) %>%
+  group_by(location_code, method_cd, spring_code, method_combi) %>%
   nest() %>%
   mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
   select(-data) %>%
@@ -145,13 +166,13 @@ rarefaction_result %>%
     ) +
   geom_line(
     aes(
-      colour = uv, linetype = level)) +
+      colour = location_code)) +
   geom_ribbon(
     aes(
-      ymin = lwr, ymax = upr, fill = uv, linetype = level), alpha = 0.2) +
+      ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
   xlab("Rarefied number of days") +
   ylab("Number of (morpho)species") +
-  facet_wrap(~location_code)
+  facet_wrap(~method_combi)
 ```
 
 
@@ -239,14 +260,14 @@ rarefaction_result_2 <- {{group}} %>%
   ) %>%
   complete(
     nesting(
-      location_code, method_cd, spring_code, level, uv, month,
+      location_code, method_cd, spring_code, method_combi, month,
       sampling_site_cd),
     species_nm,
     fill = list(no_ind = 0)) %>%
-  group_by(location_code, method_cd, spring_code, level, uv, month,
+  group_by(location_code, method_cd, spring_code, method_combi, month,
            sampling_site_cd, species_nm) %>%
   summarise(n = sum(no_ind)) %>%
-  group_by(location_code, method_cd, spring_code, level, uv, month) %>%
+  group_by(location_code, method_cd, spring_code, method_combi, month) %>%
   filter(sum(n) > 0) %>%
   nest() %>%
   mutate(rarefaction = map(data, ~ rarefaction(.x))) %>%
@@ -264,14 +285,13 @@ rarefaction_result_2 %>%
     ) +
   geom_line(
     aes(
-      colour = uv,
-      linetype = level)) +
+      colour = location_code)) +
   geom_ribbon(
     aes(
-      ymin = lwr, ymax = upr, fill = uv, linetype = level), alpha = 0.2) +
+      ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
   xlab("Rarefied number of pan trap sampling sites") +
   ylab("Number of (morpho)species") +
-  facet_grid(paste("maand:", month) ~ location_code, scales = "free")
+  facet_grid(paste("maand:", month) ~ method_combi, scales = "free")
 ```
 
 ```{r}
@@ -282,13 +302,13 @@ rarefaction_result_2 %>%
     ) +
   geom_line(
     aes(
-      colour = level, linetype = uv)) +
+      colour = location_code)) +
   geom_ribbon(
     aes(
-      ymin = lwr, ymax = upr, fill = level, linetype = uv), alpha = 0.2) +
+      ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
   xlab("Rarefied number of individuals") +
   ylab("Number of (morpho)species") +
-  facet_grid(paste("maand:", month) ~ location_code, scales = "free")
+  facet_grid(paste("maand:", month) ~ method_combi, scales = "free")
 ```
 
 
@@ -326,13 +346,13 @@ rarefaction_result_3 %>%
     ) +
   geom_line(
     aes(
-      colour = spring_code)) +
+      colour = location_code)) +
   geom_ribbon(
     aes(
-      ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
+      ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
   xlab("Rarefied number of transect 50m segments") +
   ylab("Number of (morpho)species") +
-  facet_grid(~ location_code, scales = "free")
+  facet_grid(~ spring_code, scales = "free")
 ```
 
 ```{r}
@@ -343,13 +363,58 @@ rarefaction_result_3 %>%
     ) +
   geom_line(
     aes(
-      colour = spring_code)) +
+      colour = location_code)) +
   geom_ribbon(
     aes(
-      ymin = lwr, ymax = upr, fill = spring_code), alpha = 0.2) +
+      ymin = lwr, ymax = upr, fill = location_code), alpha = 0.2) +
   xlab("Rarefied number of individuals") +
   ylab("Number of (morpho)species") +
-  facet_grid(~ location_code, scales = "free")
+  facet_grid(~ spring_code, scales = "free")
 ```
+
+#### Cummulatieve soortenaantallen doorheen de maanden
+
+```{r}
+{{group}}_cumulative_month <- {{group}} %>%
+  group_by(
+    location_code, sampling_site_cd, method_cd, spring_code
+  ) %>%
+  arrange(month, .by_group = TRUE) %>%
+  group_by(
+    location_code, sampling_site_cd, method_cd, spring_code,
+    level, uv, method_combi, month
+  ) %>%
+  summarise(
+    species_list = list(species_nm[!is.na(species_nm)])
+  ) %>%
+  mutate(
+    accumulated_species_list = accumulate(
+      species_list, union, .simplify = FALSE),
+    cumulative_n_species = map_dbl(accumulated_species_list, length),
+    extra_n_species = cumulative_n_species - dplyr::lag(cumulative_n_species),
+  ) %>%
+  ungroup()
+```
+
+```{r}
+{{group}}_cumulative_month %>%
+  ggplot(aes(x = month, y = cumulative_n_species)) +
+  geom_point(alpha = 0.2) +
+  stat_summary(fun.data = mean_cl_boot, colour = "blue") +
+  facet_grid(location_code ~ method_combi)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
