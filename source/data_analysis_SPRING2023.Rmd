@@ -3,7 +3,7 @@ title: "Exploratory data analysis SPRING"
 author: "Emma Cartuyvels, Hans Van Calster"
 date: "2024-02-28"
 output:
-  html_document:
+  bookdown::html_document2:
     code_folding: hide
     toc: true
     toc_float: true
