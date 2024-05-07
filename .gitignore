@@ -21,3 +21,5 @@ docs
 libs
 output
 renv/library
+figure
+data
