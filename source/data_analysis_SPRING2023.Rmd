@@ -1,7 +1,7 @@
 ---
 title: "Exploratory data analysis SPRING"
 author: "Emma Cartuyvels, Hans Van Calster"
-date: "2024-02-28"
+date: "2024-05-02"
 output:
   bookdown::html_document2:
     code_folding: hide
@@ -22,6 +22,7 @@ library(dataMaid)
 library(vegan)
 library(ggvenn)
 library(plotly)
+library(kableExtra)
 library(glmmTMB)
 library(sf)
 library(dplyr)
@@ -223,6 +224,13 @@ Er werden 5 verschillende monitoringsmethoden getest:
   - UV-reflecterende pan traps op vegetatiehoogte geplaatst (PT - s.s.)
   - identieke samenstelling maar op de bodem geplaatst (PT - SSL)
   - niet-UV-reflecterende pan trap unit (wat grotere valtypes), zowel op vegetatiehoogte als op de bodem (PT - MP)
+  
+Deze methoden werden op drie verschillende locaties getest:
+- BE_MVS01: Proefterrein ILVO
+- BE_MVS02: Natuurgebied Bourgoyen-Ossemeersen in Gent
+- BE_MVS03: Natuurgebied Den Dotter in Haaltert
+
+Op locatie 1 werd op vraag van ILVO een 11de pan trap geplaatst, deze werd, buiten het algemeen overzicht van het aantal soorten, niet meegenomen in de analyses.
 
 ```{r}
 angle2dec <- function(x) {
@@ -344,21 +352,23 @@ pantraps %>%
 
 Een subset van de pan trap opstellingen werd langer in het veld gelaten.
 
-Voor locatie 1 en 2 hebben we een tijdsreeks per één of twee dagen. Van locatie 1 werd in September een tijdsreeks gemaakt, van locatie 2 in Juni. Voor locatie 3 hebben we geen tussenstappen, deze locatie kan dus niet gebruikt worden voor de rarefaction analyse.
+Voor locatie 1 en 2 hebben we een tijdsreeks per één of twee dagen. Van locatie 1 werd in September een tijdsreeks gemaakt, van locatie 2 en 3 in Juni. Voor locatie 3 hebben we geen tussenstappen, deze locatie kan dus niet gebruikt worden voor de rarefaction analyse (Tabel \@ref(tab:timeseries)).
 
-```{r}
+```{r timeseries}
 samples %>%
   filter(time_series == 1) %>%
   group_by(location_code, spring_code, level, date_b, date_e) %>%
   summarise(aantal_samples = n_distinct(sample_code)) %>%
-  kableExtra::kable()
+  kable(caption = "Datums waarop de tijdsreeksen bemonsterd werden.")
 ```
 
 # General overview
 
+De figuren en tabellen in dit hoofdstuk geven een overzicht van alle waargenomen soorten (dus ook deze van de tijdsreeksen en de 11de locatie op de site van ILVO), met uitzondering van soortgroepen die tijdens de eerste grove sortering als restfractie beschouwd werden (mieren, kevers, spinnen, ...).
+
 ## Numbers per order
 
-```{r}
+```{r, fig.cap = "Aantal soorten per order."}
 identifications_basic %>%
   group_by(group, order) %>%
   summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
@@ -370,7 +380,7 @@ identifications_basic %>%
     type = "bar")
 ```
 
-```{r}
+```{r, fig.cap = "Aantal individuen per order."}
 identifications_basic %>%
   group_by(group, order) %>%
   summarise(n_individuals = sum(no_ind)) %>%
@@ -385,7 +395,7 @@ identifications_basic %>%
 
 ## Numbers per family
 
-```{r}
+```{r, fig.cap = "Aantal soorten per familie."}
 identifications_basic %>%
   group_by(group, family) %>%
   summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
@@ -398,7 +408,7 @@ identifications_basic %>%
   layout(xaxis = list(tickangle = -45))
 ```
 
-```{r}
+```{r, fig.cap = "Aantal individuen per familie."}
 identifications_basic %>%
   group_by(group, family) %>%
   summarise(n_individuals = sum(no_ind)) %>%
@@ -413,10 +423,12 @@ identifications_basic %>%
 
 ## Numbers per species
 
-```{r}
+```{r species-num, results="asis"}
+cat("<table><table width=100%>",paste0("<caption>", "(#tab:species-num)", "Aantal individuen per soort.", "</caption>"),"</table>", sep ="\n")
+
 identifications %>%
   group_by(order, family, species_nm) %>%
-  summarise(n_individuals = sum(no_ind)) %>%
+  summarise(n_individuals = sum(no_ind, na.rm = TRUE)) %>%
   arrange(desc(n_individuals), species_nm) %>%
   DT::datatable()
 ```
@@ -468,6 +480,8 @@ We fitten de modellen voor beide soortengroepen samengenomen in hetzelfde model,
 
 We maken geen correctie voor het aantal gevangen individuen (door dit toe te voegen als covariaat): omwille van het hoge aantal gevallen waar er 0 soorten zijn (en dus 0 individuen) geeft deze correctie problemen in het model (0 individuen is een perfecte, maar ook onzinnige, voorspeller voor 0 soorten).
 
+Gegevens van de tijdsreekens en de 11de pantrap op locatie 1 werden niet meegenomen in de modellen.
+
 ```{r}
 data_sp_rich <- apoidea %>%
   mutate(taxgroup = "Apoidea") %>%
@@ -490,18 +504,23 @@ data_sp_rich <- apoidea %>%
 
 ### SPRING protocol
 
+Het eerste model heeft enkel betrekking op de SPRING methode sensu stricto. 
+
 ```{r}
 data_sp_rich_spring <- data_sp_rich %>%
   filter(spring_code == "s.s.")
 ```
 
 
-```{r}
+```{r, fig.cap = "Aantal keren dat n aantal soorten in één pan trap of subtransect van 50m gevonden werd."}
 ggplot(data_sp_rich_spring, aes(x = n_species)) +
   geom_histogram(
     aes(fill = taxgroup),
     position = position_dodge())
+```
 
+
+```{r, fig.cap = "Aantal individuen in één pan trap of subtransect van 50m ten opzichte van het aantal soorten in die pan trap of dat subtransect."}
 ggplot(data_sp_rich_spring) +
   geom_point(aes(x = n_ind, y = n_species)) +
   facet_wrap(~ taxgroup, scales = "free")
@@ -521,11 +540,11 @@ model0 <- glmmTMB(
 )
 ```
 
-```{r, fig.height=10}
+```{r check1, fig.height=12, fig.cap = "Visuele controle van verschillende modelaannames."}
 performance::check_model(model0)
 ```
 
-```{r}
+```{r, fig.cap = "Verwacht aantal soorten per maand, soortgroep en SPRING methode op basis van ons model."}
 marginaleffects::plot_predictions(
   model0,
   condition = c("maand", "method_cd",  "taxgroup"),
@@ -557,13 +576,13 @@ model1 <- glmmTMB(
 )
 ```
 
-De hoge waarden voor collineariteit zijn in dit geval geen probleem en zijn het gevolg van (verwachte) collineariteit t.g.v. toevoegen van interacties.
+De hoge waarden voor collineariteit (Fig. \@ref(fig:check2)) zijn in dit geval geen probleem en zijn het gevolg van (verwachte) collineariteit t.g.v. toevoegen van interacties.
 
-```{r, fig.height=10}
+```{r check2, fig.height=12, fig.cap = "Visuele controle van verschillende modelaannames."}
 performance::check_model(model1)
 ```
 
-```{r}
+```{r, fig.cap = "Verwacht aantal soorten per soortgroep en methode op basis van ons model."}
 marginaleffects::plot_predictions(
   model1,
   condition = c("method_combi", "taxgroup"),
@@ -588,6 +607,12 @@ marginaleffects::plot_predictions(
 
 ## Alpha biodiversity
 
+De Shannon index wordt als volgt berekend:
+$$H' = - \sum_{i=1}^{R} p_i ln p_i$$
+Waarbij $p_i$ de proportie is van het aantal individuen van één soort ten opzichte van het totaal aantal individuen.
+
+Er kan geen Shannon index berekent worden voor pan traps of deeltransecten waarin niks gevangen werd. Het gebruik van deze index leidt dus sowieso tot een verlies aan informatie. Daarnaast is de Shannon index van een sample waar slechts één soort gevonden wordt gelijk aan 0.
+
 ```{r}
 sha <- apoidea %>%
   mutate(taxgroup = "Apoidea") %>%
@@ -610,6 +635,13 @@ sha <- apoidea %>%
   summarise(exp_sh = exp(-sum(prop, na.rm = TRUE)))
 ```
 
+```{r, fig.cap = "Shannon index (exp) per pan trap of subtransect van 50m."}
+ggplot(sha, aes(x = exp_sh)) +
+  geom_histogram(
+    aes(fill = taxgroup),
+    position = position_dodge())
+```
+
 ```{r}
 model0 <- glmmTMB(
   exp_sh ~ 
@@ -623,11 +655,11 @@ model0 <- glmmTMB(
 )
 ```
 
-```{r, fig.height=10}
+```{r check3, fig.height=10, fig.cap = "Visuele controle van verschillende modelaannames."}
 performance::check_model(model0)
 ```
 
-```{r}
+```{r, fig.cap = "Verwachte Shannon index (exp) per soortgroep en methode op basis van ons model."}
 marginaleffects::plot_predictions(
   model0,
   condition = c("method_combi",  "taxgroup"),
@@ -753,15 +785,15 @@ nat_ap <- apoidea %>%
   left_join(naturalhistorytraits, join_by(species_nm == species))
 ```
 
-```{r}
+```{r, fig.cap = "Unieke functionele groepen apoidea voor transecten (TS) vs. pan traps (PT)."}
 venn(nat_ap, "method_cd", "optional_functional_group")
 ```
 
-```{r}
+```{r, fig.cap = "Unieke functionele groepen apoidea per submethode."}
 venn(nat_ap, "method_combi", "optional_functional_group")
 ```
 
-```{r}
+```{r, fig.cap = "Unieke functionele groepen apoidea per maand."}
 venn(nat_ap, "month", "optional_functional_group")
 ```
 
