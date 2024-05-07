@@ -368,7 +368,7 @@ rarefaction_result_3 %>%
   facet_grid(~ spring_code, scales = "free")
 ```
 
-#### Cummulatieve soortenaantallen doorheen de maanden
+#### Cumulatieve soortenaantallen doorheen de maanden
 
 ```{r}
 {{group}}_cumulative_month <- {{group}} %>%
