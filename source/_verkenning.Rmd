@@ -226,7 +226,7 @@ referentie_extra_soorten_per_dag <- 0.5
         xend = cumulative_days + 0.5,
         y = referentie_extra_soorten_per_dag * round(cumulative_days)),
     alpha = 0.05) +
-  geom_point(alpha = 0.2) +
+ geom_line(aes(color = pt), alpha = 0.3) +
   geom_text(
     data = {{group}}_cumulative %>%
       group_by(cumulative_days, location_code, method_combi) %>%
@@ -388,6 +388,8 @@ rarefaction_result_3 %>%
       species_list, union, .simplify = FALSE),
     cumulative_n_species = map_dbl(accumulated_species_list, length),
     extra_n_species = cumulative_n_species - dplyr::lag(cumulative_n_species),
+    pt_ts = str_sub(sampling_site_cd, 12, 13),
+    month = as.numeric(month)
   ) %>%
   ungroup()
 ```
@@ -395,22 +397,28 @@ rarefaction_result_3 %>%
 ```{r, fig.cap = "Cumulatief aantal soorten {{group}} per maand en locatie."}
 {{group}}_cumulative_month %>%
   ggplot(aes(x = month, y = cumulative_n_species)) +
-  geom_point(alpha = 0.2) +
-  stat_summary(fun.data = mean_cl_boot, colour = "blue") +
+  geom_line(aes(color = pt_ts, fill = pt_ts), alpha = 0.3) +
+  stat_summary(fun.data = mean_cl_boot, colour = "royalblue") +
   facet_grid(location_code ~ method_combi)
+
 ```
 
 
+```{r, eval="{{group}}"=="apoidea", results='asis'}
+cat("### Functionele groepen\n")
 
+nat_ap <- {{group}} %>% 
+  left_join(naturalhistorytraits, join_by(species_nm == species))
+```
 
+```{r, fig.cap = "Unieke functionele groepen apoidea voor transecten (TS) vs. pan traps (PT).", eval="{{group}}"=="apoidea"}
+venn(nat_ap, "method_cd", "optional_functional_group")
+```
 
+```{r, fig.cap = "Unieke functionele groepen apoidea per submethode.", eval="{{group}}"=="apoidea"}
+venn(nat_ap, "method_combi", "optional_functional_group")
+```
 
-
-
-
-
-
-
-
-
-
+```{r, fig.cap = "Unieke functionele groepen apoidea per maand.", eval="{{group}}"=="apoidea"}
+venn(nat_ap, "month", "optional_functional_group")
+```
