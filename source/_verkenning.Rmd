@@ -9,7 +9,6 @@ tot_n_species <- identifications_basic %>%
   n_distinct()
 ```
 
-
 In totaal werden `r tot_n_species` soorten `{{group}}` gevonden.
 
 ```{r {{group}}-dataset}
@@ -26,51 +25,54 @@ In totaal werden `r tot_n_species` soorten `{{group}}` gevonden.
   filter(!(stringr::str_detect(sampling_site_cd, "PT11")))
 ```
 
+### Nulwaarnemingen
+
+```{r {{group}}-nul, fig.cap = "Aantal pan traps of subtransecten waar geen {{group}} gevonden werden (tijdsreeksen niet meegerekend)."}
+{{group}} |>
+  filter(no_ind == 0,
+         time_series == 0) |>
+  count(location_code, month, method_combi) |>
+  ggplot(aes(x = method_combi, y = n, fill = method_combi)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  facet_grid(location_code ~ month) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
 ### Gamma diversiteit
 
-Aantal unieke soorten per locatie
+Alle Venn diagrammen tonen ook de data van de tijdsreeksen.
 
-
-```{r}
+```{r, fig.cap = "Aantal unieke soorten {{group}} per locatie."}
 venn({{group}}, "location_code")
 ```
-  
-Aantal unieke soorten voor transecten (TS) en pan traps (PT)
 
-```{r}
+```{r, fig.cap = "Aantal unieke soorten {{group}} voor transecten (TS) vs. pan traps (PT)."}
 venn({{group}}, "method_cd")
 ```
 
-Aantal unieke soorten voor transecten s.s. (s.s.) en sweeping (MP)
-
-```{r}
+```{r, fig.cap = "Aantal unieke soorten {{group}} voor transecten s.s. (s.s.) vs. sweeping (MP)."}
 venn(
   {{group}} %>% filter(method_cd == "TS"),
   "spring_code"
 )
 ```
 
-Aantal unieke soorten voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)
-
-```{r}
+```{r, fig.cap = "Aantal unieke soorten {{group}} voor pan traps s.s. (s.s.), op de grond (SSL) en niet-UV-reflecterende pan traps (MP)."}
 venn(
   {{group}} %>% filter(method_cd == "PT"),
   "spring_code"
 )
 ```
 
-De combinatie van alles:
-
-```{r}
+```{r, fig.cap = "Aantal unieke soorten {{group}} per submethode (combinatie van twee voorgaande venn diagrammen)."}
 venn({{group}}, "method_combi")
 ```
 
-Aantal unieke soorten per maand
-
-```{r}
+```{r, fig.cap = "Aantal unieke soorten {{group}} per maand."}
 venn({{group}}, "month")
 ```
-
 
 ### Alpha diversiteit
 
@@ -96,9 +98,7 @@ venn({{group}}, "month")
     .groups = "drop")
 ```
 
-Gemiddeld aantal soorten per methode, waarbij elke pan trap of 50m transect als één observatie wordt beschouwd.
-
-```{r {{group}}-n-species}
+```{r {{group}}-n-species, fig.cap = "Boxplots van het aantal soorten {{group}} per methode, waarbij elke pan trap of 50m transect als één observatie wordt beschouwd."}
 {{group}}_richness %>%
   ggplot() +
   geom_boxplot(
@@ -109,9 +109,7 @@ Gemiddeld aantal soorten per methode, waarbij elke pan trap of 50m transect als 
   facet_wrap(~paste("time series: ", time_series), scales = "free_x")
 ```
 
-Gemiddelde Shannon index per methode, waarbij elke pan trap of 50m transect als één observatie wordt beschouwd.
-
-```{r {{group}}-exp-shannon}
+```{r {{group}}-exp-shannon, fig.cap = "Boxplots van de Shannon index voor {{group}} per methode, waarbij elke pan trap of 50m transect als één observatie wordt beschouwd."}
 {{group}}_richness %>%
   ggplot() +
   geom_boxplot(
@@ -130,9 +128,8 @@ Gemiddelde Shannon index per methode, waarbij elke pan trap of 50m transect als 
 >Moreover, some rarefaction and extrapolation curves may cross one or more times, so that the rank order of diversity measured among samples could change depending on the sampling effort that is used for standardized comparisons (Chao and Jost 2012). 
 
 
-Voor de volgende analyse selecteren we de tijdreeksen. Als we hiervan een "rarefaction" curve berekenen zal dit geen beeld geven van het cumulatief aantal soorten in de tijd, maar zal het weergeven hoe het aantal soorten toeneemt als je meerdere sampling events uit de tijdreeks combineert.
-Als de x-as "rarefied number of days" gelijk aan 3 weergeeft, zijn dit dus niet noodzakelijk drie opeenvolgende dagen.
-
+Voor de volgende analyse selecteren we de tijdreeksen. Als we hiervan een "rarefaction" curve berekenen zal dit geen beeld geven van het cumulatief aantal soorten in de tijd, maar zal het weergeven hoe het aantal soorten toeneemt als je meerdere sampling events (die één of twee dagen omhelsden) uit de tijdreeks combineert.
+Als de x-as "rarefied number of days" gelijk aan 3 weergeeft, zijn dit dus niet noodzakelijk drie opeenvolgende dagen (Fig. \@ref(fig:{{group}}rardays)).
 
 ```{r}
 rarefaction_result <- {{group}} %>%
@@ -157,7 +154,7 @@ rarefaction_result <- {{group}} %>%
   ungroup()
 ```
 
-```{r}
+```{r {{group}}rardays, fig.cap = "Rarefaction curve van het aantal soorten {{group}} in functie van aantal sampling events voor locatie 1 en 2."}
 rarefaction_result %>%
   filter(location_code != "BE_MVS03") %>%
   ggplot(
@@ -175,9 +172,8 @@ rarefaction_result %>%
   facet_wrap(~method_combi)
 ```
 
-
 Om wel rekening te houden met de tijdsvolgorden gaan we anders te werk.
-Voor een bepaalde plaats waarvan er een tijdreeks is, berekenen we het cumulatief aantal soorten in de tijd.
+Voor een bepaalde plaats waarvan er een tijdreeks is, berekenen we het cumulatief aantal soorten in de tijd (Fig. \@ref(fig:{{group}}cumul-time)).
 
 ```{r}
 {{group}}_cumulative <- {{group}} %>%
@@ -202,24 +198,25 @@ Voor een bepaalde plaats waarvan er een tijdreeks is, berekenen we het cumulatie
       species_list, union, .simplify = FALSE),
     cumulative_n_species = map_dbl(accumulated_species_list, length),
     cumulative_days = cumsum(duration),
-    extra_n_species = cumulative_n_species - dplyr::lag(cumulative_n_species),
-    extra_n_days = cumulative_days - dplyr::lag(cumulative_days)
+    extra_n_species = cumulative_n_species - dplyr::first(cumulative_n_species),
+    extra_n_days = cumulative_days - dplyr::lag(cumulative_days),
+    pt = str_extract(sampling_site_cd, "PT\\d*")
   ) %>%
   ungroup()
 ```
 
-```{r}
+```{r {{group}}cumul-time, fig.cap = "Cumulatief aantal soorten {{group}} in de tijd per locatie en methode."}
 {{group}}_cumulative %>%
   ggplot(aes(x = cumulative_days, y = cumulative_n_species)) +
-  geom_point(alpha = 0.2) +
-  stat_summary(fun.data = mean_cl_boot, colour = "blue") +
+  geom_line(aes(color = pt), alpha = 0.3) +
+  stat_summary(fun.data = mean_cl_boot, colour = "royalblue") +
   facet_grid(location_code ~ method_combi)
 ```
 
-In de volgende figuur hebben we berekend hoeveel soorten er extra gevonden werden door de pantraps langer te laten staan. De vergelijking is telkens met de voorgaande lagere sampling effort op die site voor die methode. In de meeste gevallen is dit één dag langer, maar soms is het meer dan 1 dag. Het aantal extra dagen is weergegeven met een cijfer naast de schatting van het gemiddelde aantal extra soorten.
+In de volgende figuur (Fig. \@ref(fig:{{group}}added-day)) hebben we berekend hoeveel soorten er extra gevonden werden door de pantraps langer te laten staan. De vergelijking is telkens met de standaard sampling effort op die site voor die methode. Het aantal extra dagen is weergegeven met een cijfer naast de schatting van het gemiddelde aantal extra soorten.
 Om af te wegen of deze extra inspanning de moeite is, moeten we ook nog aangeven wat een relevante toename aan soorten (gemiddelde) is in de sets van telkens tien pantraps. In de figuur is dit ingesteld op +0.5 extra soorten per extra dag en weergegeven met een horizontale lijn. Als het 95% betrouwbaarheidsinterval volledig boven deze lijn ligt, mogen we de toename als relevant beschouwen.
 
-```{r}
+```{r {{group}}added-day, fig.cap = "Aantal soorten {{group}} extra bij bijkomend sampling event (de cijfers geven het aantal tussenliggende dagen aan). De horizontale lijn geeft het aantal soorten weer dat we zouden verwachten bij een toename van 0.5 soorten per dag."}
 referentie_extra_soorten_per_dag <- 0.5
 
 {{group}}_cumulative %>%
@@ -227,7 +224,7 @@ referentie_extra_soorten_per_dag <- 0.5
   geom_segment(
     aes(x = cumulative_days - 0.5,
         xend = cumulative_days + 0.5,
-        y = referentie_extra_soorten_per_dag * extra_n_days),
+        y = referentie_extra_soorten_per_dag * round(cumulative_days)),
     alpha = 0.05) +
   geom_point(alpha = 0.2) +
   geom_text(
@@ -277,7 +274,7 @@ rarefaction_result_2 <- {{group}} %>%
 
 Noot: waar de lijn praktisch lineair is, gaat het om gevallen waar in totaal zeer weinig individuen werden geteld. De methode maakt dan een lineaire interpolatie tussen het aantal soorten in alle 10 pantraps en de oorsprong (0 sites, 0 soorten).
 
-```{r}
+```{r, fig.cap = "Rarefaction curve van het aantal soorten {{group}} in functie van het aantal pan traps."}
 rarefaction_result_2 %>%
   ggplot(
     aes(
@@ -294,7 +291,7 @@ rarefaction_result_2 %>%
   facet_grid(paste("maand:", month) ~ method_combi, scales = "free")
 ```
 
-```{r}
+```{r, fig.cap = "Rarefaction curve van het aantal soorten {{group}} in functie van aantal individuen gevangen met pan traps."}
 rarefaction_result_2 %>%
   ggplot(
     aes(
@@ -337,8 +334,7 @@ rarefaction_result_3 <- {{group}} %>%
 ```
 
 
-
-```{r}
+```{r, fig.cap = "Rarefaction curve van het aantal soorten {{group}} in functie van aantal deeltransecten gelopen."}
 rarefaction_result_3 %>%
   ggplot(
     aes(
@@ -355,7 +351,7 @@ rarefaction_result_3 %>%
   facet_grid(~ spring_code, scales = "free")
 ```
 
-```{r}
+```{r, fig.cap = "Rarefaction curve van het aantal soorten {{group}} in functie van aantal individuen gevangen tijdens transect walks."}
 rarefaction_result_3 %>%
   ggplot(
     aes(
@@ -396,7 +392,7 @@ rarefaction_result_3 %>%
   ungroup()
 ```
 
-```{r}
+```{r, fig.cap = "Cumulatief aantal soorten {{group}} per maand en locatie."}
 {{group}}_cumulative_month %>%
   ggplot(aes(x = month, y = cumulative_n_species)) +
   geom_point(alpha = 0.2) +
