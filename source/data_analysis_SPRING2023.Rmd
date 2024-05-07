@@ -687,9 +687,8 @@ time_data <- time_data %>%
 
 ```
 
-Vaste verplaatsingskost:
 ```{r}
-cost_data %>% 
+verpl <- cost_data %>% 
   filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") %>% 
   pull(prijs) *
   cost_data %>% 
@@ -697,15 +696,21 @@ cost_data %>%
   pull(prijs)
 ```
 
-Tijdskost verplaatsing:
+Ervan uitgaand dat de gemiddelde verplaatsing naar een locatie 35.25 km bedraagt betalen we aan kilometervergoeding `r round(verpl)` euro.
+
 ```{r}
-cost_data %>% 
+verpl_tijd <- cost_data %>% 
   filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") %>% 
-  pull(prijs) / 50 * 60 *
-  cost_data %>% 
+  pull(prijs) / 50 * 60
+
+loon_verpl <- cost_data %>% 
   filter(Kostencategorie == "Jaarloon veldmedewerker") %>% 
   pull(`prijs/min`)
 ```
+
+Om deze afstand te rijden hebben we `r round(verpl_tijd)` minuten nodig. Als dit door een veldmedewerker gebeurt dan kost ons dit `r round(verpl_tijd * loon_verpl)` euro in loonkost.
+
+
 
 
 Variabele kosten pan traps:
