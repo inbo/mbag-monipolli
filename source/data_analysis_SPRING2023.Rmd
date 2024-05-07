@@ -751,6 +751,7 @@ calculate_costs <- function(points, method, submethod){
 
 
 Scenario 1:
+
 - 650 meetpunten
 - 1 pan trap s.s. per locatie
 
@@ -760,6 +761,7 @@ calculate_costs(650, "PT", "s.s.") +
 ```
 
 Scenario 2:
+
 - 650 meetpunten
 - Transect (sweeping) van 250m
 
@@ -769,6 +771,7 @@ calculate_costs(650, "TS", "MP") * 5 +
 ```
 
 Scenario 3:
+
 - 650 meetpunten
 - 1 pan trap s.s. per locatie
 - Transect (sweeping) van 250m
@@ -777,24 +780,6 @@ Scenario 3:
 calculate_costs(650, "PT", "s.s.") +
   calculate_costs(650, "TS", "MP") * 5 +
   (650 * 14.93543) + (650 * 36.27281)
-```
-
-# Natural history traits
-```{r}
-nat_ap <- apoidea %>% 
-  left_join(naturalhistorytraits, join_by(species_nm == species))
-```
-
-```{r, fig.cap = "Unieke functionele groepen apoidea voor transecten (TS) vs. pan traps (PT)."}
-venn(nat_ap, "method_cd", "optional_functional_group")
-```
-
-```{r, fig.cap = "Unieke functionele groepen apoidea per submethode."}
-venn(nat_ap, "method_combi", "optional_functional_group")
-```
-
-```{r, fig.cap = "Unieke functionele groepen apoidea per maand."}
-venn(nat_ap, "month", "optional_functional_group")
 ```
 
 <!--
