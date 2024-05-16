@@ -34,7 +34,7 @@ In totaal werden `r tot_n_species` soorten `{{group}}` gevonden.
   count(location_code, month, method_combi) |>
   ggplot(aes(x = method_combi, y = n, fill = method_combi)) +
   geom_bar(stat = "identity", position = position_dodge()) +
-  facet_grid(location_code ~ month) +
+  facet_grid(location_code ~ paste("maand:", month)) +
   theme(axis.title.x=element_blank(),
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank())
@@ -389,7 +389,7 @@ rarefaction_result_3 %>%
     cumulative_n_species = map_dbl(accumulated_species_list, length),
     extra_n_species = cumulative_n_species - dplyr::lag(cumulative_n_species),
     pt_ts = str_sub(sampling_site_cd, 12, 13),
-    month = as.numeric(month)
+    month = as.numeric(as.character(month))
   ) %>%
   ungroup()
 ```
