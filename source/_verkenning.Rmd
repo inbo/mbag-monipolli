@@ -21,13 +21,13 @@ In totaal werden `r tot_n_species` soorten `{{group}}` gevonden.
       0,
       no_ind
     )) %>%
-  mutate(month = as.factor(month)) %>% 
+  mutate(month = as.factor(month)) %>%
   filter(!(stringr::str_detect(sampling_site_cd, "PT11")))
 ```
 
 ### Nulwaarnemingen
 
-```{r {{group}}-nul, fig.cap = "Aantal pan traps of subtransecten waar geen {{group}} gevonden werden (tijdsreeksen niet meegerekend)."}
+```{r {{group}}-nul, fig.cap = "Aantal pan traps of deeltransecten waar geen {{group}} gevonden werden (tijdsreeksen niet meegerekend)."}
 {{group}} |>
   filter(no_ind == 0,
          time_series == 0) |>
@@ -35,9 +35,9 @@ In totaal werden `r tot_n_species` soorten `{{group}}` gevonden.
   ggplot(aes(x = method_combi, y = n, fill = method_combi)) +
   geom_bar(stat = "identity", position = position_dodge()) +
   facet_grid(location_code ~ paste("maand:", month)) +
-  theme(axis.title.x=element_blank(),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank())
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
 ```
 
 ### Gamma diversiteit
@@ -407,7 +407,7 @@ rarefaction_result_3 %>%
 ```{r, eval="{{group}}"=="apoidea", results='asis'}
 cat("### Functionele groepen\n")
 
-nat_ap <- {{group}} %>% 
+nat_ap <- {{group}} %>%
   left_join(naturalhistorytraits, join_by(species_nm == species))
 ```
 

@@ -1,5 +1,5 @@
 ---
-title: "Exploratory data analysis SPRING"
+title: "Verkennend data analyse SPRING"
 author: "Emma Cartuyvels, Hans Van Calster"
 date: "2024-05-02"
 output:
@@ -44,10 +44,10 @@ venn <- function(data, group, count_id = "species_nm") {
   groups <- data %>%
     distinct(!!sym(group)) %>%
     pull(!!sym(group))
-  
+
   x <- vector(mode = "list", length = length(groups))
   x <- setNames(x, groups)
-  
+
   for (i in groups) {
     int <- data %>%
       filter(
@@ -59,7 +59,7 @@ venn <- function(data, group, count_id = "species_nm") {
       pull(!!sym(count_id))
     x[[i]] <- int
   }
-  
+
   ggVennDiagram::ggVennDiagram(x) +
     scale_x_continuous(expand = c(0.2, 0.2))
 }
@@ -89,7 +89,7 @@ rarefaction <- function(data) {
 }
 ```
 
-Er zijn vier tabellen in de access database:
+Er zijn vier tabellen in de Access database:
 
 - Identificaties van de soorten
 - Unieke samples
@@ -149,20 +149,23 @@ identifications_basic <- identifications %>%
     functional_group,
     no_ind
   ) %>%
-  group_by(sample_code,
+  group_by(
+    sample_code,
     species_nm,
     family,
     order,
-    functional_group) %>%
+    functional_group
+  ) %>%
   summarise(
     no_ind = sum(no_ind),
     .groups = "drop"
-  ) %>% 
+  ) %>%
   mutate(group = case_when(
     family %in% c(
-        "Apidae", "Andrenidae",
-        "Colletidae", "Halictidae",
-        "Melittidae", "Megachilidae") ~ "Apoidea",
+      "Apidae", "Andrenidae",
+      "Colletidae", "Halictidae",
+      "Melittidae", "Megachilidae"
+    ) ~ "Apoidea",
     family == "Syrphidae" ~ "Syrphidae",
     .default = "other"
   ))
@@ -186,10 +189,11 @@ samples_basic <- samples %>%
     month = lubridate::month(date_b),
     duration = date_e - date_b,
     time_order = order(date_b),
-        uv = case_when(
+    uv = case_when(
       spring_code == "MP" & method_cd == "PT" ~ "non-uv",
       spring_code != "MP" & method_cd == "PT" ~ "uv",
-      TRUE ~ "not applicable"),
+      TRUE ~ "not applicable"
+    ),
     method_combi = ifelse(
       method_cd == "PT",
       paste(method_cd, uv, level),
@@ -199,7 +203,8 @@ samples_basic <- samples %>%
   arrange(time_order, .by_group = TRUE) %>%
   mutate(
     time_since_previous = date_b - dplyr::lag(date_e),
-    time_till_next = dplyr::lead(date_b) - date_e) %>%
+    time_till_next = dplyr::lead(date_b) - date_e
+  ) %>%
   ungroup()
 ```
 
@@ -213,15 +218,15 @@ glimpse(naturalhistorytraits)
 ```
 
 
-### Proefopzet
+## Proefopzet
 
 Er werden 5 verschillende monitoringsmethoden getest:
 
-- 2 transecttypen. Een transect beslaat 500m en is verdeeld in 10 secties:
+- 2 transecttypen. Een transect beslaat 500 m en is verdeeld in 10 secties:
   - SPRING s.s.: waargenomen of op het zicht verzameld (TS - s.s.)
   - MP: verzameld via het afslepen van de vegetatie of bodem (TS - MP)
 
-- 3 pan traps opstellingen. Eén pan trap sample is de gecombineerde vangst van één pan trap unit bestaande uit één blauwe, één witte en één gele val. Per transect worden steeds 10 units geplaatst, dus één per sectie:
+- 3 pan traps opstellingen. Één pan trap sample is de gecombineerde vangst van één pan trap unit bestaande uit één blauwe, één witte en één gele val. Per transect worden steeds 10 units geplaatst, dus één per sectie:
   - UV-reflecterende pan traps op vegetatiehoogte geplaatst (PT - s.s.)
   - identieke samenstelling maar op de bodem geplaatst (PT - SSL)
   - niet-UV-reflecterende pan trap unit (wat grotere valtypes), zowel op vegetatiehoogte als op de bodem (PT - MP)
@@ -264,7 +269,7 @@ transecten <- sampling_sites %>%
     geometry = st_as_sfc(geometry)
   ) %>%
   select(-ends_with("section")) %>%
-  mutate(transect_sectie = stringr::str_extract(remarks, "\\d*-\\d*m")) %>% 
+  mutate(transect_sectie = stringr::str_extract(remarks, "\\d*-\\d*m")) %>%
   mutate(transect_sectie = factor(
     transect_sectie,
     levels = c(
@@ -349,11 +354,11 @@ pantraps %>%
 ```
 
 
-### Tijdsreeksen
+## Tijdsreeksen
 
 Een subset van de pan trap opstellingen werd langer in het veld gelaten.
 
-Voor locatie 1 en 2 hebben we een tijdsreeks per één of twee dagen. Van locatie 1 werd in September een tijdsreeks gemaakt, van locatie 2 en 3 in Juni. Voor locatie 3 hebben we geen tussenstappen, deze locatie kan dus niet gebruikt worden voor de rarefaction analyse (Tabel \@ref(tab:timeseries)).
+Voor locatie 1 en 2 hebben we een tijdsreeks per één of twee dagen. Van locatie 1 werd in september een tijdsreeks gemaakt, van locatie 2 en 3 in juni. Voor locatie 3 hebben we geen tussenstappen, deze locatie kan dus niet gebruikt worden voor de rarefaction analyse (Tabel \@ref(tab:timeseries)).
 
 ```{r timeseries}
 samples %>%
@@ -363,11 +368,11 @@ samples %>%
   kable(caption = "Datums waarop de tijdsreeksen bemonsterd werden.")
 ```
 
-# General overview
+# Algemeen overzicht
 
 De figuren en tabellen in dit hoofdstuk geven een overzicht van alle waargenomen soorten (dus ook deze van de tijdsreeksen en de 11de locatie op de site van ILVO), met uitzondering van soortgroepen die tijdens de eerste grove sortering als restfractie beschouwd werden (mieren, kevers, spinnen, ...).
 
-## Numbers per order
+## Aantallen per order
 
 ```{r, fig.cap = "Aantal soorten per order."}
 identifications_basic %>%
@@ -378,7 +383,8 @@ identifications_basic %>%
     x = ~order,
     y = ~n_species,
     color = ~group,
-    type = "bar")
+    type = "bar"
+  )
 ```
 
 ```{r, fig.cap = "Aantal individuen per order."}
@@ -390,11 +396,11 @@ identifications_basic %>%
     x = ~order,
     y = ~n_individuals,
     color = ~group,
-    type = "bar")
+    type = "bar"
+  )
 ```
 
-
-## Numbers per family
+## Aantallen per familie
 
 ```{r, fig.cap = "Aantal soorten per familie."}
 identifications_basic %>%
@@ -405,7 +411,8 @@ identifications_basic %>%
     x = ~family,
     y = ~n_species,
     color = ~group,
-    type = "bar") %>%
+    type = "bar"
+  ) %>%
   layout(xaxis = list(tickangle = -45))
 ```
 
@@ -418,14 +425,21 @@ identifications_basic %>%
     x = ~family,
     y = ~n_individuals,
     color = ~group,
-    type = "bar") %>%
+    type = "bar"
+  ) %>%
   layout(xaxis = list(tickangle = -45))
 ```
 
-## Numbers per species
+## Aantallen per soort
 
 ```{r species-num, results="asis"}
-cat("<table><table width=100%>",paste0("<caption>", "(#tab:species-num)", "Aantal individuen per soort.", "</caption>"),"</table>", sep ="\n")
+cat("<table><table width=100%>",
+    paste0("<caption>",
+           "(#tab:species-num)",
+           "Aantal individuen per soort.",
+           "</caption>"),
+    "</table>",
+    sep = "\n")
 
 identifications %>%
   group_by(order, family, species_nm) %>%
@@ -452,13 +466,13 @@ purrr::pmap(
     group = c("apoidea", "syrphidae")
   ),
   function(
-    title = title, group = group, familyvec = familyvec
-  ) {
+      title = title, group = group, familyvec = familyvec) {
     knit_expand(
       here::here("source", "_verkenning.Rmd"),
       title = title,
       group = group,
-      familyvec = familyvec)
+      familyvec = familyvec
+    )
   }
 ) %>%
   paste(collapse = "\n") -> rmd
@@ -477,9 +491,9 @@ knit(text = rmd, quiet = TRUE) %>%
 
 ## Soortenrijkdom
 
-We fitten de modellen voor beide soortengroepen samengenomen in hetzelfde model, maar we laten elke covariaat in interactie gaan met de soortengroep zodat we aparte parameterschattingen per soortengroep bekomen.
+We fitten de modellen voor beide soortengroepen samengenomen in hetzelfde model, maar we laten elke covariabele in interactie gaan met de soortengroep zodat we aparte parameterschattingen per soortengroep bekomen.
 
-We maken geen correctie voor het aantal gevangen individuen (door dit toe te voegen als covariaat): omwille van het hoge aantal gevallen waar er 0 soorten zijn (en dus 0 individuen) geeft deze correctie problemen in het model (0 individuen is een perfecte, maar ook onzinnige, voorspeller voor 0 soorten).
+We maken geen correctie voor het aantal gevangen individuen (door dit toe te voegen als covariabele): omwille van het hoge aantal gevallen waar er 0 soorten zijn (en dus 0 individuen) geeft deze correctie problemen in het model (0 individuen is een perfecte, maar ook onzinnige, voorspeller voor 0 soorten).
 
 Gegevens van de tijdsreekens en de 11de pantrap op locatie 1 werden niet meegenomen in de modellen.
 
@@ -492,10 +506,12 @@ data_sp_rich <- apoidea %>%
   ) %>%
   filter(time_series == 0) %>%
   mutate(
-    maand = as.factor(month(date_b))) %>%
+    maand = as.factor(month(date_b))
+  ) %>%
   group_by(
-    sample_code, location_code, method_combi, 
-    method_cd, spring_code, uv, level, maand, taxgroup) %>%
+    sample_code, location_code, method_combi,
+    method_cd, spring_code, uv, level, maand, taxgroup
+  ) %>%
   summarise(
     n_species = n_distinct(species_nm, na.rm = TRUE),
     n_ind = sum(no_ind),
@@ -513,46 +529,60 @@ data_sp_rich_spring <- data_sp_rich %>%
 ```
 
 
-```{r, fig.cap = "Aantal keren dat n aantal soorten in één pan trap of subtransect van 50m gevonden werd."}
+```{r, fig.cap = "Aantal keren dat n aantal soorten in één pan trap of deeltransect van 50m gevonden werd."}
 ggplot(data_sp_rich_spring, aes(x = n_species)) +
   geom_histogram(
     aes(fill = taxgroup),
-    position = position_dodge())
+    position = position_dodge()
+  )
 ```
 
-
-```{r, fig.cap = "Aantal individuen in één pan trap of subtransect van 50m ten opzichte van het aantal soorten in die pan trap of dat subtransect."}
+```{r, fig.cap = "Aantal individuen in één pan trap of deeltransect van 50m ten opzichte van het aantal soorten in die pan trap of dat deeltransect."}
 ggplot(data_sp_rich_spring) +
   geom_point(aes(x = n_ind, y = n_species)) +
-  facet_wrap(~ taxgroup, scales = "free")
+  facet_wrap(~taxgroup, scales = "free")
 ```
 
 ```{r}
 model0 <- glmmTMB(
-  n_species ~ 
+  n_species ~
     (location_code
-  + maand
-  + method_cd) * taxgroup
-  ,
+    + maand
+      + method_cd) * taxgroup,
   family = "poisson",
-  ziformula = ~ taxgroup,
+  ziformula = ~taxgroup,
   na.action = na.fail,
   data = data_sp_rich_spring
 )
+```
+
+```{r, class.source = "fold-show"}
+summary(model0)
 ```
 
 ```{r check1, fig.height=12, fig.cap = "Visuele controle van verschillende modelaannames."}
 performance::check_model(model0)
 ```
 
-```{r, fig.cap = "Verwacht aantal soorten per maand, soortgroep en SPRING methode op basis van ons model."}
+```{r, fig.cap = "Verwacht aantal soorten in een pantrap-set of transectsegment van 50 m per maand, soortgroep en SPRING methode op basis van ons model."}
 marginaleffects::plot_predictions(
   model0,
-  condition = c("maand", "method_cd",  "taxgroup"),
+  condition = c("maand", "method_cd", "taxgroup"),
   type = "response",
   vcov = TRUE
 )
 ```
+
+```{r, fig.cap = "Kans op een nulwaarneming in een pantrap-set of transectsegment van 50 m per soortgroep op basis van ons model."}
+marginaleffects::plot_predictions(
+  model0,
+  condition = c("taxgroup"),
+  type = "zprob",
+  vcov = TRUE
+) +
+  ylab("Probability of having zero species")
+```
+
 
 ### Alternatieve methoden
 
@@ -567,14 +597,18 @@ Interactie tussen uv en hoogte van plaatsing kan niet onderzocht worden omdat er
 model1 <- glmmTMB(
   n_species ~
     (method_combi
-  + location_code
-  + maand
-  ) * taxgroup,
-  ziformula = ~ taxgroup,
-  family = "poisson", 
+    + location_code
+      + maand
+    ) * taxgroup,
+  ziformula = ~taxgroup,
+  family = "poisson",
   na.action = na.exclude,
   data = data_sp_rich
 )
+```
+
+```{r, class.source = "fold-show"}
+summary(model1)
 ```
 
 De hoge waarden voor collineariteit (Fig. \@ref(fig:check2)) zijn in dit geval geen probleem en zijn het gevolg van (verwachte) collineariteit t.g.v. toevoegen van interacties.
@@ -583,13 +617,14 @@ De hoge waarden voor collineariteit (Fig. \@ref(fig:check2)) zijn in dit geval g
 performance::check_model(model1)
 ```
 
-```{r, fig.cap = "Verwacht aantal soorten per soortgroep en methode op basis van ons model."}
+```{r, fig.cap = "Verwacht aantal soorten in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
 marginaleffects::plot_predictions(
   model1,
   condition = c("method_combi", "taxgroup"),
   type = "response",
   vcov = TRUE,
-  draw = FALSE) %>%
+  draw = FALSE
+) %>%
   left_join(
     data_sp_rich %>%
       distinct(method_cd, spring_code, uv, level, method_combi, taxgroup)
@@ -599,20 +634,31 @@ marginaleffects::plot_predictions(
   geom_pointrange(
     aes(
       x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
-      colour = method_combi),
+      colour = method_combi
+    ),
     position = position_dodge(width = 0.5)
   ) +
   labs(y = "Soortenrijkdom") +
   facet_wrap(~taxgroup, scales = "free")
 ```
 
-## Alpha biodiversity
+```{r, fig.cap = "Kans op een nulwaarneming in een pantrap-set of transectsegment van 50 m per soortgroep op basis van ons model."}
+marginaleffects::plot_predictions(
+  model1,
+  condition = c("taxgroup"),
+  type = "zprob",
+  vcov = TRUE
+) +
+  ylab("Probability of having zero species")
+```
+
+## Alpha biodiversiteit
 
 De Shannon index wordt als volgt berekend:
 $$H' = - \sum_{i=1}^{R} p_i ln p_i$$
 Waarbij $p_i$ de proportie is van het aantal individuen van één soort ten opzichte van het totaal aantal individuen.
 
-Er kan geen Shannon index berekent worden voor pan traps of deeltransecten waarin niks gevangen werd. Het gebruik van deze index leidt dus sowieso tot een verlies aan informatie. Daarnaast is de Shannon index van een sample waar slechts één soort gevonden wordt gelijk aan 0.
+Er kan geen Shannon index berekent worden voor pan traps of deeltransecten waarin niks gevangen werd. Het gebruik van deze index leidt dus sowieso tot een verlies aan informatie. Daarnaast is de Shannon index van een sample waar slechts één soort gevonden wordt gelijk aan 0. Voor volgende berekeningen werden dan ook alle maanden per pan trap of deeltransect van 50 m samengevoegd om een teveel aan nulwaarnemingen te voorkomen.
 
 ```{r}
 sha <- apoidea %>%
@@ -620,50 +666,60 @@ sha <- apoidea %>%
   bind_rows(
     syrphidae %>%
       mutate(taxgroup = "Syrphidae")
-  ) %>% 
-  group_by(sampling_site_cd, spring_code, method_cd, taxgroup,
-           location_code, method_combi) %>% 
-  mutate(tot_ind = sum(no_ind)) %>% 
-  group_by(sampling_site_cd, spring_code, 
-           method_cd, species_nm, tot_ind,
-           taxgroup,
-           location_code, method_combi) %>% 
-  summarise(n_ind = sum(no_ind)) %>% 
-  mutate(prop = (n_ind/tot_ind) * log(n_ind/tot_ind)) %>% 
-  group_by(sampling_site_cd, spring_code, 
-           method_cd, taxgroup,
-           location_code, method_combi) %>% 
+  ) %>%
+  group_by(
+    sampling_site_cd, spring_code, method_cd, taxgroup,
+    location_code, method_combi
+  ) %>%
+  mutate(tot_ind = sum(no_ind)) %>%
+  group_by(
+    sampling_site_cd, spring_code,
+    method_cd, species_nm, tot_ind,
+    taxgroup,
+    location_code, method_combi
+  ) %>%
+  summarise(n_ind = sum(no_ind)) %>%
+  mutate(prop = (n_ind / tot_ind) * log(n_ind / tot_ind)) %>%
+  group_by(
+    sampling_site_cd, spring_code,
+    method_cd, taxgroup,
+    location_code, method_combi
+  ) %>%
   summarise(exp_sh = exp(-sum(prop, na.rm = TRUE)))
 ```
 
-```{r, fig.cap = "Shannon index (exp) per pan trap of subtransect van 50m."}
+```{r, fig.cap = "Shannon index (exp) per pan trap of deeltransect van 50m."}
 ggplot(sha, aes(x = exp_sh)) +
   geom_histogram(
     aes(fill = taxgroup),
-    position = position_dodge())
+    position = position_dodge()
+  )
 ```
 
 ```{r}
-model0 <- glmmTMB(
-  exp_sh ~ 
+model2 <- glmmTMB(
+  exp_sh ~
     (method_combi +
-       location_code) * taxgroup
-  ,
+      location_code) * taxgroup,
   family = "Gamma",
-  ziformula = ~ taxgroup,
+  ziformula = ~taxgroup,
   na.action = na.fail,
   data = sha
 )
 ```
 
-```{r check3, fig.height=10, fig.cap = "Visuele controle van verschillende modelaannames."}
-performance::check_model(model0)
+```{r, class.source = "fold-show"}
+summary(model2)
 ```
 
-```{r, fig.cap = "Verwachte Shannon index (exp) per soortgroep en methode op basis van ons model."}
+```{r check3, fig.height=10, fig.cap = "Visuele controle van verschillende modelaannames."}
+performance::check_model(model2)
+```
+
+```{r, fig.cap = "Verwachte Shannon index (exp) in één pantrap-set of transectsegment van 50 m per soortgroep en methode (voor alle maanden samen) op basis van ons model."}
 marginaleffects::plot_predictions(
-  model0,
-  condition = c("method_combi",  "taxgroup"),
+  model2,
+  condition = c("method_combi", "taxgroup"),
   type = "response",
   vcov = TRUE
 )
@@ -672,57 +728,60 @@ marginaleffects::plot_predictions(
 # Kosten
 
 ```{r}
-cost_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z6MTw5S8oI8B5iYxRmbNoStl9Ywf0", 
-                        sheet = "Kosten")
+cost_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z6MTw5S8oI8B5iYxRmbNoStl9Ywf0",
+  sheet = "Kosten"
+)
 
-time_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z6MTw5S8oI8B5iYxRmbNoStl9Ywf0", 
-                        sheet = "Tijdsbesteding")
+time_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z6MTw5S8oI8B5iYxRmbNoStl9Ywf0",
+  sheet = "Tijdsbesteding"
+)
 
-time_data <- time_data %>% 
-  left_join(cost_data %>% 
-              select(ID, `prijs/min`),
-            by = join_by(uitvoerder == ID))
+time_data <- time_data %>%
+  left_join(
+    cost_data %>%
+      select(ID, `prijs/min`),
+    by = join_by(uitvoerder == ID)
+  )
 
-time_data <- time_data %>% 
+time_data <- time_data %>%
   mutate(prijs = minuten * `prijs/min`)
-
 ```
 
 ```{r}
-mean_ap <- apoidea |> 
-  group_by(sample_code) |> 
-  summarise(n = n_distinct(species_nm)) |> 
+mean_ap <- apoidea |>
+  group_by(sample_code) |>
+  summarise(n = n_distinct(species_nm)) |>
   summarise(mean(n))
 
-mean_syr <- syrphidae |> 
-  group_by(sample_code) |> 
-  summarise(n = n_distinct(species_nm)) |> 
+mean_syr <- syrphidae |>
+  group_by(sample_code) |>
+  summarise(n = n_distinct(species_nm)) |>
   summarise(mean(n))
 
-iden_cost <- ((time_data[14, 7] * mean_ap) + (time_data[15, 7] * mean_syr)) |> 
+iden_cost <- ((time_data[14, 7] * mean_ap) + (time_data[15, 7] * mean_syr)) |>
   pull(prijs)
 ```
 
-Eén staal (één pan trap of transect van 50m) bevat gemiddelde `r round(mean_ap, 2)` soorten apoidea en  `r round(mean_syr, 2)` soorten syrphidae. Dat betekend dat één staal uitsorteren ons `r round(iden_cost, 2)` euro aan loon kost. We nemen het gemiddelde om methoden die meer soorten opleveren niet af te straffen.
+Één staal (één pan trap of transect van 50 m) bevat gemiddelde `r round(mean_ap, 2)` soorten apoidea en  `r round(mean_syr, 2)` soorten syrphidae. Dat betekend dat één staal uitsorteren ons `r round(iden_cost, 2)` euro aan loon kost. We nemen het gemiddelde om methoden die meer soorten opleveren niet af te straffen.
 
 ```{r}
-verpl <- cost_data %>% 
-  filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") %>% 
+verpl <- cost_data %>%
+  filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") %>%
   pull(prijs) *
-  cost_data %>% 
-  filter(Kostencategorie == "Km vergoeding") %>% 
-  pull(prijs)
+  cost_data %>%
+    filter(Kostencategorie == "Km vergoeding") %>%
+    pull(prijs)
 ```
 
 Ervan uitgaand dat de gemiddelde verplaatsing naar een locatie 35.25 km bedraagt betalen we aan kilometervergoeding `r round(verpl)` euro.
 
 ```{r}
-verpl_tijd <- cost_data %>% 
-  filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") %>% 
+verpl_tijd <- cost_data %>%
+  filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") %>%
   pull(prijs) / 50 * 60
 
-loon_verpl <- cost_data %>% 
-  filter(Kostencategorie == "Jaarloon veldmedewerker") %>% 
+loon_verpl <- cost_data %>%
+  filter(Kostencategorie == "Jaarloon veldmedewerker") %>%
   pull(`prijs/min`)
 ```
 
@@ -731,57 +790,41 @@ Om deze afstand te rijden hebben we `r round(verpl_tijd)` minuten nodig. Als dit
 
 Variabele kosten pan traps:
 ```{r}
-time_data %>% 
+time_data %>%
   filter(methode == "PT") %>%
-  add_row(cost_data %>% filter(!is.na(submethode)) %>% 
-            select(Activiteit = Kostencategorie, methode, 
-                   submethode, prijs)) %>%
-  arrange(submethode) |> 
+  add_row(cost_data %>% filter(!is.na(submethode)) %>%
+    select(
+      Activiteit = Kostencategorie, methode,
+      submethode, prijs
+    )) %>%
+  arrange(submethode) |>
   kableExtra::kable(digits = 0)
 ```
 
 
 Variabele kosten transecten:
 ```{r}
-time_data %>% 
+time_data %>%
   filter(methode == "TS") %>%
   kableExtra::kable(digits = 0)
 ```
 
 ## Scenario's
 
-```{r}
-calculate_costs <- function(points, method, submethod){
-  cost1 <- time_data %>% 
-  filter(methode == method,
-         submethode == submethod) %>% 
-  summarise(prijs = sum(prijs)) %>% 
-    pull(prijs)
-  
-  cost2 <- cost_data %>% 
-    filter(!is.na(submethode),
-           methode == method,
-           submethode == submethod) %>% 
-    summarise(prijs = sum(prijs)) %>% 
-    pull(prijs)
-  
-  ((cost1 + cost2) * points)
-}
-```
-
-
 Als we 650 meetpunten éénmaal zouden bezoeken dan zou ons dit `r round(verpl) * 650` euro aan kilometervergoeding kosten en `r round(verpl_tijd * loon_verpl) * 650` euro aan personeelskosten. 
 
-Als we één pan trap s.s. per locatie zouden plaatsen zouden we volgende kosten hebben:
+Als we één pan trap s.s. (uv - vegetatie) per locatie zouden plaatsen zouden we volgende kosten hebben:
 ```{r}
-pt_ss <- time_data %>% 
+pt_ss <- time_data %>%
   filter(methode == "PT", submethode == "s.s.") %>%
-  add_row(cost_data %>% filter(submethode == "s.s.") %>% 
-            select(Activiteit = Kostencategorie, methode, 
-                   submethode, prijs)) %>%
-  mutate(prijs_alle_punten = prijs * 650) 
+  add_row(cost_data %>% filter(submethode == "s.s.") %>%
+    select(
+      Activiteit = Kostencategorie, methode,
+      submethode, prijs
+    )) %>%
+  mutate(prijs_alle_punten = prijs * 650)
 
-pt_ss |> 
+pt_ss |>
   kableExtra::kable(digits = 0)
 ```
 
@@ -790,74 +833,76 @@ De prijs zou als volgt toenemen (verplaatsingskost niet meegerekend) wanneer we 
 pantraps <- c(1:5)
 maanden <- c(1:7)
 
-testset <- data.frame(matrix(ncol = length(pantraps), 
-                             nrow = length(maanden))) |> 
-  `colnames<-`(pantraps) |> 
+testset <- data.frame(matrix(
+  ncol = length(pantraps),
+  nrow = length(maanden)
+)) |>
+  `colnames<-`(pantraps) |>
   `rownames<-`(maanden)
 
-for (i in maanden){
-  for (j in pantraps){
-    x <- pt_ss[c(1,4),] |> 
-      mutate(berekening = prijs_alle_punten * j) |> 
-      summarise(m = sum(berekening)) |> 
+for (i in maanden) {
+  for (j in pantraps) {
+    x <- pt_ss[c(1, 4), ] |>
+      mutate(berekening = prijs_alle_punten * j) |>
+      summarise(m = sum(berekening)) |>
       pull(m)
-    
-    y <- pt_ss[c(2,3),] |> 
-      mutate(berekening = prijs_alle_punten * i * j) |> 
-      summarise(n = sum(berekening)) |> 
+
+    y <- pt_ss[c(2, 3), ] |>
+      mutate(berekening = prijs_alle_punten * i * j) |>
+      summarise(n = sum(berekening)) |>
       pull(n)
-    
-    testset[i,j] <- x + y
+
+    testset[i, j] <- x + y
   }
 }
 
-testset |> 
+testset |>
   kableExtra::kable(digits = 0, row.names = TRUE)
-
 ```
 
-Als we twee pan traps s.s. en twee pan traps SSL zouden plaatsen zouden de prijzen als volgt zijn voor 1 tot 7 verschillende maanden monitoring van 650 locaties:
+Als we twee pan traps s.s.(uv - vegetatie) en twee pan traps SSL (uv - bodem) zouden plaatsen zouden de prijzen als volgt zijn voor 1 tot 7 verschillende maanden monitoring van 650 locaties:
 ```{r}
-pt_ssl <- time_data %>% 
+pt_ssl <- time_data %>%
   filter(methode == "PT", submethode == "SSL") %>%
-  add_row(cost_data %>% filter(submethode == "SSL") %>% 
-            select(Activiteit = Kostencategorie, methode, 
-                   submethode, prijs)) %>%
+  add_row(cost_data %>% filter(submethode == "SSL") %>%
+    select(
+      Activiteit = Kostencategorie, methode,
+      submethode, prijs
+    )) %>%
   mutate(prijs_alle_punten = prijs * 650)
 
 testset2 <- c(NA)
 
 for (i in maanden) {
-    x <- pt_ssl[c(4),] |> 
-      mutate(m = prijs_alle_punten * 2) |> 
-      pull(m)
-    
-    y <- pt_ssl[c(2,3),] |> 
-      mutate(berekening = prijs_alle_punten * i * 2) |> 
-      summarise(n = sum(berekening)) |> 
-      pull(n)
-    
-    testset2[i] <- x + y
+  x <- pt_ssl[c(4), ] |>
+    mutate(m = prijs_alle_punten * 2) |>
+    pull(m)
+
+  y <- pt_ssl[c(2, 3), ] |>
+    mutate(berekening = prijs_alle_punten * i * 2) |>
+    summarise(n = sum(berekening)) |>
+    pull(n)
+
+  testset2[i] <- x + y
 }
 
-data.frame("tww_ss_twee_SSL" = testset$`2` + testset2) |> 
+data.frame("tww_ss_twee_SSL" = testset$`2` + testset2) |>
   kableExtra::kable(digits = 0, row.names = TRUE)
-
 ```
 
-Als we één transect s.s. van 250m per locatie zouden lopen zouden we volgende kosten hebben voor 650 punten:
+Als we één transect s.s. (geen sweeping) van 250 m per locatie zouden lopen zouden we volgende kosten hebben voor 650 punten:
 ```{r}
-ts_ss <- time_data %>% 
+ts_ss <- time_data %>%
   filter(methode == "TS", submethode == "s.s.") %>%
-  mutate(prijs_alle_punten_250 = prijs * 650 * 5) 
+  mutate(prijs_alle_punten_250 = prijs * 650 * 5)
 
-ts_ss |> 
+ts_ss |>
   kableExtra::kable(digits = 0)
 ```
 
 Laat ons tot slot twee volledige scenario's met elkaar vergelijken:
 
-650 locaties met twee pan traps s.s. en twee pantraps SSL die drie maal per jaar een week in het veld worden gelaten. Daarnaast wordt ook elke keer een transect van 250m gelopen.
+650 locaties met twee pan traps s.s. (uv - vegetatie) en twee pantraps SSL (uv - bodem) die drie maal per jaar een week in het veld worden gelaten. Daarnaast wordt ook elke keer een transect van 250 m gelopen.
 
 1: dit gebeurt door veldwerkers met manuele identificatie
 
@@ -1028,7 +1073,7 @@ y ~ methode + is_bodem + is_uv  + maand + locatie + eventuele interacties
 5) Hoe complementair zijn de verschillende protocols, op gebied van soorten?
 
 - per soortengroep
-    - vendiagram
+    - venndiagram
     - tabel unieke soorten per methode + gemeenschappelijke soorten
     - indirecte ordinatie (CA + achteraf visualiseren kleur = methode )
 
@@ -1398,7 +1443,28 @@ Vergelijk beste methode PT met beste methode TS
 ```{r}
 ```
 
+```{r}
+calculate_costs <- function(points, method, submethod) {
+  cost1 <- time_data %>%
+    filter(
+      methode == method,
+      submethode == submethod
+    ) %>%
+    summarise(prijs = sum(prijs)) %>%
+    pull(prijs)
 
+  cost2 <- cost_data %>%
+    filter(
+      !is.na(submethode),
+      methode == method,
+      submethode == submethod
+    ) %>%
+    summarise(prijs = sum(prijs)) %>%
+    pull(prijs)
+
+  ((cost1 + cost2) * points)
+}
+```
 
 
 
