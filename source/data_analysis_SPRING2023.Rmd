@@ -15,6 +15,7 @@ editor_options:
 ```{r setup, include=FALSE}
 library(knitr)
 opts_chunk$set(message = FALSE, warning = FALSE)
+options(scipen = 10)
 
 library(RODBC)
 library(readxl)
@@ -683,9 +684,26 @@ time_data <- time_data %>%
             by = join_by(uitvoerder == ID))
 
 time_data <- time_data %>% 
-  mutate(kost = minuten * `prijs/min`)
+  mutate(prijs = minuten * `prijs/min`)
 
 ```
+
+```{r}
+mean_ap <- apoidea |> 
+  group_by(sample_code) |> 
+  summarise(n = n_distinct(species_nm)) |> 
+  summarise(mean(n))
+
+mean_syr <- syrphidae |> 
+  group_by(sample_code) |> 
+  summarise(n = n_distinct(species_nm)) |> 
+  summarise(mean(n))
+
+iden_cost <- ((time_data[14, 7] * mean_ap) + (time_data[15, 7] * mean_syr)) |> 
+  pull(prijs)
+```
+
+Eén staal (één pan trap of transect van 50m) bevat gemiddelde `r round(mean_ap, 2)` soorten apoidea en  `r round(mean_syr, 2)` soorten syrphidae. Dat betekend dat één staal uitsorteren ons `r round(iden_cost, 2)` euro aan loon kost. We nemen het gemiddelde om methoden die meer soorten opleveren niet af te straffen.
 
 ```{r}
 verpl <- cost_data %>% 
@@ -708,29 +726,26 @@ loon_verpl <- cost_data %>%
   pull(`prijs/min`)
 ```
 
-Om deze afstand te rijden hebben we `r round(verpl_tijd)` minuten nodig. Als dit door een veldmedewerker gebeurt dan kost ons dit `r round(verpl_tijd * loon_verpl)` euro in loonkost.
-
-
+Om deze afstand te rijden hebben we `r round(verpl_tijd)` minuten nodig. Als dit door een veldmedewerker (niveau B) gebeurt dan kost ons dit `r round(verpl_tijd * loon_verpl)` euro in loonkost.
 
 
 Variabele kosten pan traps:
 ```{r}
 time_data %>% 
-  filter(methode == "PT") %>% 
-  summarise(.by = submethode, prijs = sum(kost)) %>% 
+  filter(methode == "PT") %>%
   add_row(cost_data %>% filter(!is.na(submethode)) %>% 
-            select(submethode, prijs)) %>% 
-  summarise(.by = submethode, prijs = sum(prijs)) %>%
-  kableExtra::kable()
+            select(Activiteit = Kostencategorie, methode, 
+                   submethode, prijs)) %>%
+  arrange(submethode) |> 
+  kableExtra::kable(digits = 0)
 ```
 
 
 Variabele kosten transecten:
 ```{r}
 time_data %>% 
-  filter(methode == "TS") %>% 
-  summarise(.by = submethode, prijs = sum(kost)) %>%
-  kableExtra::kable()
+  filter(methode == "TS") %>%
+  kableExtra::kable(digits = 0)
 ```
 
 ## Scenario's
@@ -740,7 +755,7 @@ calculate_costs <- function(points, method, submethod){
   cost1 <- time_data %>% 
   filter(methode == method,
          submethode == submethod) %>% 
-  summarise(prijs = sum(kost)) %>% 
+  summarise(prijs = sum(prijs)) %>% 
     pull(prijs)
   
   cost2 <- cost_data %>% 
@@ -755,37 +770,128 @@ calculate_costs <- function(points, method, submethod){
 ```
 
 
-Scenario 1:
+Als we 650 meetpunten éénmaal zouden bezoeken dan zou ons dit `r round(verpl) * 650` euro aan kilometervergoeding kosten en `r round(verpl_tijd * loon_verpl) * 650` euro aan personeelskosten. 
 
-- 650 meetpunten
-- 1 pan trap s.s. per locatie
-
+Als we één pan trap s.s. per locatie zouden plaatsen zouden we volgende kosten hebben:
 ```{r}
-calculate_costs(650, "PT", "s.s.") +
-  (650 * 14.93543) + (650 * 36.27281)
+pt_ss <- time_data %>% 
+  filter(methode == "PT", submethode == "s.s.") %>%
+  add_row(cost_data %>% filter(submethode == "s.s.") %>% 
+            select(Activiteit = Kostencategorie, methode, 
+                   submethode, prijs)) %>%
+  mutate(prijs_alle_punten = prijs * 650) 
+
+pt_ss |> 
+  kableExtra::kable(digits = 0)
 ```
 
-Scenario 2:
-
-- 650 meetpunten
-- Transect (sweeping) van 250m
-
+De prijs zou als volgt toenemen (verplaatsingskost niet meegerekend) wanneer we 1 tot 5 pan traps plaatsen gedurende 1 tot 7 maanden en dit voor 650 locaties:
 ```{r}
-calculate_costs(650, "TS", "MP") * 5 +
-  (650 * 14.93543) + (650 * 36.27281)
+pantraps <- c(1:5)
+maanden <- c(1:7)
+
+testset <- data.frame(matrix(ncol = length(pantraps), 
+                             nrow = length(maanden))) |> 
+  `colnames<-`(pantraps) |> 
+  `rownames<-`(maanden)
+
+for (i in maanden){
+  for (j in pantraps){
+    x <- pt_ss[c(1,4),] |> 
+      mutate(berekening = prijs_alle_punten * j) |> 
+      summarise(m = sum(berekening)) |> 
+      pull(m)
+    
+    y <- pt_ss[c(2,3),] |> 
+      mutate(berekening = prijs_alle_punten * i * j) |> 
+      summarise(n = sum(berekening)) |> 
+      pull(n)
+    
+    testset[i,j] <- x + y
+  }
+}
+
+testset |> 
+  kableExtra::kable(digits = 0, row.names = TRUE)
+
 ```
 
-Scenario 3:
-
-- 650 meetpunten
-- 1 pan trap s.s. per locatie
-- Transect (sweeping) van 250m
-
+Als we twee pan traps s.s. en twee pan traps SSL zouden plaatsen zouden de prijzen als volgt zijn voor 1 tot 7 verschillende maanden monitoring van 650 locaties:
 ```{r}
-calculate_costs(650, "PT", "s.s.") +
-  calculate_costs(650, "TS", "MP") * 5 +
-  (650 * 14.93543) + (650 * 36.27281)
+pt_ssl <- time_data %>% 
+  filter(methode == "PT", submethode == "SSL") %>%
+  add_row(cost_data %>% filter(submethode == "SSL") %>% 
+            select(Activiteit = Kostencategorie, methode, 
+                   submethode, prijs)) %>%
+  mutate(prijs_alle_punten = prijs * 650)
+
+testset2 <- c(NA)
+
+for (i in maanden) {
+    x <- pt_ssl[c(4),] |> 
+      mutate(m = prijs_alle_punten * 2) |> 
+      pull(m)
+    
+    y <- pt_ssl[c(2,3),] |> 
+      mutate(berekening = prijs_alle_punten * i * 2) |> 
+      summarise(n = sum(berekening)) |> 
+      pull(n)
+    
+    testset2[i] <- x + y
+}
+
+data.frame("tww_ss_twee_SSL" = testset$`2` + testset2) |> 
+  kableExtra::kable(digits = 0, row.names = TRUE)
+
 ```
+
+Als we één transect s.s. van 250m per locatie zouden lopen zouden we volgende kosten hebben voor 650 punten:
+```{r}
+ts_ss <- time_data %>% 
+  filter(methode == "TS", submethode == "s.s.") %>%
+  mutate(prijs_alle_punten_250 = prijs * 650 * 5) 
+
+ts_ss |> 
+  kableExtra::kable(digits = 0)
+```
+
+Laat ons tot slot twee volledige scenario's met elkaar vergelijken:
+
+650 locaties met twee pan traps s.s. en twee pantraps SSL die drie maal per jaar een week in het veld worden gelaten. Daarnaast wordt ook elke keer een transect van 250m gelopen.
+
+1: dit gebeurt door veldwerkers met manuele identificatie
+
+- Verplaatsingskosten: 
+  - Kilometervergoeding: `r round(verpl * 650 * 6)` euro
+  - Loonkost: `r round(verpl_tijd * loon_verpl * 650 * 6)` euro
+  
+- Aankopen, plaatsen, inzamelen en uitsorteren van 2 pan traps s.s. en 2 pan traps SSL op drie momenten: 354359 euro 
+
+- Transect lopen en uitsorteren op drie momenten: 74577 euro
+
+- Identificeren van soorten: `r round(iden_cost * 9 * 650 * 3)` euro
+
+- Totale kost: 1 220 161 euro per jaar
+
+
+2: dit gebeurt door vrijwilligers met metabarcoding (geen aantallen individuen, alle samples worden samengevoegd per locatie)
+
+- Verplaatsingskosten: 0 euro
+
+- Aankopen pan traps: 7800 euro
+
+- Transect lopen: 0 euro
+
+- Identificeren van soorten: 45500 euro
+
+- Totale kost: 53 300 euro per jaar
+
+Beide scenario's vereisen een senior wetenschapper die het project opvolgt en een coördinator die het veldwerk aanstuurt, wel kan er vanuit worden gegaan dat deze coördinator meer werk zou hebben met vrijwilligers. Voorlopig ben ik van een metabarcoding kost van 70 euro per staal uit gegaan, vermoedelijk komt hier nog werk voor een bioinformaticus aan te pas.
+
+
+
+
+
 
 <!--
 # Correspondence Analysis
