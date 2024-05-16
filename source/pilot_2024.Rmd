@@ -12,7 +12,8 @@ library(here)
 ```
 
 ```{r}
-steekproef_mas_zand <- read_sf(here("data", "steekproef_zandstreek_avimap.geojson"))
+steekproef_mas_zand <- read_sf(here("data",
+                                    "steekproef_zandstreek_avimap.geojson"))
 ```
 
 
@@ -30,8 +31,8 @@ selectie_punten <- c("Zn_39774.9", "Zn_35328.1.2", "Zn_18968.1", "Zn_29251.2.1",
 ```
 
 ```{r}
-pilot_monipolli <- steekproef_mas_zand |> 
-  filter(pointid %in% selectie_punten) |> 
+pilot_monipolli <- steekproef_mas_zand |>
+  filter(pointid %in% selectie_punten) |>
   st_write("punten_2024.shp")
 ```
 
