@@ -1,3 +1,5 @@
+# nolint start
+
 ## {{title}}
 
 We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 11de pantrap op de site van ILVO niet wordt meegenomen in verdere analyses.
@@ -124,9 +126,9 @@ venn({{group}}, "month")
 ### Soortenaccumulatie
 
 #### Saturatie pan traps in tijd
-
+<!-- spell-check: ignore:start -->
 >Moreover, some rarefaction and extrapolation curves may cross one or more times, so that the rank order of diversity measured among samples could change depending on the sampling effort that is used for standardized comparisons (Chao and Jost 2012). 
-
+<!-- spell-check: ignore:end -->
 
 Voor de volgende analyse selecteren we de tijdreeksen. Als we hiervan een "rarefaction" curve berekenen zal dit geen beeld geven van het cumulatief aantal soorten in de tijd, maar zal het weergeven hoe het aantal soorten toeneemt als je meerdere sampling events (die één of twee dagen omhelsden) uit de tijdreeks combineert.
 Als de x-as "rarefied number of days" gelijk aan 3 weergeeft, zijn dit dus niet noodzakelijk drie opeenvolgende dagen (Fig. \@ref(fig:{{group}}rardays)).
@@ -422,3 +424,5 @@ venn(nat_ap, "method_combi", "optional_functional_group")
 ```{r, fig.cap = "Unieke functionele groepen apoidea per maand.", eval="{{group}}"=="apoidea"}
 venn(nat_ap, "month", "optional_functional_group")
 ```
+
+# nolint end

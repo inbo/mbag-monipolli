@@ -10,6 +10,9 @@ output:
 editor_options: 
   chunk_output_type: console
 ---
+
+# nolint start: object_usage_linter.
+
 # Inleiding
 
 ```{r setup, include=FALSE}
@@ -94,7 +97,7 @@ Er zijn vier tabellen in de Access database:
 - Identificaties van de soorten
 - Unieke samples
 - Sample locaties
-- Natural history traits van wilde bijsoorten
+- Natural history traits van wilde bij soorten
 
 Van de eerste twee tabellen wordt een versimpelde versie gemaakt.
 
@@ -480,7 +483,7 @@ purrr::pmap(
 # onderstaande clipr code kan je gebruiken om de rmd naar klembord te schrijven
 # daarna kan je dit plakken in een tijdelijk bestand en de chunks runnen
 # enkel nodig indien je interactief werkt en de code van deze chunks nodig hebt
-# clipr::write_clip(rmd)
+# clipr::write_clip(rmd) # nolint
 
 knit(text = rmd, quiet = TRUE) %>%
   cat()
@@ -495,7 +498,7 @@ We fitten de modellen voor beide soortengroepen samengenomen in hetzelfde model,
 
 We maken geen correctie voor het aantal gevangen individuen (door dit toe te voegen als covariabele): omwille van het hoge aantal gevallen waar er 0 soorten zijn (en dus 0 individuen) geeft deze correctie problemen in het model (0 individuen is een perfecte, maar ook onzinnige, voorspeller voor 0 soorten).
 
-Gegevens van de tijdsreekens en de 11de pantrap op locatie 1 werden niet meegenomen in de modellen.
+Gegevens van de tijdsreeksen en de 11de pantrap op locatie 1 werden niet meegenomen in de modellen.
 
 ```{r}
 data_sp_rich <- apoidea %>%
@@ -728,11 +731,11 @@ marginaleffects::plot_predictions(
 # Kosten
 
 ```{r}
-cost_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z6MTw5S8oI8B5iYxRmbNoStl9Ywf0",
+cost_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z6MTw5S8oI8B5iYxRmbNoStl9Ywf0", # nolint: line_length_linter.
   sheet = "Kosten"
 )
 
-time_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z6MTw5S8oI8B5iYxRmbNoStl9Ywf0",
+time_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z6MTw5S8oI8B5iYxRmbNoStl9Ywf0", # nolint: line_length_linter.
   sheet = "Tijdsbesteding"
 )
 
@@ -792,7 +795,7 @@ Variabele kosten pan traps:
 ```{r}
 time_data %>%
   filter(methode == "PT") %>%
-  add_row(cost_data %>% filter(!is.na(submethode)) %>%
+  add_row(cost_data %>% filter(!is.na(submethode)) %>%  # nolint: pipe_continuation_linter, line_length_linter.
     select(
       Activiteit = Kostencategorie, methode,
       submethode, prijs
@@ -817,7 +820,7 @@ Als we één pan trap s.s. (uv - vegetatie) per locatie zouden plaatsen zouden w
 ```{r}
 pt_ss <- time_data %>%
   filter(methode == "PT", submethode == "s.s.") %>%
-  add_row(cost_data %>% filter(submethode == "s.s.") %>%
+  add_row(cost_data %>% filter(submethode == "s.s.") %>%   # nolint: pipe_continuation_linter, line_length_linter.
     select(
       Activiteit = Kostencategorie, methode,
       submethode, prijs
@@ -864,7 +867,7 @@ Als we twee pan traps s.s.(uv - vegetatie) en twee pan traps SSL (uv - bodem) zo
 ```{r}
 pt_ssl <- time_data %>%
   filter(methode == "PT", submethode == "SSL") %>%
-  add_row(cost_data %>% filter(submethode == "SSL") %>%
+  add_row(cost_data %>% filter(submethode == "SSL") %>%   # nolint: pipe_continuation_linter, line_length_linter.
     select(
       Activiteit = Kostencategorie, methode,
       submethode, prijs
@@ -932,3 +935,5 @@ Laat ons tot slot twee volledige scenario's met elkaar vergelijken:
 - Totale kost: 53 300 euro per jaar
 
 Beide scenario's vereisen een senior wetenschapper die het project opvolgt en een coördinator die het veldwerk aanstuurt, wel kan er vanuit worden gegaan dat deze coördinator meer werk zou hebben met vrijwilligers. Voorlopig ben ik van een metabarcoding kost van 70 euro per staal uit gegaan, vermoedelijk komt hier nog werk voor een bioinformaticus aan te pas.
+
+# nolint end: object_usage_linter.
