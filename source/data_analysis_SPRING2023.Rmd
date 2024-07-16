@@ -1,7 +1,7 @@
 ---
-title: "Verkennend data analyse SPRING"
+title: "Data analyse SPRING Flanders"
 author: "Emma Cartuyvels, Hans Van Calster"
-date: "2024-05-02"
+date: "2024-07-09"
 output:
   bookdown::html_document2:
     code_folding: hide
@@ -36,6 +36,7 @@ library(here)
 library(lubridate)
 library(stringr)
 library(googlesheets4)
+library(VennDiagram)
 
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
@@ -63,8 +64,10 @@ venn <- function(data, group, count_id = "species_nm") {
     x[[i]] <- int
   }
 
-  ggVennDiagram::ggVennDiagram(x) +
-    scale_x_continuous(expand = c(0.2, 0.2))
+  ggVennDiagram::ggVennDiagram(x, label_alpha = 0, edge_size = 0.75) +
+    scale_fill_distiller(palette = "Greens") +
+    scale_x_continuous(expand = c(0.2, 0.2)) +
+    theme(legend.position = "none")
 }
 ```
 
@@ -128,7 +131,12 @@ samples <- samples %>%
   as_tibble() %>%
   mutate(
     date_b = lubridate::as_date(date_b),
-    date_e = lubridate::as_date(date_e)
+    date_e = lubridate::as_date(date_e),
+    spring_code = ifelse(spring_code == "MP",
+                       ifelse(method_cd == "TS",
+                              "SWEEP",
+                              "NO-UV"),
+                       spring_code)
   )
 
 sampling_sites <- sampling_sites %>%
@@ -193,8 +201,8 @@ samples_basic <- samples %>%
     duration = date_e - date_b,
     time_order = order(date_b),
     uv = case_when(
-      spring_code == "MP" & method_cd == "PT" ~ "non-uv",
-      spring_code != "MP" & method_cd == "PT" ~ "uv",
+      spring_code == "NO-UV" & method_cd == "PT" ~ "non-uv",
+      spring_code != "NO-UV" & method_cd == "PT" ~ "uv",
       TRUE ~ "not applicable"
     ),
     method_combi = ifelse(
@@ -615,6 +623,11 @@ summary(model1)
 ```
 
 De hoge waarden voor collineariteit (Fig. \@ref(fig:check2)) zijn in dit geval geen probleem en zijn het gevolg van (verwachte) collineariteit t.g.v. toevoegen van interacties.
+
+```{r}
+car::Anova(model1)
+```
+
 
 ```{r check2, fig.height=12, fig.cap = "Visuele controle van verschillende modelaannames."}
 performance::check_model(model1)
