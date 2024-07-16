@@ -36,7 +36,6 @@ library(here)
 library(lubridate)
 library(stringr)
 library(googlesheets4)
-library(VennDiagram)
 
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
