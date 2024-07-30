@@ -1,4 +1,3 @@
-<!-- spell-check: ignore:start -->
 <!-- badges: start -->
 ![GitHub](https://img.shields.io/github/license/inbo/mbag-monipolli)
 ![GitHub repo size](https://img.shields.io/github/repo-size/inbo/mbag-monipolli)
@@ -18,7 +17,6 @@ Research Institute for Nature and Forest (INBO)[^cph][^fnd]
 [^inbo.be]: Instituut voor Natuur- en Bosonderzoek (INBO)
 
 **keywords**: MBAG; meetnet; pollinatoren; bestuivers
-<!-- spell-check: ignore:end -->
 
 <!-- community: inbo -->
 

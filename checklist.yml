@@ -1,8 +1,17 @@
 description: Configuration file for checklist::check_pkg()
 package: no
 allowed:
-  warnings: []
-  notes: []
+  warnings:
+  - motivation: Needed to allow annotation of figures and tables in Dutch parent-child
+      documents
+    value: No Rstudio project found for bookdown C:/R/git_repositories/mbag-monipolli/source
+  notes:
+  - motivation: Not applicable
+    value: no DOI badge found in README.md
+  - motivation: Not relevant yet
+    value: No version information found in README.md
+  - motivation: Not applicable
+    value: no website badge found in README.md
 required:
 - CITATION
 - checklist
