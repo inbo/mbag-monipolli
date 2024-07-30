@@ -1,5 +1,5 @@
 ---
-title: "Data analyse SPRING Flanders"
+title: "Data analyse SPRING Vlaanderen"
 author: "Emma Cartuyvels, Hans Van Calster"
 date: "2024-07-30"
 output:
@@ -42,6 +42,8 @@ conflicted::conflict_prefer("layout", "plotly")
 
 ```{r venn-function}
 venn <- function(data, group, count_id = "species_nm") {
+  require(ggplot2)
+
   groups <- data %>%
     distinct(!!sym(group)) %>%
     pull(!!sym(group))
@@ -788,7 +790,7 @@ model4 <- lm(n_species_syr ~ number_of_floral_units, data = flowers |>
 summary(model4)
 ```
 
-No significant effect of number of floral units on number of species or number of individuals caught, effect becomes even less significant when removing one strong outlier.
+Geen significant effect van het aantal bloemeenheden op het aantal soorten of het aantal gevangen individuen; het effect wordt nog minder significant wanneer één sterke uitschieter wordt verwijderd.
 
 ### Uitgebreid model
 ```{r}
