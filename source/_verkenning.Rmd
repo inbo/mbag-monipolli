@@ -1,5 +1,3 @@
-# nolint start
-
 ## {{title}}
 
 We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 11de pantrap op de site van ILVO niet wordt meegenomen in verdere analyses.
@@ -95,6 +93,7 @@ venn({{group}}, "month")
   ) %>%
   mutate(p_i = no_ind / sum(no_ind)) %>%
   summarise(
+    n_ind = sum(no_ind),
     n_species = sum(no_ind > 0),
     exp_shannon = exp(-sum(p_i * log(p_i), na.rm = TRUE)),
     .groups = "drop")
@@ -424,5 +423,3 @@ venn(nat_ap, "method_combi", "optional_functional_group")
 ```{r, fig.cap = "Unieke functionele groepen apoidea per maand.", eval="{{group}}"=="apoidea"}
 venn(nat_ap, "month", "optional_functional_group")
 ```
-
-# nolint end
