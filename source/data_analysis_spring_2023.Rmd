@@ -1,7 +1,7 @@
 ---
 title: "Data analyse SPRING Flanders"
 author: "Emma Cartuyvels, Hans Van Calster"
-date: "2024-07-09"
+date: "2024-07-30"
 output:
   bookdown::html_document2:
     code_folding: hide
@@ -10,8 +10,6 @@ output:
 editor_options: 
   chunk_output_type: console
 ---
-
-# nolint start: object_usage_linter.
 
 # Inleiding
 
@@ -54,7 +52,7 @@ venn <- function(data, group, count_id = "species_nm") {
   for (i in groups) {
     int <- data %>%
       filter(
-        time_series == 0,
+        .data$time_series == 0,
         !!sym(group) == i
       ) %>%
       distinct(!!sym(count_id)) %>%
@@ -64,7 +62,7 @@ venn <- function(data, group, count_id = "species_nm") {
   }
 
   ggVennDiagram::ggVennDiagram(x, label_alpha = 0, edge_size = 0.75) +
-    scale_fill_distiller(palette = "Greens") +
+    scale_fill_distiller(palette = "Greens", direction = 1) +
     scale_x_continuous(expand = c(0.2, 0.2)) +
     theme(legend.position = "none")
 }
@@ -74,7 +72,7 @@ venn <- function(data, group, count_id = "species_nm") {
 rarefaction <- function(data) {
   rrf <- data %>%
     pivot_wider(
-      names_from = species_nm,
+      names_from = .data$species_nm,
       values_from = n,
       values_fill = 0
     ) %>%
@@ -88,8 +86,8 @@ rarefaction <- function(data) {
     sd = rrf[["sd"]]
   ) %>%
     mutate(
-      lwr = richness - 2 * sd,
-      upr = richness + 2 * sd
+      lwr = .data$richness - 2 * .data$sd,
+      upr = .data$richness + 2 * .data$sd
     ) # sd standard error of the estimate
 }
 ```
@@ -331,7 +329,7 @@ We plotten de locaties van de transecten en pan traps om te controleren dat alle
 ```{r map-transecten}
 plottransecten <- function(x) {
   ggplot(x) +
-    geom_sf(aes(colour = transect_sectie)) +
+    geom_sf(aes(colour = .data$transect_sectie)) +
     labs(title = x$location_code[[1]])
 }
 
@@ -627,6 +625,10 @@ De hoge waarden voor collineariteit (Fig. \@ref(fig:check2)) zijn in dit geval g
 car::Anova(model1)
 ```
 
+```{r}
+emmeans::emmeans(model1, pairwise ~ method_combi)
+emmeans::emmeans(model1, pairwise ~ method_combi * taxgroup)
+```
 
 ```{r check2, fig.height=12, fig.cap = "Visuele controle van verschillende modelaannames."}
 performance::check_model(model1)
@@ -740,6 +742,98 @@ marginaleffects::plot_predictions(
 )
 ```
 
+## Effect aantal bloemen
+
+```{r}
+flowers <- read_xlsx(here::here("data", "Number of flowers.xlsx")) |>
+   janitor::clean_names()
+```
+
+```{r}
+flowers <- flowers |>
+  left_join(apoidea_richness |>
+              select(n_ind_ap = n_ind,
+                     n_species_ap = n_species,
+                     sample_code),
+            by = join_by(sampling_site_cd == sample_code)) |>
+  left_join(syrphidae_richness |>
+              select(n_ind_syr = n_ind,
+                     n_species_syr = n_species,
+                     sample_code),
+            by = join_by(sampling_site_cd == sample_code))
+```
+
+```{r}
+flowers |>
+  ggplot(aes(x = number_of_floral_units, y = n_species_ap)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+```{r}
+model1 <- lm(n_ind_ap ~ number_of_floral_units, data = flowers |>
+               filter(number_of_floral_units < 4000))
+summary(model1)
+
+model2 <- lm(n_species_ap ~ number_of_floral_units, data = flowers |>
+               filter(number_of_floral_units < 4000))
+summary(model2)
+
+model3 <- lm(n_ind_syr ~ number_of_floral_units, data = flowers |>
+               filter(number_of_floral_units < 4000))
+summary(model3)
+
+model4 <- lm(n_species_syr ~ number_of_floral_units, data = flowers |>
+               filter(number_of_floral_units < 4000))
+summary(model4)
+```
+
+No significant effect of number of floral units on number of species or number of individuals caught, effect becomes even less significant when removing one strong outlier.
+
+### Uitgebreid model
+```{r}
+flowers <- flowers |>
+  mutate(location_code = str_sub(sampling_site_cd, start = 1L, end = 8L),
+         maand = str_sub(sampling_site_cd, start = 20L, end = 20L))
+```
+
+
+```{r}
+model1 <- glmmTMB(
+  n_species_ap ~ number_of_floral_units + location_code + maand,
+  ziformula = ~ 1,
+  family = "poisson",
+  na.action = na.exclude,
+  data = flowers
+)
+```
+
+```{r}
+summary(model1)
+```
+
+```{r}
+performance::check_model(model1)
+```
+
+```{r}
+model2 <- glmmTMB(
+  n_species_syr ~ number_of_floral_units + location_code + maand,
+  ziformula = ~ 1,
+  family = "poisson",
+  na.action = na.exclude,
+  data = flowers
+)
+```
+
+```{r}
+summary(model2)
+```
+
+```{r}
+performance::check_model(model2)
+```
+
 # Kosten
 
 ```{r}
@@ -777,7 +871,9 @@ iden_cost <- ((time_data[14, 7] * mean_ap) + (time_data[15, 7] * mean_syr)) |>
   pull(prijs)
 ```
 
-Één staal (één pan trap of transect van 50 m) bevat gemiddelde `r round(mean_ap, 2)` soorten apoidea en  `r round(mean_syr, 2)` soorten syrphidae. Dat betekend dat één staal uitsorteren ons `r round(iden_cost, 2)` euro aan loon kost. We nemen het gemiddelde om methoden die meer soorten opleveren niet af te straffen.
+Één staal (één pan trap of transect van 50 m) bevat gemiddelde `r round(mean_ap, 2)` soorten apoidea en  `r round(mean_syr, 2)` soorten syrphidae. Dat betekend dat het identificeren van de soorten in één staal ons `r round(iden_cost, 2)` euro aan loon kost. We nemen het gemiddelde om methoden die meer van de gewenste soorten opleveren niet af te straffen.
+
+Verderop bekijken we wel de verschillende tijden die nodig zijn voor het uitsorteren van een staal (bijen en zweefvliegen van andere families scheiden). Dit omdat specifieke methoden, zoals bv. het plaatsen van een pan trap op de grond, kunnen leiden tot hogere restfracties dan andere.
 
 ```{r}
 verpl <- cost_data %>%
@@ -813,7 +909,7 @@ time_data %>%
       submethode, prijs
     )) %>%
   arrange(submethode) |>
-  kableExtra::kable(digits = 0)
+  kableExtra::kable(digits = 2)
 ```
 
 
@@ -821,7 +917,7 @@ Variabele kosten transecten:
 ```{r}
 time_data %>%
   filter(methode == "TS") %>%
-  kableExtra::kable(digits = 0)
+  kableExtra::kable(digits = 2)
 ```
 
 ## Scenario's
@@ -947,5 +1043,3 @@ Laat ons tot slot twee volledige scenario's met elkaar vergelijken:
 - Totale kost: 53 300 euro per jaar
 
 Beide scenario's vereisen een senior wetenschapper die het project opvolgt en een coördinator die het veldwerk aanstuurt, wel kan er vanuit worden gegaan dat deze coördinator meer werk zou hebben met vrijwilligers. Voorlopig ben ik van een metabarcoding kost van 70 euro per staal uit gegaan, vermoedelijk komt hier nog werk voor een bioinformaticus aan te pas.
-
-# nolint end: object_usage_linter.
