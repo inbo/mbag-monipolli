@@ -25,3 +25,6 @@ spelling:
   ignore:
   - .github
   - LICENSE.md
+exclusions: list(
+    "source/_bookdown.yml"
+  )
