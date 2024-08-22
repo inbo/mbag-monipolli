@@ -1,10 +1,7 @@
 description: Configuration file for checklist::check_pkg()
 package: no
 allowed:
-  warnings:
-  - motivation: Needed to allow annotation of figures and tables in Dutch parent-child
-      documents
-    value: No Rstudio project found for bookdown C:/R/git_repositories/mbag-monipolli/source
+  warnings: []
   notes:
   - motivation: Not applicable
     value: no DOI badge found in README.md
@@ -25,6 +22,3 @@ spelling:
   ignore:
   - .github
   - LICENSE.md
-exclusions: list(
-    "source/_bookdown.yml"
-  )
