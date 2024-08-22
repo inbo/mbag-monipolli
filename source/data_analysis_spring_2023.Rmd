@@ -81,7 +81,7 @@ rarefaction <- function(data) {
       values_fill = 0
     ) %>%
     select(-1) %>%
-    specaccum(method = "rarefaction")
+    vegan::specaccum(method = "rarefaction")
 
   data.frame(
     sites = rrf[["sites"]],
