@@ -77,7 +77,7 @@ venn({{group}}, "month")
 ### Alpha diversiteit
 
 ```{r {{group}}-richness}
-{{group}}_richness <- {{group}} %>%
+{{group}}_richness <- {{group}} %>% # nolint
   group_by(
     location_code,
     sampling_site_cd,

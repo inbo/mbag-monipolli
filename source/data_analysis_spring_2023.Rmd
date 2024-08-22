@@ -16,6 +16,8 @@ editor_options:
 ```{r setup, include=FALSE}
 library(knitr)
 opts_chunk$set(message = FALSE, warning = FALSE)
+opts_knit$set(
+  root.dir = here::here("source"))
 options(scipen = 10)
 
 library(RODBC)
@@ -42,7 +44,7 @@ conflicted::conflict_prefer("layout", "plotly")
 
 ```{r venn-function}
 venn <- function(data, group, count_id = "species_nm") {
-  require(ggplot2)
+  require(ggplot2) # nolint
 
   groups <- data %>%
     distinct(!!sym(group)) %>%
@@ -802,7 +804,7 @@ flowers <- flowers |>
 
 ```{r}
 model1 <- glmmTMB(
-  n_species_ap ~ number_of_floral_units + location_code + maand,
+  n_ind_ap ~ log(number_of_floral_units + 1) + location_code + maand,
   ziformula = ~ 1,
   family = "poisson",
   na.action = na.exclude,
