@@ -783,30 +783,11 @@ flowers <- flowers |>
 flowers |>
   ggplot(aes(x = number_of_floral_units, y = n_species_ap)) +
   geom_point() +
-  geom_smooth(method = "lm")
+  geom_smooth(method = "glm", method.args = list(family = "poisson")) +
+  scale_x_continuous(trans = "pseudo_log")
 ```
 
-```{r}
-model1 <- lm(n_ind_ap ~ number_of_floral_units, data = flowers |>
-               filter(number_of_floral_units < 4000))
-summary(model1)
 
-model2 <- lm(n_species_ap ~ number_of_floral_units, data = flowers |>
-               filter(number_of_floral_units < 4000))
-summary(model2)
-
-model3 <- lm(n_ind_syr ~ number_of_floral_units, data = flowers |>
-               filter(number_of_floral_units < 4000))
-summary(model3)
-
-model4 <- lm(n_species_syr ~ number_of_floral_units, data = flowers |>
-               filter(number_of_floral_units < 4000))
-summary(model4)
-```
-
-Geen significant effect van het aantal bloemeenheden op het aantal soorten of het aantal gevangen individuen; het effect wordt nog minder significant wanneer één sterke uitschieter wordt verwijderd.
-
-### Uitgebreid model
 ```{r}
 flowers <- flowers |>
   mutate(location_code = str_sub(sampling_site_cd, start = 1L, end = 8L),
