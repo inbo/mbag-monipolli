@@ -779,14 +779,6 @@ flowers <- flowers |>
             by = join_by(sampling_site_cd == sample_code))
 ```
 
-```{r}
-flowers |>
-  ggplot(aes(x = number_of_floral_units, y = n_species_ap)) +
-  geom_point() +
-  geom_smooth(method = "glm", method.args = list(family = "poisson")) +
-  scale_x_continuous(trans = "pseudo_log")
-```
-
 
 ```{r}
 flowers <- flowers |>
@@ -794,11 +786,100 @@ flowers <- flowers |>
          maand = str_sub(sampling_site_cd, start = 20L, end = 20L))
 ```
 
+Aantal soorten bijen ifv aantal bloemen:
+
+```{r}
+flowers |>
+  ggplot(aes(x = number_of_floral_units, y = n_species_ap)) +
+  geom_point() +
+  geom_smooth(
+    method = "glm", method.args = list(family = "poisson"), se = FALSE) +
+  scale_x_continuous(trans = "pseudo_log") +
+  facet_grid(location_code ~ maand, scales = "free")
+```
+
+Aantal individuen van bijen ifv aantal bloemen:
+
+```{r}
+flowers |>
+  ggplot(aes(x = number_of_floral_units, y = n_ind_ap)) +
+  geom_point() +
+  geom_smooth(
+    method = "glm", method.args = list(family = "poisson"), se = FALSE) +
+  scale_x_continuous(trans = "pseudo_log") +
+  facet_grid(location_code ~ maand, scales = "free")
+```
+
+Aantal soorten zweefvliegen ifv aantal bloemen:
+
+```{r}
+flowers |>
+  ggplot(aes(x = number_of_floral_units, y = n_species_syr)) +
+  geom_point() +
+  geom_smooth(
+    method = "glm", method.args = list(family = "poisson"), se = FALSE) +
+  scale_x_continuous(trans = "pseudo_log") +
+  facet_grid(location_code ~ maand, scales = "free")
+```
+
+Aantal individuen van zweefvliegen ifv aantal bloemen:
+
+```{r}
+flowers |>
+  ggplot(aes(x = number_of_floral_units, y = n_ind_syr)) +
+  geom_point() +
+  geom_smooth(
+    method = "glm", method.args = list(family = "poisson"), se = FALSE) +
+  scale_x_continuous(trans = "pseudo_log") +
+  facet_grid(location_code ~ maand, scales = "free")
+```
+
+```{r}
+flowers |>
+  ggplot(
+        aes(
+      x = maand,
+      y = number_of_floral_units
+    )
+  ) +
+  geom_violin() +
+  ggforce::geom_sina() +
+  scale_y_continuous(
+    trans = "pseudo_log",
+    breaks = c(0, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000))
+```
+
+```{r}
+flowers |>
+  ggplot(
+    aes(
+      x = n_ind_ap,
+      y = n_species_ap
+    )
+  ) +
+  stat_sum() +
+  geom_abline()
+
+flowers |>
+  ggplot(
+    aes(
+      x = n_ind_syr,
+      y = n_species_syr
+    )
+  ) +
+  stat_sum() +
+  geom_abline()
+```
+
 
 ```{r}
 model1 <- glmmTMB(
-  n_ind_ap ~ log(number_of_floral_units + 1) + location_code + maand,
-  ziformula = ~ 1,
+  n_species_ap ~
+    log(number_of_floral_units + 1) 
+  + maand
+  + location_code
+  ,
+  ziformula = ~ maand,
   family = "poisson",
   na.action = na.exclude,
   data = flowers
@@ -810,13 +891,27 @@ summary(model1)
 ```
 
 ```{r}
+performance::check_overdispersion(model1)
 performance::check_model(model1)
 ```
 
 ```{r}
+marginaleffects::plot_predictions(
+  model1, "number_of_floral_units",
+  vcov = TRUE,
+  re.form = NA
+) +
+  scale_x_continuous(trans = "pseudo_log")
+```
+
+
+```{r}
 model2 <- glmmTMB(
-  n_species_syr ~ number_of_floral_units + location_code + maand,
-  ziformula = ~ 1,
+  n_species_syr ~
+    log(number_of_floral_units + 1)
+  + location_code
+  + maand,
+  ziformula = ~ maand,
   family = "poisson",
   na.action = na.exclude,
   data = flowers
@@ -828,7 +923,79 @@ summary(model2)
 ```
 
 ```{r}
+performance::check_overdispersion(model2)
 performance::check_model(model2)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model2, "number_of_floral_units",
+  vcov = TRUE,
+  re.form = NA
+) +
+  scale_x_continuous(trans = "pseudo_log")
+```
+
+```{r}
+model3 <- glmmTMB(
+  n_ind_ap ~
+    log(number_of_floral_units + 1)
+  + location_code
+  + maand,
+  ziformula = ~ maand,
+  family = "nbinom2",
+  na.action = na.exclude,
+  data = flowers
+)
+```
+
+```{r}
+summary(model3)
+```
+
+```{r}
+performance::check_overdispersion(model3)
+performance::check_model(model3)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model3, "number_of_floral_units",
+  vcov = TRUE,
+  re.form = NA
+) +
+  scale_x_continuous(trans = "pseudo_log")
+```
+
+```{r}
+model4 <- glmmTMB(
+  n_ind_syr ~
+  + log(number_of_floral_units + 1)
+  + location_code
+  + maand,
+  ziformula = ~ maand,
+  family = "nbinom2",
+  na.action = na.exclude,
+  data = flowers
+)
+```
+
+```{r}
+summary(model4)
+```
+
+```{r}
+performance::check_overdispersion(model4)
+performance::check_model(model4)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model4, "number_of_floral_units",
+  vcov = TRUE,
+  re.form = NA
+) +
+  scale_x_continuous(trans = "pseudo_log")
 ```
 
 # Kosten
