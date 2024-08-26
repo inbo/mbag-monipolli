@@ -16,8 +16,6 @@ editor_options:
 ```{r setup, include=FALSE}
 library(knitr)
 opts_chunk$set(message = FALSE, warning = FALSE)
-opts_knit$set(
-  root.dir = here::here("source"))
 options(scipen = 10)
 
 library(RODBC)
@@ -68,7 +66,8 @@ venn <- function(data, group, count_id = "species_nm") {
   ggVennDiagram::ggVennDiagram(x, label_alpha = 0, edge_size = 0.75) +
     scale_fill_distiller(palette = "Greens", direction = 1) +
     scale_x_continuous(expand = c(0.2, 0.2)) +
-    theme(legend.position = "none")
+    theme(legend.position = "none") +
+    labs(title = paste0("Aantal unieke van ", count_id))
 }
 ```
 
@@ -106,7 +105,7 @@ Er zijn vier tabellen in de Access database:
 Van de eerste twee tabellen wordt een versimpelde versie gemaakt.
 
 ```{r load-data}
-conn <- odbcConnectAccess2007(here("data/SPRING.accdb"))
+conn <- odbcConnectAccess2007("../data/SPRING.accdb")
 
 identifications <- sqlFetch(conn, "identifications")
 samples <- sqlFetch(conn, "samples")
@@ -480,7 +479,7 @@ purrr::pmap(
   function(
       title = title, group = group, familyvec = familyvec) {
     knit_expand(
-      here::here("source", "_verkenning.Rmd"),
+      "_verkenning.Rmd",
       title = title,
       group = group,
       familyvec = familyvec
@@ -749,7 +748,7 @@ marginaleffects::plot_predictions(
 ## Effect aantal bloemen
 
 ```{r}
-flowers <- read_xlsx(here::here("data", "Number of flowers.xlsx")) |>
+flowers <- read_xlsx("../data/Number of flowers.xlsx") |>
    janitor::clean_names()
 ```
 
