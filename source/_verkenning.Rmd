@@ -125,6 +125,7 @@ venn({{group}}, "month")
 ### Soortenaccumulatie
 
 #### Saturatie pan traps in tijd
+
 <!-- spell-check: ignore:start -->
 >Moreover, some rarefaction and extrapolation curves may cross one or more times, so that the rank order of diversity measured among samples could change depending on the sampling effort that is used for standardized comparisons (Chao and Jost 2012). 
 <!-- spell-check: ignore:end -->
@@ -409,17 +410,27 @@ rarefaction_result_3 %>%
 cat("### Functionele groepen\n")
 
 nat_ap <- {{group}} %>%
-  left_join(naturalhistorytraits, join_by(species_nm == species))
+  left_join(naturalhistorytraits, join_by(species_nm == species)) %>%
+  mutate(
+    traits_combined = paste(
+      foraging_prefence,
+      sociality,
+      nesting_type,
+      tongue_length
+    )
+  )
 ```
 
 ```{r, fig.cap = "Unieke functionele groepen apoidea voor transecten (TS) vs. pan traps (PT).", eval="{{group}}"=="apoidea"}
-venn(nat_ap, "method_cd", "optional_functional_group")
+
+venn(nat_ap, "method_cd", "traits_combined")
 ```
 
 ```{r, fig.cap = "Unieke functionele groepen apoidea per submethode.", eval="{{group}}"=="apoidea"}
-venn(nat_ap, "method_combi", "optional_functional_group")
+venn(nat_ap, "method_combi", "traits_combined")
 ```
 
 ```{r, fig.cap = "Unieke functionele groepen apoidea per maand.", eval="{{group}}"=="apoidea"}
-venn(nat_ap, "month", "optional_functional_group")
+venn(nat_ap, "month", "traits_combined")
 ```
+
