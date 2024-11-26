@@ -38,12 +38,11 @@ flower_effect <- rnorm(1000, mean = 50, sd = 10)  # Bloemen (voorbeeld)
 ```
 
 ```{r startpopulatie}
-n_spec_per_loc <- pmax(0, 
+n_spec_per_loc <- as.integer(pmax(0, 
                        rnorm(n_locations,
                              avg_species_per_loc,
-                             sd_species_per_loc))
+                             sd_species_per_loc)))
 ```
-
 
 ```{r}
 simulate_species_presence <- function(n_species,
@@ -60,7 +59,7 @@ simulate_species_presence <- function(n_species,
   
   # Wijs aanwezigheid toe
   species <- species %>%
-    mutate(is_present = rbinom(n_species,
+    mutate(is_present = rbinom(1,
                                size = 1,
                                prob = presence_prob)  # Aanwezigheidsstatus
     ) %>%
@@ -71,6 +70,22 @@ simulate_species_presence <- function(n_species,
 }
 ```
 
+```{r}
+# Simuleer soorten per locatie
+location_species <- tibble(
+  location_id = 1:n_locations,
+  species_count = n_spec_per_loc
+) %>%
+  rowwise() %>%
+  mutate(
+    present_species = list(simulate_species_presence(
+      n_species = n_species,
+      n_present = n_spec_per_loc,
+      general_prob = 0.8,
+      rare_prob = 0.2
+    ))
+  )
+```
 
 
 
