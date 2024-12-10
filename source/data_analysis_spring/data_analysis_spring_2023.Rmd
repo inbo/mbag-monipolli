@@ -746,7 +746,7 @@ marginaleffects::plot_predictions(
 ## Effect aantal bloemen
 
 ```{r}
-flowers <- read_xlsx("../../data/Number of flowers.xlsx") |>
+flowers <- readr::read_csv2("../../data/number_of_flowers.csv") |>
    janitor::clean_names()
 ```
 
