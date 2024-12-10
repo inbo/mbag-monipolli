@@ -8,6 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+library(RODBC)
+library(here)
 library(tidyverse)
 library(lme4)
 
@@ -16,9 +18,9 @@ set.seed(123)
 
 ```{r define parameters}
 # Simulatieparameters
-years <- 0:6                       # Aantal jaren (24 jaar)
-sampling_freq <- c(1, 3, 6)        # Frequenties: jaarlijks, elke 3 of 6 jaar
 n_locations <- 50                  # Aantal locaties
+cyclus <- c(1,3,6)                 # Lengte cyclus
+decline_rate <- 0.01               # "Echte" trend in de populatie
 
 # Populatieparameters
 n_species <- 819                   # Totaal aantal soorten
@@ -30,29 +32,52 @@ sd_peak_day <- 25                  # Spreiding rond piekdag
 sampling_period <- c(91, 243)      # Samplingperiode: april-augustus (dag 91 tot 243)
 
 # Trends
-decline_rate_6y <- rnorm(n_species, -0.06, 25)
+decline_rate_6y <- rnorm(n_species, -0.06, 0.25)
 
 # Correctiefactoren
 temp_effect <- rnorm(1000, mean = 20, sd = 5)   # Temperatuur (voorbeeld)
 flower_effect <- rnorm(1000, mean = 50, sd = 10)  # Bloemen (voorbeeld)
 ```
 
-```{r startpopulatie}
+```{r gegevens SPRING}
+# Gemiddeld aantal individuen per soort per locatie
+conn <- odbcConnectAccess2007("../data/SPRING.accdb")
+identifications <- sqlFetch(conn, "identifications")
+RODBC::odbcClose(conn)
+
+identifications <- identifications %>%
+  janitor::clean_names() %>%
+  as_tibble() %>%
+  rename(
+    no_ind = "no_males_females",
+    species_nm = "species_nm_author_year"
+  ) %>%
+  rename(
+    family = familiy
+  )
+
+n_ind_per_loc <- identifications |>
+  group_by(species_nm) |>
+  summarise(mean = mean(no_ind, na.rm = TRUE),
+            sd = sd(no_ind, na.rm = ))
+```
+
+```{r species per location}
 n_spec_per_loc <- as.integer(pmax(0, 
                        rnorm(n_locations,
                              avg_species_per_loc,
                              sd_species_per_loc)))
 ```
 
-```{r}
+```{r which species are present}
 simulate_species_presence <- function(n_species,
                                       n_present,
                                       general_prob,
                                       rare_prob) {
-  # Categoriseer soorten in algemeen (eerste 20%) en zeldzaam (rest)
+  # Categoriseer soorten in algemeen (eerste 10%) en zeldzaam (rest)
   species <- tibble(
     species_id = 1:n_species,
-    presence_prob = ifelse(species_id <= round(0.2 * n_species),
+    presence_prob = ifelse(species_id <= round(0.1 * n_species),
                         general_prob,
                         rare_prob)  # De eerste 20% zijn algemene soorten
   )
@@ -61,16 +86,31 @@ simulate_species_presence <- function(n_species,
   species <- species %>%
     mutate(is_present = rbinom(1,
                                size = 1,
-                               prob = presence_prob)  # Aanwezigheidsstatus
-    ) %>%
-    filter(is_present == 1) %>%  # Filter alleen aanwezige soorten
-    slice_sample(n = n_present)  # Selecteer willekeurig het aantal soorten per locatie
+                               prob = presence_prob)) # Aanwezigheidsstatus
+           
+           
+  if (sum(species$is_present) >= n_present){
+    species <- species |>
+      filter(is_present == 1) %>%  # Filter alleen aanwezige soorten
+      slice_sample(n = n_present)  # Selecteer willekeurig het aantal soorten per locatie
+  } else {
+    d <- n_present - sum(species$is_present)
+    
+    species1 <- species |>
+      filter(is_present == 1) %>%  # Filter alleen aanwezige soorten
+      slice_sample(n = n_present) 
+    
+    species2 <- species |>
+      filter(is_present == 0) %>%  # Filter alleen aanwezige soorten
+      slice_sample(n = d)
+    
+    species <- species1 |>
+      add_row(species2)
+  }
   
   return(species$species_id)
 }
-```
 
-```{r}
 # Simuleer soorten per locatie
 location_species <- tibble(
   location_id = 1:n_locations,
@@ -80,15 +120,31 @@ location_species <- tibble(
   mutate(
     present_species = list(simulate_species_presence(
       n_species = n_species,
-      n_present = n_spec_per_loc,
-      general_prob = 0.8,
-      rare_prob = 0.2
+      n_present = species_count,
+      general_prob = 0.95,
+      rare_prob = 0.25
     ))
   )
 ```
 
+```{r initial abundances}
+sim_pop <- location_species |>
+  unnest(present_species) |>
+  mutate(init_pop = rpois(n(), avg_species_per_loc))
+```
 
 
+```{r}
+
+total_years <- 6  # Number of years
+total_decline <- -0.06  # Total decline over the period (-6%)
+
+# Generate random yearly declines
+random_yearly_declines <- runif(total_years, min = -0.5, max = 0.5)  # Random values in range
+scaled_yearly_declines <- random_yearly_declines - (mean(random_yearly_declines) - total_decline)
+
+
+```
 
 
 
