@@ -103,7 +103,9 @@ Er zijn vier tabellen in de Access database:
 Van de eerste twee tabellen wordt een versimpelde versie gemaakt.
 
 ```{r load-data}
-conn <- odbcConnectAccess2007("../../data/SPRING.accdb")
+conn <- odbcConnectAccess2007(
+  "G:/Gedeelde drives/PRJ_MBAG/4b_bestuivers/data/SPRING.accdb"
+  )
 
 identifications <- sqlFetch(conn, "identifications")
 samples <- sqlFetch(conn, "samples")

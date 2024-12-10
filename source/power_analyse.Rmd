@@ -19,7 +19,7 @@ set.seed(123)
 ```{r define parameters}
 # Simulatieparameters
 n_locations <- 50                  # Aantal locaties
-cyclus <- c(1,3,6)                 # Lengte cyclus
+cyclus <- c(1, 3, 6)                 # Lengte cyclus
 decline_rate <- 0.01               # "Echte" trend in de populatie
 
 # Populatieparameters
@@ -29,7 +29,7 @@ sd_species_per_loc <- 13           # Standaarddeviatie van soorten per locatie
 detect_prob <- 0.01                # Detectiekans per individu
 peak_day <- 160                    # Piekdag (8 juni)
 sd_peak_day <- 25                  # Spreiding rond piekdag
-sampling_period <- c(91, 243)      # Samplingperiode: april-augustus (dag 91 tot 243)
+sampling_period <- c(91, 243) # Samplingperiode: april-augustus (dag 91 tot 243)
 
 # Trends
 decline_rate_6y <- rnorm(n_species, -0.06, 0.25)
@@ -41,7 +41,10 @@ flower_effect <- rnorm(1000, mean = 50, sd = 10)  # Bloemen (voorbeeld)
 
 ```{r gegevens SPRING}
 # Gemiddeld aantal individuen per soort per locatie
-conn <- odbcConnectAccess2007("../data/SPRING.accdb")
+conn <- odbcConnectAccess2007(
+  "G:/Gedeelde drives/PRJ_MBAG/4b_bestuivers/data/SPRING.accdb"
+  )
+
 identifications <- sqlFetch(conn, "identifications")
 RODBC::odbcClose(conn)
 
@@ -63,7 +66,7 @@ n_ind_per_loc <- identifications |>
 ```
 
 ```{r species per location}
-n_spec_per_loc <- as.integer(pmax(0, 
+n_spec_per_loc <- as.integer(pmax(0,
                        rnorm(n_locations,
                              avg_species_per_loc,
                              sd_species_per_loc)))
@@ -77,37 +80,37 @@ simulate_species_presence <- function(n_species,
   # Categoriseer soorten in algemeen (eerste 10%) en zeldzaam (rest)
   species <- tibble(
     species_id = 1:n_species,
-    presence_prob = ifelse(species_id <= round(0.1 * n_species),
+    presence_prob = ifelse(.data$species_id <= round(0.1 * n_species),
                         general_prob,
                         rare_prob)  # De eerste 20% zijn algemene soorten
   )
-  
+
   # Wijs aanwezigheid toe
   species <- species %>%
     mutate(is_present = rbinom(1,
                                size = 1,
-                               prob = presence_prob)) # Aanwezigheidsstatus
-           
-           
-  if (sum(species$is_present) >= n_present){
+                               prob = .data$presence_prob)) #Aanwezigheidsstatus
+
+
+  if (sum(species$is_present) >= n_present) {
     species <- species |>
-      filter(is_present == 1) %>%  # Filter alleen aanwezige soorten
-      slice_sample(n = n_present)  # Selecteer willekeurig het aantal soorten per locatie
+      filter(.data$is_present == 1) %>%  # Filter alleen aanwezige soorten
+      slice_sample(n = n_present)  # Sample uit rijen
   } else {
     d <- n_present - sum(species$is_present)
-    
+
     species1 <- species |>
-      filter(is_present == 1) %>%  # Filter alleen aanwezige soorten
-      slice_sample(n = n_present) 
-    
+      filter(.data$is_present == 1) %>%  # Filter alleen aanwezige soorten
+      slice_sample(n = n_present)
+
     species2 <- species |>
-      filter(is_present == 0) %>%  # Filter alleen aanwezige soorten
+      filter(.data$is_present == 0) %>%  # Filter alleen aanwezige soorten
       slice_sample(n = d)
-    
+
     species <- species1 |>
       add_row(species2)
   }
-  
+
   return(species$species_id)
 }
 
@@ -140,8 +143,11 @@ total_years <- 6  # Number of years
 total_decline <- -0.06  # Total decline over the period (-6%)
 
 # Generate random yearly declines
-random_yearly_declines <- runif(total_years, min = -0.5, max = 0.5)  # Random values in range
-scaled_yearly_declines <- random_yearly_declines - (mean(random_yearly_declines) - total_decline)
+random_yearly_declines <- runif(total_years,
+                                min = -0.5,
+                                max = 0.5)  # Random values in range
+scaled_yearly_declines <- random_yearly_declines -
+  (mean(random_yearly_declines) - total_decline)
 
 
 ```
@@ -154,25 +160,28 @@ scaled_yearly_declines <- random_yearly_declines - (mean(random_yearly_declines)
 
 ```{r define parameters}
 # Functie: Simuleer populatie op een locatie
-simulate_population <- function(year, location, species, decline_rate, sampling_days) {
+simulate_population <- function(
+    year, location, species, decline_rate, sampling_days) {
   # Basis populatiegrootte per soort
   initial_population <- rpois(species, lambda = avg_species_per_loc)
-  
+
   # Jaarlijkse trend
   population <- initial_population * exp(decline_rate * year)
-  
+
   # Seizoenseffect (Gaussian peak rond dag 160)
   day_effect <- dnorm(sampling_days, mean = peak_day, sd = sd_peak_day)
-  
+
   # Correcties toepassen (temperatuur en bloemen)
   temp_corr <- rnorm(length(sampling_days), mean = 1, sd = 0.1)
   flower_corr <- rnorm(length(sampling_days), mean = 1, sd = 0.2)
-  
+
   corrected_population <- population * day_effect * temp_corr * flower_corr
-  
+
   # Detectiekans toepassen
-  observed_population <- rbinom(length(corrected_population), size = corrected_population, prob = detect_prob)
-  
+  observed_population <- rbinom(length(corrected_population),
+                                size = corrected_population,
+                                prob = detect_prob)
+
   return(observed_population)
 }
 
@@ -184,9 +193,18 @@ simulated_data <- expand.grid(
 ) %>%
   rowwise() %>%
   mutate(
-    sampling_days = list(sample(seq(sampling_period[1], sampling_period[2]), 2, replace = TRUE)),
-    decline_rate = if_else(sampling_freq == 1, decline_rate_24y, decline_rate_6y),
-    observed_counts = list(simulate_population(year, location, n_species, decline_rate, sampling_days))
+    sampling_days = list(sample(seq(sampling_period[1],
+                                    sampling_period[2]),
+                                2,
+                                replace = TRUE)),
+    decline_rate = if_else(sampling_freq == 1,
+                           decline_rate_24y,
+                           decline_rate_6y),
+    observed_counts = list(simulate_population(year,
+                                               location,
+                                               n_species,
+                                               decline_rate,
+                                               sampling_days))
   )
 
 # Resultaten uitbreiden
@@ -199,12 +217,11 @@ simulated_data <- simulated_data %>%
 
 # Analyse uitvoeren (Poisson-regressie)
 model <- glmer(
-  observed_counts ~ year + corrected_temp + corrected_flowers + (1|location),
+  observed_counts ~ year + corrected_temp + corrected_flowers + (1 | location),
   family = poisson,
   data = simulated_data
 )
 
 summary(model)
-
 ```
 
