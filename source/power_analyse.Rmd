@@ -42,19 +42,19 @@ flower_effect <- rnorm(1000, mean = 50, sd = 10)  # Bloemen (voorbeeld)
 ```{r gegevens SPRING}
 # Gemiddeld aantal individuen per soort per locatie
 conn <- odbcConnectAccess2007(
-  "G:/Gedeelde drives/PRJ_MBAG/4b_bestuivers/data/SPRING.accdb"
+  "G:/Gedeelde drives/PRJ_MBAG/4b_bestuivers/data/SPRING.accdb" # nolint
   )
 
 identifications <- sqlFetch(conn, "identifications")
 RODBC::odbcClose(conn)
 
-identifications <- identifications %>%
-  janitor::clean_names() %>%
-  as_tibble() %>%
+identifications <- identifications |>
+  janitor::clean_names() |>
+  as_tibble() |>
   rename(
     no_ind = "no_males_females",
     species_nm = "species_nm_author_year"
-  ) %>%
+  ) |>
   rename(
     family = familiy
   )
@@ -78,7 +78,7 @@ simulate_species_presence <- function(n_species,
                                       general_prob,
                                       rare_prob) {
   # Categoriseer soorten in algemeen (eerste 10%) en zeldzaam (rest)
-  species <- tibble(
+  species <- tibble::tibble(
     species_id = 1:n_species,
     presence_prob = ifelse(.data$species_id <= round(0.1 * n_species),
                         general_prob,
@@ -86,29 +86,29 @@ simulate_species_presence <- function(n_species,
   )
 
   # Wijs aanwezigheid toe
-  species <- species %>%
-    mutate(is_present = rbinom(1,
+  species <- species |>
+    dplyr::mutate(is_present = rbinom(1,
                                size = 1,
                                prob = .data$presence_prob)) #Aanwezigheidsstatus
 
 
   if (sum(species$is_present) >= n_present) {
     species <- species |>
-      filter(.data$is_present == 1) %>%  # Filter alleen aanwezige soorten
-      slice_sample(n = n_present)  # Sample uit rijen
+      filter(.data$is_present == 1) |>  # Filter alleen aanwezige soorten
+      dplyr::slice_sample(n = n_present)  # Sample uit rijen
   } else {
     d <- n_present - sum(species$is_present)
 
     species1 <- species |>
-      filter(.data$is_present == 1) %>%  # Filter alleen aanwezige soorten
-      slice_sample(n = n_present)
+      filter(.data$is_present == 1) |>  # Filter alleen aanwezige soorten
+      dplyr::slice_sample(n = n_present)
 
     species2 <- species |>
-      filter(.data$is_present == 0) %>%  # Filter alleen aanwezige soorten
-      slice_sample(n = d)
+      filter(.data$is_present == 0) |>  # Filter alleen aanwezige soorten
+      dplyr::slice_sample(n = d)
 
     species <- species1 |>
-      add_row(species2)
+      tibble::add_row(species2)
   }
 
   return(species$species_id)
@@ -118,8 +118,8 @@ simulate_species_presence <- function(n_species,
 location_species <- tibble(
   location_id = 1:n_locations,
   species_count = n_spec_per_loc
-) %>%
-  rowwise() %>%
+) |>
+  rowwise() |>
   mutate(
     present_species = list(simulate_species_presence(
       n_species = n_species,
@@ -190,8 +190,8 @@ simulated_data <- expand.grid(
   year = years,
   location = 1:n_locations,
   sampling_freq = sampling_freq
-) %>%
-  rowwise() %>%
+) |>
+  rowwise() |>
   mutate(
     sampling_days = list(sample(seq(sampling_period[1],
                                     sampling_period[2]),
@@ -208,8 +208,8 @@ simulated_data <- expand.grid(
   )
 
 # Resultaten uitbreiden
-simulated_data <- simulated_data %>%
-  unnest(cols = c(sampling_days, observed_counts)) %>%
+simulated_data <- simulated_data |>
+  unnest(cols = c(sampling_days, observed_counts)) |>
   mutate(
     corrected_temp = temp_effect[sample(1:1000, n(), replace = TRUE)],
     corrected_flowers = flower_effect[sample(1:1000, n(), replace = TRUE)]

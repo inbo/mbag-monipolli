@@ -43,21 +43,21 @@ conflicted::conflict_prefer("layout", "plotly")
 venn <- function(data, group, count_id = "species_nm") {
   require(ggplot2) # nolint
 
-  groups <- data %>%
-    distinct(!!sym(group)) %>%
+  groups <- data |>
+    distinct(!!sym(group)) |>
     pull(!!sym(group))
 
   x <- vector(mode = "list", length = length(groups))
   x <- setNames(x, groups)
 
   for (i in groups) {
-    int <- data %>%
+    int <- data |>
       filter(
         .data$time_series == 0,
         !!sym(group) == i
-      ) %>%
-      distinct(!!sym(count_id)) %>%
-      filter(!is.na(!!sym(count_id))) %>%
+      ) |>
+      distinct(!!sym(count_id)) |>
+      filter(!is.na(!!sym(count_id))) |>
       pull(!!sym(count_id))
     x[[i]] <- int
   }
@@ -71,13 +71,13 @@ venn <- function(data, group, count_id = "species_nm") {
 
 ```{r rarefaction-function}
 rarefaction <- function(data) {
-  rrf <- data %>%
+  rrf <- data |>
     pivot_wider(
       names_from = .data$species_nm,
       values_from = n,
       values_fill = 0
-    ) %>%
-    select(-1) %>%
+    ) |>
+    select(-1) |>
     vegan::specaccum(method = "rarefaction")
 
   data.frame(
@@ -85,7 +85,7 @@ rarefaction <- function(data) {
     richness = rrf[["richness"]],
     individuals = rrf[["individuals"]],
     sd = rrf[["sd"]]
-  ) %>%
+  ) |>
     mutate(
       lwr = .data$richness - 2 * .data$sd,
       upr = .data$richness + 2 * .data$sd
@@ -104,7 +104,7 @@ Van de eerste twee tabellen wordt een versimpelde versie gemaakt.
 
 ```{r load-data}
 conn <- odbcConnectAccess2007(
-  "G:/Gedeelde drives/PRJ_MBAG/4b_bestuivers/data/SPRING.accdb"
+  "G:/Gedeelde drives/PRJ_MBAG/4b_bestuivers/data/SPRING.accdb" # nolint
   )
 
 identifications <- sqlFetch(conn, "identifications")
@@ -115,20 +115,20 @@ RODBC::odbcClose(conn)
 ```
 
 ```{r}
-identifications <- identifications %>%
-  janitor::clean_names() %>%
-  as_tibble() %>%
+identifications <- identifications |>
+  janitor::clean_names() |>
+  as_tibble() |>
   rename(
     no_ind = "no_males_females",
     species_nm = "species_nm_author_year"
-  ) %>%
+  ) |>
   rename(
     family = familiy
   )
 
-samples <- samples %>%
-  janitor::clean_names() %>%
-  as_tibble() %>%
+samples <- samples |>
+  janitor::clean_names() |>
+  as_tibble() |>
   mutate(
     date_b = lubridate::as_date(date_b),
     date_e = lubridate::as_date(date_e),
@@ -139,19 +139,19 @@ samples <- samples %>%
                        spring_code)
   )
 
-sampling_sites <- sampling_sites %>%
-  janitor::clean_names() %>%
-  as_tibble() %>%
+sampling_sites <- sampling_sites |>
+  janitor::clean_names() |>
+  as_tibble() |>
   mutate(
     method_cd = stringr::str_extract(sampling_site_cd, "(TS|PT)")
   )
 
-naturalhistorytraits <- naturalhistorytraits %>%
-  janitor::clean_names() %>%
+naturalhistorytraits <- naturalhistorytraits |>
+  janitor::clean_names() |>
   as_tibble()
 
-identifications_basic <- identifications %>%
-  as_tibble() %>%
+identifications_basic <- identifications |>
+  as_tibble() |>
   select(
     sample_code,
     species_nm,
@@ -159,18 +159,18 @@ identifications_basic <- identifications %>%
     order,
     functional_group,
     no_ind
-  ) %>%
+  ) |>
   group_by(
     sample_code,
     species_nm,
     family,
     order,
     functional_group
-  ) %>%
+  ) |>
   summarise(
     no_ind = sum(no_ind),
     .groups = "drop"
-  ) %>%
+  ) |>
   mutate(group = case_when(
     family %in% c(
       "Apidae", "Andrenidae",
@@ -181,7 +181,7 @@ identifications_basic <- identifications %>%
     .default = "other"
   ))
 
-samples_basic <- samples %>%
+samples_basic <- samples |>
   distinct(
     sample_code,
     location_code,
@@ -192,10 +192,10 @@ samples_basic <- samples %>%
     level,
     date_b,
     date_e
-  ) %>%
+  ) |>
   group_by(
     location_code, sampling_site_cd, method_cd, spring_code, level
-  ) %>%
+  ) |>
   mutate(
     month = lubridate::month(date_b),
     duration = date_e - date_b,
@@ -210,12 +210,12 @@ samples_basic <- samples %>%
       paste(method_cd, uv, level),
       paste(method_cd, spring_code)
     )
-  ) %>%
-  arrange(time_order, .by_group = TRUE) %>%
+  ) |>
+  arrange(time_order, .by_group = TRUE) |>
   mutate(
     time_since_previous = date_b - dplyr::lag(date_e),
     time_till_next = dplyr::lead(date_b) - date_e
-  ) %>%
+  ) |>
   ungroup()
 ```
 
@@ -258,8 +258,8 @@ angle2dec <- function(x) {
   return(x)
 }
 
-transecten <- sampling_sites %>%
-  filter(method_cd == "TS") %>%
+transecten <- sampling_sites |>
+  filter(method_cd == "TS") |>
   select(
     -sampling_site_id,
     -alt_exact_position,
@@ -267,7 +267,7 @@ transecten <- sampling_sites %>%
     -alt_end_section,
     -lat_exact_position,
     -long_exact_position
-  ) %>%
+  ) |>
   mutate(
     long_start_section = angle2dec(long_start_section),
     lat_start_section = angle2dec(lat_start_section),
@@ -278,9 +278,9 @@ transecten <- sampling_sites %>%
       long_start_section, lat_start_section, long_end_section, lat_end_section
     ),
     geometry = st_as_sfc(geometry)
-  ) %>%
-  select(-ends_with("section")) %>%
-  mutate(transect_sectie = stringr::str_extract(remarks, "\\d*-\\d*m")) %>%
+  ) |>
+  select(-ends_with("section")) |>
+  mutate(transect_sectie = stringr::str_extract(remarks, "\\d*-\\d*m")) |>
   mutate(transect_sectie = factor(
     transect_sectie,
     levels = c(
@@ -295,13 +295,13 @@ transecten <- sampling_sites %>%
       "400-450m",
       "450-500m"
     )
-  )) %>%
+  )) |>
   st_as_sf(crs = 4326)
 
 glimpse(transecten)
 
-pantraps <- sampling_sites %>%
-  filter(method_cd == "PT") %>%
+pantraps <- sampling_sites |>
+  filter(method_cd == "PT") |>
   select(
     -sampling_site_id,
     -alt_exact_position,
@@ -311,7 +311,7 @@ pantraps <- sampling_sites %>%
     -lat_start_section,
     -long_end_section,
     -lat_end_section,
-  ) %>%
+  ) |>
   mutate(
     long_exact_position = angle2dec(long_exact_position),
     lat_exact_position = angle2dec(lat_exact_position),
@@ -320,8 +320,8 @@ pantraps <- sampling_sites %>%
       long_exact_position, lat_exact_position
     ),
     geometry = st_as_sfc(geometry)
-  ) %>%
-  select(-ends_with("_position"), -remarks) %>%
+  ) |>
+  select(-ends_with("_position"), -remarks) |>
   st_as_sf(crs = 4326)
 
 glimpse(pantraps)
@@ -336,14 +336,14 @@ plottransecten <- function(x) {
     labs(title = x$location_code[[1]])
 }
 
-transecten %>%
-  nest(data = everything(), .by = location_code) %>%
+transecten |>
+  nest(data = everything(), .by = location_code) |>
   mutate(
     plot = map(
       .x = data,
       .f = plottransecten
     )
-  ) %>%
+  ) |>
   pull(plot)
 ```
 
@@ -353,14 +353,14 @@ plotpantraps <- function(x) {
     geom_sf() +
     labs(title = x$location_code[[1]])
 }
-pantraps %>%
-  nest(data = everything(), .by = location_code) %>%
+pantraps |>
+  nest(data = everything(), .by = location_code) |>
   mutate(
     plot = map(
       .x = data,
       .f = plotpantraps
     )
-  ) %>%
+  ) |>
   pull(plot)
 ```
 
@@ -372,10 +372,10 @@ Een subset van de pan trap opstellingen werd langer in het veld gelaten.
 Voor locatie 1 en 2 hebben we een tijdsreeks per één of twee dagen. Van locatie 1 werd in september een tijdsreeks gemaakt, van locatie 2 en 3 in juni. Voor locatie 3 hebben we geen tussenstappen, deze locatie kan dus niet gebruikt worden voor de rarefaction analyse (Tabel \@ref(tab:timeseries)).
 
 ```{r timeseries}
-samples %>%
-  filter(time_series == 1) %>%
-  group_by(location_code, spring_code, level, date_b, date_e) %>%
-  summarise(aantal_samples = n_distinct(sample_code)) %>%
+samples |>
+  filter(time_series == 1) |>
+  group_by(location_code, spring_code, level, date_b, date_e) |>
+  summarise(aantal_samples = n_distinct(sample_code)) |>
   kable(caption = "Datums waarop de tijdsreeksen bemonsterd werden.")
 ```
 
@@ -386,10 +386,10 @@ De figuren en tabellen in dit hoofdstuk geven een overzicht van alle waargenomen
 ## Aantallen per order
 
 ```{r, fig.cap = "Aantal soorten per order."}
-identifications_basic %>%
-  group_by(group, order) %>%
-  summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
-  mutate(order = reorder(order, desc(n_species))) %>%
+identifications_basic |>
+  group_by(group, order) |>
+  summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) |>
+  mutate(order = reorder(order, desc(n_species))) |>
   plot_ly(
     x = ~order,
     y = ~n_species,
@@ -399,10 +399,10 @@ identifications_basic %>%
 ```
 
 ```{r, fig.cap = "Aantal individuen per order."}
-identifications_basic %>%
-  group_by(group, order) %>%
-  summarise(n_individuals = sum(no_ind)) %>%
-  mutate(order = reorder(order, desc(n_individuals))) %>%
+identifications_basic |>
+  group_by(group, order) |>
+  summarise(n_individuals = sum(no_ind)) |>
+  mutate(order = reorder(order, desc(n_individuals))) |>
   plot_ly(
     x = ~order,
     y = ~n_individuals,
@@ -414,30 +414,30 @@ identifications_basic %>%
 ## Aantallen per familie
 
 ```{r, fig.cap = "Aantal soorten per familie."}
-identifications_basic %>%
-  group_by(group, family) %>%
-  summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) %>%
-  mutate(family = reorder(family, desc(n_species))) %>%
+identifications_basic |>
+  group_by(group, family) |>
+  summarise(n_species = n_distinct(species_nm, na.rm = TRUE)) |>
+  mutate(family = reorder(family, desc(n_species))) |>
   plot_ly(
     x = ~family,
     y = ~n_species,
     color = ~group,
     type = "bar"
-  ) %>%
+  ) |>
   layout(xaxis = list(tickangle = -45))
 ```
 
 ```{r, fig.cap = "Aantal individuen per familie."}
-identifications_basic %>%
-  group_by(group, family) %>%
-  summarise(n_individuals = sum(no_ind)) %>%
-  mutate(family = reorder(family, desc(n_individuals))) %>%
+identifications_basic |>
+  group_by(group, family) |>
+  summarise(n_individuals = sum(no_ind)) |>
+  mutate(family = reorder(family, desc(n_individuals))) |>
   plot_ly(
     x = ~family,
     y = ~n_individuals,
     color = ~group,
     type = "bar"
-  ) %>%
+  ) |>
   layout(xaxis = list(tickangle = -45))
 ```
 
@@ -452,10 +452,10 @@ cat("<table><table width=100%>",
     "</table>",
     sep = "\n")
 
-identifications %>%
-  group_by(order, family, species_nm) %>%
-  summarise(n_individuals = sum(no_ind, na.rm = TRUE)) %>%
-  arrange(desc(n_individuals), species_nm) %>%
+identifications |>
+  group_by(order, family, species_nm) |>
+  summarise(n_individuals = sum(no_ind, na.rm = TRUE)) |>
+  arrange(desc(n_individuals), species_nm) |>
   DT::datatable()
 ```
 
@@ -485,7 +485,7 @@ purrr::pmap(
       familyvec = familyvec
     )
   }
-) %>%
+) |>
   paste(collapse = "\n") -> rmd
 
 # onderstaande clipr code kan je gebruiken om de rmd naar klembord te schrijven
@@ -493,7 +493,7 @@ purrr::pmap(
 # enkel nodig indien je interactief werkt en de code van deze chunks nodig hebt
 # clipr::write_clip(rmd) # nolint
 
-knit(text = rmd, quiet = TRUE) %>%
+knit(text = rmd, quiet = TRUE) |>
   cat()
 ```
 
@@ -509,20 +509,20 @@ We maken geen correctie voor het aantal gevangen individuen (door dit toe te voe
 Gegevens van de tijdsreeksen en de 11de pantrap op locatie 1 werden niet meegenomen in de modellen.
 
 ```{r}
-data_sp_rich <- apoidea %>%
-  mutate(taxgroup = "Apoidea") %>%
+data_sp_rich <- apoidea |>
+  mutate(taxgroup = "Apoidea") |>
   bind_rows(
-    syrphidae %>%
+    syrphidae |>
       mutate(taxgroup = "Syrphidae")
-  ) %>%
-  filter(time_series == 0) %>%
+  ) |>
+  filter(time_series == 0) |>
   mutate(
     maand = as.factor(month(date_b))
-  ) %>%
+  ) |>
   group_by(
     sample_code, location_code, method_combi,
     method_cd, spring_code, uv, level, maand, taxgroup
-  ) %>%
+  ) |>
   summarise(
     n_species = n_distinct(species_nm, na.rm = TRUE),
     n_ind = sum(no_ind),
@@ -535,7 +535,7 @@ data_sp_rich <- apoidea %>%
 Het eerste model heeft enkel betrekking op de SPRING methode sensu stricto. 
 
 ```{r}
-data_sp_rich_spring <- data_sp_rich %>%
+data_sp_rich_spring <- data_sp_rich |>
   filter(spring_code == "s.s.")
 ```
 
@@ -644,12 +644,12 @@ marginaleffects::plot_predictions(
   type = "response",
   vcov = TRUE,
   draw = FALSE
-) %>%
+) |>
   left_join(
-    data_sp_rich %>%
+    data_sp_rich |>
       distinct(method_cd, spring_code, uv, level, method_combi, taxgroup)
-  ) %>%
-  as_tibble() %>%
+  ) |>
+  as_tibble() |>
   ggplot() +
   geom_pointrange(
     aes(
@@ -681,30 +681,30 @@ Waarbij $p_i$ de proportie is van het aantal individuen van één soort ten opzi
 Er kan geen Shannon index berekent worden voor pan traps of deeltransecten waarin niks gevangen werd. Het gebruik van deze index leidt dus sowieso tot een verlies aan informatie. Daarnaast is de Shannon index van een sample waar slechts één soort gevonden wordt gelijk aan 0. Voor volgende berekeningen werden dan ook alle maanden per pan trap of deeltransect van 50 m samengevoegd om een teveel aan nulwaarnemingen te voorkomen.
 
 ```{r}
-sha <- apoidea %>%
-  mutate(taxgroup = "Apoidea") %>%
+sha <- apoidea |>
+  mutate(taxgroup = "Apoidea") |>
   bind_rows(
-    syrphidae %>%
+    syrphidae |>
       mutate(taxgroup = "Syrphidae")
-  ) %>%
+  ) |>
   group_by(
     sampling_site_cd, spring_code, method_cd, taxgroup,
     location_code, method_combi
-  ) %>%
-  mutate(tot_ind = sum(no_ind)) %>%
+  ) |>
+  mutate(tot_ind = sum(no_ind)) |>
   group_by(
     sampling_site_cd, spring_code,
     method_cd, species_nm, tot_ind,
     taxgroup,
     location_code, method_combi
-  ) %>%
-  summarise(n_ind = sum(no_ind)) %>%
-  mutate(prop = (n_ind / tot_ind) * log(n_ind / tot_ind)) %>%
+  ) |>
+  summarise(n_ind = sum(no_ind)) |>
+  mutate(prop = (n_ind / tot_ind) * log(n_ind / tot_ind)) |>
   group_by(
     sampling_site_cd, spring_code,
     method_cd, taxgroup,
     location_code, method_combi
-  ) %>%
+  ) |>
   summarise(exp_sh = exp(-sum(prop, na.rm = TRUE)))
 ```
 
@@ -848,14 +848,14 @@ time_data <- read_sheet("https://docs.google.com/spreadsheets/d/179lN4oWz6jnKx4z
   sheet = "Tijdsbesteding"
 )
 
-time_data <- time_data %>%
+time_data <- time_data |>
   left_join(
-    cost_data %>%
+    cost_data |>
       select(ID, `prijs/min`),
     by = join_by(uitvoerder == ID)
   )
 
-time_data <- time_data %>%
+time_data <- time_data |>
   mutate(prijs = minuten * `prijs/min`)
 ```
 
@@ -879,23 +879,23 @@ iden_cost <- ((time_data[14, 7] * mean_ap) + (time_data[15, 7] * mean_syr)) |>
 Verderop bekijken we wel de verschillende tijden die nodig zijn voor het uitsorteren van een staal (bijen en zweefvliegen van andere families scheiden). Dit omdat specifieke methoden, zoals bv. het plaatsen van een pan trap op de grond, kunnen leiden tot hogere restfracties dan andere.
 
 ```{r}
-verpl <- cost_data %>%
-  filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") %>%
+verpl <- cost_data |>
+  filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") |>
   pull(prijs) *
-  cost_data %>%
-    filter(Kostencategorie == "Km vergoeding") %>%
+  cost_data |>
+    filter(Kostencategorie == "Km vergoeding") |>
     pull(prijs)
 ```
 
 Ervan uitgaand dat de gemiddelde verplaatsing naar een locatie 35.25 km bedraagt betalen we aan kilometervergoeding `r round(verpl)` euro.
 
 ```{r}
-verpl_tijd <- cost_data %>%
-  filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") %>%
+verpl_tijd <- cost_data |>
+  filter(Kostencategorie == "Gemiddelde afstand SPRING locaties") |>
   pull(prijs) / 50 * 60
 
-loon_verpl <- cost_data %>%
-  filter(Kostencategorie == "Jaarloon veldmedewerker") %>%
+loon_verpl <- cost_data |>
+  filter(Kostencategorie == "Jaarloon veldmedewerker") |>
   pull(`prijs/min`)
 ```
 
@@ -904,13 +904,13 @@ Om deze afstand te rijden hebben we `r round(verpl_tijd)` minuten nodig. Als dit
 
 Variabele kosten pan traps:
 ```{r}
-time_data %>%
-  filter(methode == "PT") %>%
-  add_row(cost_data %>% filter(!is.na(submethode)) %>%  # nolint: pipe_continuation_linter, line_length_linter.
+time_data |>
+  filter(methode == "PT") |>
+  add_row(cost_data |> filter(!is.na(submethode)) |>  # nolint: pipe_continuation_linter, line_length_linter.
     select(
       Activiteit = Kostencategorie, methode,
       submethode, prijs
-    )) %>%
+    )) |>
   arrange(submethode) |>
   kableExtra::kable(digits = 2)
 ```
@@ -918,8 +918,8 @@ time_data %>%
 
 Variabele kosten transecten:
 ```{r}
-time_data %>%
-  filter(methode == "TS") %>%
+time_data |>
+  filter(methode == "TS") |>
   kableExtra::kable(digits = 2)
 ```
 
@@ -929,13 +929,13 @@ Als we 650 meetpunten éénmaal zouden bezoeken dan zou ons dit `r round(verpl) 
 
 Als we één pan trap s.s. (uv - vegetatie) per locatie zouden plaatsen zouden we volgende kosten hebben:
 ```{r}
-pt_ss <- time_data %>%
-  filter(methode == "PT", submethode == "s.s.") %>%
-  add_row(cost_data %>% filter(submethode == "s.s.") %>%   # nolint: pipe_continuation_linter, line_length_linter.
+pt_ss <- time_data |>
+  filter(methode == "PT", submethode == "s.s.") |>
+  add_row(cost_data |> filter(submethode == "s.s.") |>   # nolint: pipe_continuation_linter, line_length_linter.
     select(
       Activiteit = Kostencategorie, methode,
       submethode, prijs
-    )) %>%
+    )) |>
   mutate(prijs_alle_punten = prijs * 650)
 
 pt_ss |>
@@ -976,13 +976,13 @@ testset |>
 
 Als we twee pan traps s.s.(uv - vegetatie) en twee pan traps SSL (uv - bodem) zouden plaatsen zouden de prijzen als volgt zijn voor 1 tot 7 verschillende maanden monitoring van 650 locaties:
 ```{r}
-pt_ssl <- time_data %>%
-  filter(methode == "PT", submethode == "SSL") %>%
-  add_row(cost_data %>% filter(submethode == "SSL") %>%   # nolint: pipe_continuation_linter, line_length_linter.
+pt_ssl <- time_data |>
+  filter(methode == "PT", submethode == "SSL") |>
+  add_row(cost_data |> filter(submethode == "SSL") |>   # nolint: pipe_continuation_linter, line_length_linter.
     select(
       Activiteit = Kostencategorie, methode,
       submethode, prijs
-    )) %>%
+    )) |>
   mutate(prijs_alle_punten = prijs * 650)
 
 testset2 <- c(NA)
@@ -1006,8 +1006,8 @@ data.frame("tww_ss_twee_SSL" = testset$`2` + testset2) |>
 
 Als we één transect s.s. (geen sweeping) van 250 m per locatie zouden lopen zouden we volgende kosten hebben voor 650 punten:
 ```{r}
-ts_ss <- time_data %>%
-  filter(methode == "TS", submethode == "s.s.") %>%
+ts_ss <- time_data |>
+  filter(methode == "TS", submethode == "s.s.") |>
   mutate(prijs_alle_punten_250 = prijs * 650 * 5)
 
 ts_ss |>
