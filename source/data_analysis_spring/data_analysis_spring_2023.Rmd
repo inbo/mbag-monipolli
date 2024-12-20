@@ -750,62 +750,44 @@ marginaleffects::plot_predictions(
 ```{r}
 flowers <- readr::read_csv2("../../data/number_of_flowers.csv") |>
    janitor::clean_names()
-```
 
-```{r}
 flowers <- flowers |>
   left_join(apoidea_richness |>
               select(n_ind_ap = n_ind,
-                     n_species_ap = n_species,
                      sample_code),
             by = join_by(sampling_site_cd == sample_code)) |>
   left_join(syrphidae_richness |>
               select(n_ind_syr = n_ind,
-                     n_species_syr = n_species,
                      sample_code),
             by = join_by(sampling_site_cd == sample_code))
+
+flowers <- flowers |>
+  pivot_longer(cols = starts_with("n_ind"),
+               names_prefix = "n_ind_",
+               names_to = "group",
+               values_to = "n_ind")
 ```
 
+### visuele verkenning
 ```{r}
 flowers |>
-  ggplot(aes(x = number_of_floral_units, y = n_species_ap)) +
+  ggplot(aes(x = log(number_of_floral_units), y = n_ind, colour = group)) +
   geom_point() +
   geom_smooth(method = "lm")
 ```
 
-```{r}
-model1 <- lm(n_ind_ap ~ number_of_floral_units, data = flowers |>
-               filter(number_of_floral_units < 4000))
-summary(model1)
-
-model2 <- lm(n_species_ap ~ number_of_floral_units, data = flowers |>
-               filter(number_of_floral_units < 4000))
-summary(model2)
-
-model3 <- lm(n_ind_syr ~ number_of_floral_units, data = flowers |>
-               filter(number_of_floral_units < 4000))
-summary(model3)
-
-model4 <- lm(n_species_syr ~ number_of_floral_units, data = flowers |>
-               filter(number_of_floral_units < 4000))
-summary(model4)
-```
-
-Geen significant effect van het aantal bloemeenheden op het aantal soorten of het aantal gevangen individuen; het effect wordt nog minder significant wanneer één sterke uitschieter wordt verwijderd.
-
-### Uitgebreid model
+### model
 ```{r}
 flowers <- flowers |>
   mutate(location_code = str_sub(sampling_site_cd, start = 1L, end = 8L),
          maand = str_sub(sampling_site_cd, start = 20L, end = 20L))
 ```
 
-
 ```{r}
 model1 <- glmmTMB(
-  n_ind_ap ~ log(number_of_floral_units + 1) + location_code + maand,
-  ziformula = ~ 1,
-  family = "poisson",
+  n_ind ~ (log(number_of_floral_units + 1) + location_code + maand) * group,
+  ziformula = ~ group,
+  family = "nbinom2",
   na.action = na.exclude,
   data = flowers
 )
@@ -813,6 +795,12 @@ model1 <- glmmTMB(
 
 ```{r}
 summary(model1)
+```
+
+```{r}
+emmeans::emmeans(model1, ~log(number_of_floral_units + 1) * group, infer = TRUE)
+
+car::Anova(model1)
 ```
 
 ```{r}
@@ -820,21 +808,51 @@ performance::check_model(model1)
 ```
 
 ```{r}
-model2 <- glmmTMB(
-  n_species_syr ~ number_of_floral_units + location_code + maand,
-  ziformula = ~ 1,
-  family = "poisson",
-  na.action = na.exclude,
-  data = flowers
-)
-```
+nd <- data.frame(
+  number_of_floral_units = seq(
+    from = min(flowers$number_of_floral_units),
+    to = max(flowers$number_of_floral_units),
+    length.out = 100)) |> 
+  expand_grid(
+    data.frame(
+      group = c("ap", "syr"),
+      maand = 7,
+      location_code = "BE_MVS02"
+    )
+  )
+  
+predictions <- predict(
+  model1,
+  newdata = nd,
+  type = "link",
+  se.fit = TRUE)
 
-```{r}
-summary(model2)
-```
+# Add predictions and confidence intervals to the new data frame
+new_data <- nd %>%
+  mutate(
+    predicted = exp(predictions$fit),
+    lower = exp(predictions$fit - 1.96 * predictions$se.fit),
+    upper = exp(predictions$fit + 1.96 * predictions$se.fit)
+  )
 
-```{r}
-performance::check_model(model2)
+# Plot the data and model fit
+new_data |>
+  ggplot(aes(x = number_of_floral_units, y = predicted)) +
+  geom_line(aes(colour = group),
+            linewidth = 1) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = group),
+              alpha = 0.2) +
+  labs(x = "Number of flowering units", y = "Number of individuals") +
+  theme_minimal() +
+  scale_x_continuous(trans = "log1p",
+                     breaks = c(1, 5, 10, 50, 100, 500, 1000, 5000, 10000)) +
+  scale_colour_manual(values = c("darkgreen", "gold"),
+                       labels = c("Apoidea", "Syrpidae")) + 
+  scale_fill_manual(values = c("darkgreen", "gold"),
+                     labels = c("Apoidea", "Syrpidae"))
+
+
+
 ```
 
 # Kosten
