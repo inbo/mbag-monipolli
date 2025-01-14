@@ -209,7 +209,7 @@ Voor een bepaalde plaats waarvan er een tijdreeks is, berekenen we het cumulatie
 ```{r {{group}}cumul-time, fig.cap = "Cumulatief aantal soorten {{group}} in de tijd per locatie en methode."}
 {{group}}_cumulative %>%
   ggplot(aes(x = cumulative_days, y = cumulative_n_species)) +
-  geom_line(aes(color = pt), alpha = 0.3) +
+  geom_line(aes(group = pt), alpha = 0.3) +
   stat_summary(fun.data = mean_cl_boot, colour = "royalblue") +
   facet_grid(location_code ~ method_combi)
 ```
@@ -227,7 +227,7 @@ referentie_extra_soorten_per_dag <- 0.5
         xend = cumulative_days + 0.5,
         y = referentie_extra_soorten_per_dag * round(cumulative_days)),
     alpha = 0.05) +
- geom_line(aes(color = pt), alpha = 0.3) +
+ geom_line(aes(group = pt), alpha = 0.3) +
   geom_text(
     data = {{group}}_cumulative %>%
       group_by(cumulative_days, location_code, method_combi) %>%
