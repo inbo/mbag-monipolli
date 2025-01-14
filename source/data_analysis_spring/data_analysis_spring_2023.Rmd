@@ -696,6 +696,136 @@ marginaleffects::plot_predictions(
   ylab("Probability of having zero species")
 ```
 
+## Aantal individuen
+
+### Met honingbijen
+
+```{r}
+m_n_ind <- glmmTMB(
+  n_ind ~
+    (location_code
+    + maand
+      + method_cd) * taxgroup,
+  ziformula = ~taxgroup,
+  family = "nbinom1",
+  na.action = na.fail,
+  data = data_sp_rich_spring
+)
+```
+
+Verschillende distributies geprobeerd, maar deze modellen fitten niet goed.
+Wellicht omwille van de honingbijen die soms in uitzonderlijk hoge aantallen gevangen worden.
+
+```{r check_n_ind, fig.height=12, fig.cap = "Visuele controle van verschillende modelaannames."}
+performance::check_model(m_n_ind)
+performance::check_overdispersion(m_n_ind)
+```
+
+```{r, fig.cap = "Verwacht aantal soorten in een pantrap-set of transectsegment van 50 m per maand, soortgroep en SPRING methode op basis van ons model."}
+marginaleffects::plot_predictions(
+  m_n_ind,
+  condition = c("maand", "method_cd", "taxgroup"),
+  type = "response",
+  vcov = TRUE
+)
+```
+
+```{r, fig.cap = "Kans op een nulwaarneming in een pantrap-set of transectsegment van 50 m per soortgroep op basis van ons model."}
+marginaleffects::plot_predictions(
+  m_n_ind,
+  condition = c("taxgroup"),
+  type = "zprob",
+  vcov = TRUE
+) +
+  ylab("Probability of having zero individuals")
+```
+
+### Zonder honingbijen
+
+```{r zonder-honingbij}
+apoidea_zonder_honingbij <- apoidea %>%
+  filter(
+    species_nm != "Apis mellifera Linnaeus, 1758"
+  )
+
+
+data_zonder_honingbij <- apoidea_zonder_honingbij |>
+  mutate(taxgroup = "Apoidea") |>
+  bind_rows(
+    syrphidae |>
+      mutate(taxgroup = "Syrphidae")
+  ) |>
+  filter(time_series == 0) |>
+  mutate(
+    maand = as.factor(month(date_b))
+  ) |>
+  group_by(
+    sample_code, location_code, method_combi,
+    method_cd, spring_code, uv, level, maand, taxgroup
+  ) |>
+  summarise(
+    n_species = n_distinct(species_nm, na.rm = TRUE),
+    n_ind = sum(no_ind),
+    .groups = "drop"
+  )
+
+```
+
+
+Hier fit een negatief-binomiaal model zonder zero-inflation goed.
+
+```{r}
+m_n_ind_zh <- glmmTMB(
+  n_ind ~
+    (location_code
+    + maand
+      + method_combi) * taxgroup,
+  family = "nbinom2",
+  na.action = na.fail,
+  data = data_zonder_honingbij
+)
+```
+
+```{r check_n_ind_zh, fig.height=12, fig.cap = "Visuele controle van verschillende modelaannames."}
+performance::check_model(m_n_ind_zh)
+performance::check_overdispersion(m_n_ind_zh)
+performance::check_predictions(m_n_ind_zh)
+```
+
+```{r, fig.cap = "Verwacht aantal individuen (zonder honingbijen) in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
+marginaleffects::plot_predictions(
+  m_n_ind_zh,
+  condition = c("method_combi", "taxgroup"),
+  type = "response",
+  vcov = TRUE,
+  draw = FALSE
+) |>
+  left_join(
+    data_sp_rich |>
+      distinct(method_cd, spring_code, uv, level, method_combi, taxgroup)
+  ) |>
+  as_tibble() |>
+  ggplot() +
+  geom_pointrange(
+    aes(
+      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
+      colour = method_combi
+    ),
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(y = "Number of individuals (without Apis mellifera)",
+       x = "",
+       colour = "") +
+  facet_wrap(~taxgroup, scales = "free")
+```
+
+
+```{r pwc-method-taxgroup-n-ind-zh}
+emmeans::emmeans(m_n_ind_zh, pairwise ~ method_combi * taxgroup)
+```
+
+
+
 ## Alpha biodiversiteit
 
 De Shannon index wordt als volgt berekend:
