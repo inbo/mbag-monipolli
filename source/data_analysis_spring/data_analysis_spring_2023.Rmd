@@ -628,9 +628,20 @@ De hoge waarden voor collineariteit (Fig. \@ref(fig:check2)) zijn in dit geval g
 car::Anova(model1)
 ```
 
-```{r}
+```{r pwc-method}
 emmeans::emmeans(model1, pairwise ~ method_combi)
+```
+
+```{r pwc-method-taxgroup}
 emmeans::emmeans(model1, pairwise ~ method_combi * taxgroup)
+```
+
+```{r pwc-location}
+emmeans::emmeans(model1, pairwise ~ location_code)
+```
+
+```{r pwc-location-taxgroup}
+emmeans::emmeans(model1, pairwise ~ location_code * taxgroup)
 ```
 
 ```{r check2, fig.height=12, fig.cap = "Visuele controle van verschillende modelaannames."}
