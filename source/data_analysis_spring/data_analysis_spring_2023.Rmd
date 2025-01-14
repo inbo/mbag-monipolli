@@ -493,8 +493,21 @@ purrr::pmap(
 # enkel nodig indien je interactief werkt en de code van deze chunks nodig hebt
 # clipr::write_clip(rmd) # nolint
 
-knit(text = rmd, quiet = TRUE) |>
-  cat()
+if (interactive()) {
+  # Extract R code from the rmd content
+  r_code <- knitr::purl(text = rmd, quiet = TRUE)
+  
+  # Function to execute the extracted R code
+  execute_r_code <- function(code) {
+    eval(parse(text = code), envir = .GlobalEnv)
+  }
+  
+  # Execute the extracted R code
+  execute_r_code(r_code)
+} else {
+  knit(text = rmd, quiet = TRUE) |>
+    cat()
+}
 ```
 
 
