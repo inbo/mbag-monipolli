@@ -1,0 +1,38 @@
+---
+title: "pilot_2024"
+author: "Emma Cartuyvels"
+date: "2024-05-02"
+output: html_document
+---
+
+```{r setup}
+library(dplyr)
+library(sf)
+library(here)
+```
+
+```{r}
+steekproef_mas_zand <- read_sf(here("data",
+                                    "steekproef_zandstreek_avimap.geojson"))
+```
+
+
+```{r}
+selectie_punten <- c("Zn_39774.9", "Zn_35328.1.2", "Zn_18968.1", "Zn_29251.2.1",
+                     "Zn_84422.5", "Zn_37177", "Zn_61481.8", "Zn_4118.2.1",
+                     "Zn_98240.1", "Zn_23217.5", "Zn_83307.10", "Zn_48490.20",
+                     "Zn_79507.8", "Zn_18984.2", "Zn_31301.1", "Zn_38707.1.11",
+                     "Zn_60961.8", "Zn_34831.8", "Zn_16692.1", "Zn_14885.1",
+                     "Zn_83021.2.1", "Zn_36256.1.1", "Zn_96879.1", "Zn_31549.7",
+                     "Zn_33957", "Zn_34811.10", "Zn_78664.3", "Zn_27368.2",
+                     "Zn_43166.6", "Zn_24372.1", "Zn_41425.7", "Zn_73032.1",
+                     "Zn_16740.1", "Zn_29392.1.1", "Zn_30371.6", "Zn_60431.3",
+                     "Zn_19514.2", "Zn_37439.3", "Zn_31427.6", "Zn_18836.1.8")
+```
+
+```{r}
+pilot_monipolli <- steekproef_mas_zand |>
+  filter(pointid %in% selectie_punten) |>
+  st_write("punten_2024.shp")
+```
+

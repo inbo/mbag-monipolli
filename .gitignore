@@ -1,3 +1,4 @@
+*.accdb
 *.dbf
 *.doc*
 *.gddoc
@@ -20,3 +21,5 @@ docs
 libs
 output
 renv/library
+figure
+source/data_analysis_spring/data_analysis_spring_2023_cache/**
