@@ -40,6 +40,7 @@ funder
 holder
 linter
 metabarcoding
+negatief-binomiaal
 niet-UV-reflecterende
 niet-uv
 nolint
@@ -74,3 +75,4 @@ usage
 valtypes
 verplaatsingskost
 visual
+zero-inflation
