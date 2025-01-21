@@ -40,7 +40,7 @@ conflicted::conflict_prefer("layout", "plotly")
 ```
 
 ```{r cache=TRUE}
-1+1
+1 + 1
 ```
 
 
@@ -501,12 +501,12 @@ purrr::pmap(
 if (interactive()) {
   # Extract R code from the rmd content
   r_code <- knitr::purl(text = rmd, quiet = TRUE)
-  
+
   # Function to execute the extracted R code
   execute_r_code <- function(code) {
     eval(parse(text = code), envir = .GlobalEnv)
   }
-  
+
   # Execute the extracted R code
   execute_r_code(r_code)
 } else {
@@ -1042,7 +1042,7 @@ nd <- data.frame(
   number_of_floral_units = seq(
     from = min(flowers$number_of_floral_units),
     to = max(flowers$number_of_floral_units),
-    length.out = 100)) |> 
+    length.out = 100)) |>
   expand_grid(
     data.frame(
       group = c("ap", "syr"),
@@ -1050,7 +1050,7 @@ nd <- data.frame(
       location_code = "BE_MVS02"
     )
   )
-  
+
 predictions <- predict(
   model1,
   newdata = nd,
@@ -1077,7 +1077,7 @@ new_data |>
   scale_x_continuous(trans = "log1p",
                      breaks = c(1, 5, 10, 50, 100, 500, 1000, 5000, 10000)) +
   scale_colour_manual(values = c("darkgreen", "gold"),
-                       labels = c("Apoidea", "Syrpidae")) + 
+                       labels = c("Apoidea", "Syrpidae")) +
   scale_fill_manual(values = c("darkgreen", "gold"),
                      labels = c("Apoidea", "Syrpidae"))
 
