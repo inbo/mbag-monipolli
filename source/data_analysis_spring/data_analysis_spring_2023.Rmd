@@ -39,6 +39,11 @@ conflicted::conflict_prefer("filter", "dplyr")
 conflicted::conflict_prefer("layout", "plotly")
 ```
 
+```{r cache=TRUE}
+1+1
+```
+
+
 ```{r venn-function}
 venn <- function(data, group, count_id = "species_nm") {
   require(ggplot2) # nolint
@@ -513,14 +518,6 @@ if (interactive()) {
 
 # Data modellering
 
-## Soortenrijkdom
-
-We fitten de modellen voor beide soortengroepen samengenomen in hetzelfde model, maar we laten elke covariabele in interactie gaan met de soortengroep zodat we aparte parameterschattingen per soortengroep bekomen.
-
-We maken geen correctie voor het aantal gevangen individuen (door dit toe te voegen als covariabele): omwille van het hoge aantal gevallen waar er 0 soorten zijn (en dus 0 individuen) geeft deze correctie problemen in het model (0 individuen is een perfecte, maar ook onzinnige, voorspeller voor 0 soorten).
-
-Gegevens van de tijdsreeksen en de 11de pantrap op locatie 1 werden niet meegenomen in de modellen.
-
 ```{r}
 data_sp_rich <- apoidea |>
   mutate(taxgroup = "Apoidea") |>
@@ -542,6 +539,43 @@ data_sp_rich <- apoidea |>
     .groups = "drop"
   )
 ```
+
+```{r zonder-honingbij}
+apoidea_zonder_honingbij <- apoidea %>%
+  filter(
+    species_nm != "Apis mellifera Linnaeus, 1758"
+  )
+
+
+data_zonder_honingbij <- apoidea_zonder_honingbij |>
+  mutate(taxgroup = "Apoidea") |>
+  bind_rows(
+    syrphidae |>
+      mutate(taxgroup = "Syrphidae")
+  ) |>
+  filter(time_series == 0) |>
+  mutate(
+    maand = as.factor(month(date_b))
+  ) |>
+  group_by(
+    sample_code, location_code, method_combi,
+    method_cd, spring_code, uv, level, maand, taxgroup
+  ) |>
+  summarise(
+    n_species = n_distinct(species_nm, na.rm = TRUE),
+    n_ind = sum(no_ind),
+    .groups = "drop"
+  )
+
+```
+
+## Soortenrijkdom
+
+We fitten de modellen voor beide soortengroepen samengenomen in hetzelfde model, maar we laten elke covariabele in interactie gaan met de soortengroep zodat we aparte parameterschattingen per soortengroep bekomen.
+
+We maken geen correctie voor het aantal gevangen individuen (door dit toe te voegen als covariabele): omwille van het hoge aantal gevallen waar er 0 soorten zijn (en dus 0 individuen) geeft deze correctie problemen in het model (0 individuen is een perfecte, maar ook onzinnige, voorspeller voor 0 soorten).
+
+Gegevens van de tijdsreeksen en de 11de pantrap op locatie 1 werden niet meegenomen in de modellen.
 
 ### SPRING protocol
 
@@ -609,6 +643,8 @@ marginaleffects::plot_predictions(
 
 
 ### Alternatieve methoden
+
+#### Met honingbijen
 
 1. Leveren transecttellingen een andere diversiteit op dan pan trap opstellingen?
 2. Leveren transsecttellingen on sight (visual) een hogere diversiteit op dan de MP-transecttellingen?
@@ -696,6 +732,76 @@ marginaleffects::plot_predictions(
   ylab("Probability of having zero species")
 ```
 
+#### Zonder honingbijen
+
+```{r}
+model2 <- glmmTMB(
+  n_species ~
+    (method_combi
+    + location_code
+      + maand
+    ) * taxgroup,
+  ziformula = ~1,
+  family = "nbinom2",
+  na.action = na.exclude,
+  data = data_zonder_honingbij
+)
+```
+
+```{r, class.source = "fold-show"}
+summary(model2)
+```
+
+```{r}
+car::Anova(model2)
+```
+
+```{r pwc-method zonder honingbij}
+emmeans::emmeans(model2, pairwise ~ method_combi)
+```
+
+```{r pwc-method-taxgroup zonder honingbij}
+emmeans::emmeans(model2, pairwise ~ method_combi * taxgroup)
+```
+
+```{r pwc-location zonder honingbij}
+emmeans::emmeans(model2, pairwise ~ location_code)
+```
+
+```{r pwc-location-taxgroup zonder honingbij}
+emmeans::emmeans(model2, pairwise ~ location_code * taxgroup)
+```
+
+```{r}
+performance::check_model(model2)
+performance::check_overdispersion(model2)
+```
+
+```{r, fig.cap = "Verwacht aantal soorten (zonder honingbijen) in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
+marginaleffects::plot_predictions(
+  model2,
+  condition = c("method_combi", "taxgroup"),
+  type = "response",
+  vcov = TRUE,
+  draw = FALSE
+) |>
+  left_join(
+    data_sp_rich |>
+      distinct(method_cd, spring_code, uv, level, method_combi, taxgroup)
+  ) |>
+  as_tibble() |>
+  ggplot() +
+  geom_pointrange(
+    aes(
+      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
+      colour = method_combi
+    ),
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(y = "Soortenrijkdom") +
+  facet_wrap(~taxgroup, scales = "free")
+```
+
 ## Aantal individuen
 
 ### Met honingbijen
@@ -741,36 +847,6 @@ marginaleffects::plot_predictions(
 ```
 
 ### Zonder honingbijen
-
-```{r zonder-honingbij}
-apoidea_zonder_honingbij <- apoidea %>%
-  filter(
-    species_nm != "Apis mellifera Linnaeus, 1758"
-  )
-
-
-data_zonder_honingbij <- apoidea_zonder_honingbij |>
-  mutate(taxgroup = "Apoidea") |>
-  bind_rows(
-    syrphidae |>
-      mutate(taxgroup = "Syrphidae")
-  ) |>
-  filter(time_series == 0) |>
-  mutate(
-    maand = as.factor(month(date_b))
-  ) |>
-  group_by(
-    sample_code, location_code, method_combi,
-    method_cd, spring_code, uv, level, maand, taxgroup
-  ) |>
-  summarise(
-    n_species = n_distinct(species_nm, na.rm = TRUE),
-    n_ind = sum(no_ind),
-    .groups = "drop"
-  )
-
-```
-
 
 Hier fit een negatief-binomiaal model zonder zero-inflation goed.
 
