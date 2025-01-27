@@ -1085,6 +1085,114 @@ new_data |>
 
 ```
 
+# Analyse tijdsreeksen
+
+## Wilde bijen
+
+```{r}
+apoidea_cumulative_geen_honingbij <- apoidea %>%
+  filter(species_nm != "Apis mellifera Linnaeus, 1758") %>%
+  filter(
+    time_since_previous == 0 | time_till_next == 0
+  ) %>%
+  group_by(
+    location_code, sampling_site_cd, method_cd, spring_code
+  ) %>%
+  arrange(time_order, .by_group = TRUE) %>%
+  group_by(
+    location_code, sampling_site_cd, method_cd, spring_code,
+    level, uv, method_combi, time_order
+  ) %>%
+  summarise(
+    species_list = list(species_nm[!is.na(species_nm)]),
+    duration = mean(duration)
+  ) %>%
+  mutate(
+    duration = ifelse(duration == 0, 6/24, duration),
+    accumulated_species_list = accumulate(
+      species_list, union, .simplify = FALSE),
+    cumulative_n_species = map_dbl(accumulated_species_list, length),
+    cumulative_days = cumsum(duration),
+    extra_n_species = cumulative_n_species - dplyr::first(cumulative_n_species),
+    extra_n_days = cumulative_days - dplyr::lag(cumulative_days),
+    pt = str_extract(sampling_site_cd, "PT\\d*")
+  ) %>%
+  ungroup()
+```
+
+```{r}
+# Add unique identifier for each sampling site and method combination
+# and find the number of species for the highest number of days
+apoidea_cumulative_geen_honingbij <- apoidea_cumulative_geen_honingbij |>
+  mutate(
+    sampling_site_method = paste0(
+      sampling_site_cd, "_", spring_code)) |>
+  group_by(sampling_site_method) |>
+  mutate(n_species_final = max(cumulative_n_species)) |>
+  ungroup() |>
+  mutate(prop = cumulative_n_species/n_species_final)
+```
+
+```{r}
+model5 <- glmmTMB(prop ~ time_order * method_combi + (1|sampling_site_method),
+                  family = binomial,
+                  weights = n_species_final,
+                  data = apoidea_cumulative_geen_honingbij)
+```
+
+```{r}
+# check model assumptions
+performance::check_model(model5)
+```
+
+```{r}
+# plot proportion of species found over time
+marginaleffects::plot_predictions(
+  model5,
+  condition = c("time_order"),
+  type = "response",
+  vcov = TRUE
+)
+```
+
+## Zweefvliegen
+```{r}
+# Add unique identifier for each sampling site and method combination
+# and find the number of species for the highest number of days
+syrphidae_cumulative <- syrphidae_cumulative |>
+  mutate(
+    sampling_site_method = paste0(
+      sampling_site_cd, "_", spring_code)) |>
+  group_by(sampling_site_method) |>
+  mutate(n_species_final = max(cumulative_n_species)) |>
+  ungroup() |>
+  mutate(prop = cumulative_n_species/n_species_final)
+```
+
+```{r}
+model6 <- glmmTMB(prop ~ time_order * method_combi +
+                    #location_code +
+                    (1|sampling_site_method),
+                  family = binomial,
+                  weights = n_species_final,
+                  data = syrphidae_cumulative)
+```
+
+```{r}
+# check model assumptions
+performance::check_model(model6)
+```
+
+```{r}
+# plot proportion of species found over time
+marginaleffects::plot_predictions(
+  model6,
+  condition = c("time_order"),
+  type = "response",
+  vcov = TRUE
+)
+```
+
 # Kosten
 
 ```{r}
