@@ -235,7 +235,8 @@ glimpse(naturalhistorytraits)
 De volgende analyses zijn allemaal uitgevoerd **zonder** honingbijen. De honingbijen zijn uit de dataset gefilterd.
 
 ```{r}
-# Geen honingbijen in analyse, wil je dit wel dan moet je de volgende regels uitcommentariëren
+#' Geen honingbijen in analyse, wil je dit wel dan moet je
+#' de volgende regels uitcommentariëren
 identifications <- identifications |>
   filter(species_nm != "Apis mellifera Linnaeus, 1758")
 
@@ -956,11 +957,12 @@ apoidea_cumulative <- apoidea_cumulative |>
   group_by(sampling_site_method) |>
   mutate(n_species_final = max(cumulative_n_species)) |>
   ungroup() |>
-  mutate(prop = cumulative_n_species/n_species_final)
+  mutate(prop = cumulative_n_species / n_species_final)
 ```
 
 ```{r}
-model5 <- glmmTMB(prop ~ cumulative_days * method_combi + (1|sampling_site_method),
+model5 <- glmmTMB(prop ~ cumulative_days * method_combi +
+                    (1 | sampling_site_method),
                   family = binomial,
                   weights = n_species_final,
                   data = apoidea_cumulative)
@@ -1002,7 +1004,7 @@ pp |>
   ) +
   labs(y = "Proportion of species found",
        x = "Cumulative days")
-  
+
 ```
 
 ## Zweefvliegen
@@ -1017,12 +1019,12 @@ syrphidae_cumulative <- syrphidae_cumulative |>
   group_by(sampling_site_method) |>
   mutate(n_species_final = max(cumulative_n_species)) |>
   ungroup() |>
-  mutate(prop = cumulative_n_species/n_species_final)
+  mutate(prop = cumulative_n_species / n_species_final)
 ```
 
 ```{r}
 model6 <- glmmTMB(prop ~ cumulative_days * method_combi +
-                    (1|sampling_site_method),
+                    (1 | sampling_site_method),
                   family = binomial,
                   weights = n_species_final,
                   data = syrphidae_cumulative)
@@ -1065,7 +1067,7 @@ pp |>
   ) +
   labs(y = "Proportion of species found",
        x = "Cumulative days")
-  
+
 ```
 
 ## Beide groepen
@@ -1089,7 +1091,7 @@ combi <- apoidea |>
     duration = mean(duration)
   ) %>%
   mutate(
-    duration = ifelse(duration == 0, 6/24, duration),
+    duration = ifelse(duration == 0, 6 / 24, duration),
     accumulated_species_list = accumulate(
       species_list, union, .simplify = FALSE),
     cumulative_n_species = map_dbl(accumulated_species_list, length),
@@ -1107,12 +1109,12 @@ combi <- combi |>
   group_by(sampling_site_method) |>
   mutate(n_species_final = max(cumulative_n_species)) |>
   ungroup() |>
-  mutate(prop = cumulative_n_species/n_species_final)
+  mutate(prop = cumulative_n_species / n_species_final)
 ```
 
 ```{r}
 model7 <- glmmTMB(prop ~ cumulative_days * method_combi +
-                    (1|sampling_site_method),
+                    (1 | sampling_site_method),
                   family = binomial,
                   weights = n_species_final,
                   data = combi)
@@ -1155,7 +1157,7 @@ pp |>
   ) +
   labs(y = "Proportion of species found",
        x = "Cumulative days")
-  
+
 ```
 
 # Kosten
