@@ -43,7 +43,6 @@ conflicted::conflict_prefer("layout", "plotly")
 1 + 1
 ```
 
-
 ```{r venn-function}
 venn <- function(data, group, count_id = "species_nm") {
   require(ggplot2) # nolint
@@ -100,10 +99,10 @@ rarefaction <- function(data) {
 
 Er zijn vier tabellen in de Access database:
 
-- Identificaties van de soorten
-- Unieke samples
-- Sample locaties
-- Natural history traits van wilde bij soorten
+-   Identificaties van de soorten
+-   Unieke samples
+-   Sample locaties
+-   Natural history traits van wilde bij soorten
 
 Van de eerste twee tabellen wordt een versimpelde versie gemaakt.
 
@@ -233,24 +232,30 @@ glimpse(sampling_sites)
 glimpse(naturalhistorytraits)
 ```
 
+De volgende analyses zijn allemaal uitgevoerd **zonder** honingbijen. De honingbijen zijn uit de dataset gefilterd.
+
+```{r}
+# Geen honingbijen in analyse, wil je dit wel dan moet je de volgende regels uitcommentariëren
+identifications <- identifications |>
+  filter(species_nm != "Apis mellifera Linnaeus, 1758")
+
+identifications_basic <- identifications_basic |>
+  filter(species_nm != "Apis mellifera Linnaeus, 1758")
+```
 
 ## Proefopzet
 
 Er werden 5 verschillende monitoringsmethoden getest:
 
-- 2 transecttypen. Een transect beslaat 500 m en is verdeeld in 10 secties:
-  - SPRING s.s.: waargenomen of op het zicht verzameld (TS - s.s.)
-  - MP: verzameld via het afslepen van de vegetatie of bodem (TS - MP)
+-   2 transecttypen. Een transect beslaat 500 m en is verdeeld in 10 secties:
+    -   SPRING s.s.: waargenomen of op het zicht verzameld (TS - s.s.)
+    -   MP: verzameld via het afslepen van de vegetatie of bodem (TS - MP)
+-   3 pan traps opstellingen. Één pan trap sample is de gecombineerde vangst van één pan trap unit bestaande uit één blauwe, één witte en één gele val. Per transect worden steeds 10 units geplaatst, dus één per sectie:
+    -   UV-reflecterende pan traps op vegetatiehoogte geplaatst (PT - s.s.)
+    -   identieke samenstelling maar op de bodem geplaatst (PT - SSL)
+    -   niet-UV-reflecterende pan trap unit (wat grotere valtypes), zowel op vegetatiehoogte als op de bodem (PT - MP)
 
-- 3 pan traps opstellingen. Één pan trap sample is de gecombineerde vangst van één pan trap unit bestaande uit één blauwe, één witte en één gele val. Per transect worden steeds 10 units geplaatst, dus één per sectie:
-  - UV-reflecterende pan traps op vegetatiehoogte geplaatst (PT - s.s.)
-  - identieke samenstelling maar op de bodem geplaatst (PT - SSL)
-  - niet-UV-reflecterende pan trap unit (wat grotere valtypes), zowel op vegetatiehoogte als op de bodem (PT - MP)
-  
-Deze methoden werden op drie verschillende locaties getest:
-- BE_MVS01: Proefterrein ILVO
-- BE_MVS02: Natuurgebied Bourgoyen-Ossemeersen in Gent
-- BE_MVS03: Natuurgebied Den Dotter in Haaltert
+Deze methoden werden op drie verschillende locaties getest: - BE_MVS01: Proefterrein ILVO - BE_MVS02: Natuurgebied Bourgoyen-Ossemeersen in Gent - BE_MVS03: Natuurgebied Den Dotter in Haaltert
 
 Op locatie 1 werd op vraag van ILVO een 11de pan trap geplaatst, deze werd, buiten het algemeen overzicht van het aantal soorten, niet meegenomen in de analyses.
 
@@ -369,7 +374,6 @@ pantraps |>
   pull(plot)
 ```
 
-
 ## Tijdsreeksen
 
 Een subset van de pan trap opstellingen werd langer in het veld gelaten.
@@ -386,7 +390,7 @@ samples |>
 
 # Algemeen overzicht
 
-De figuren en tabellen in dit hoofdstuk geven een overzicht van alle waargenomen soorten (dus ook deze van de tijdsreeksen en de 11de locatie op de site van ILVO), met uitzondering van soortgroepen die tijdens de eerste grove sortering als restfractie beschouwd werden (mieren, kevers, spinnen, ...).
+De figuren en tabellen in dit hoofdstuk geven een overzicht van alle waargenomen soorten (dus ook deze van de tijdsreeksen en de 11de locatie op de site van ILVO), met uitzondering van soortgroepen die tijdens de eerste grove sortering als restfractie beschouwd werden (mieren, kevers, spinnen, ...) en honingbijen.
 
 ## Aantallen per order
 
@@ -464,7 +468,6 @@ identifications |>
   DT::datatable()
 ```
 
-
 # Data verkenning
 
 ```{r verkenning, results = "asis", eval = TRUE}
@@ -515,7 +518,6 @@ if (interactive()) {
 }
 ```
 
-
 # Data modellering
 
 ```{r}
@@ -540,35 +542,6 @@ data_sp_rich <- apoidea |>
   )
 ```
 
-```{r zonder-honingbij}
-apoidea_zonder_honingbij <- apoidea %>%
-  filter(
-    species_nm != "Apis mellifera Linnaeus, 1758"
-  )
-
-
-data_zonder_honingbij <- apoidea_zonder_honingbij |>
-  mutate(taxgroup = "Apoidea") |>
-  bind_rows(
-    syrphidae |>
-      mutate(taxgroup = "Syrphidae")
-  ) |>
-  filter(time_series == 0) |>
-  mutate(
-    maand = as.factor(month(date_b))
-  ) |>
-  group_by(
-    sample_code, location_code, method_combi,
-    method_cd, spring_code, uv, level, maand, taxgroup
-  ) |>
-  summarise(
-    n_species = n_distinct(species_nm, na.rm = TRUE),
-    n_ind = sum(no_ind),
-    .groups = "drop"
-  )
-
-```
-
 ## Soortenrijkdom
 
 We fitten de modellen voor beide soortengroepen samengenomen in hetzelfde model, maar we laten elke covariabele in interactie gaan met de soortengroep zodat we aparte parameterschattingen per soortengroep bekomen.
@@ -579,13 +552,12 @@ Gegevens van de tijdsreeksen en de 11de pantrap op locatie 1 werden niet meegeno
 
 ### SPRING protocol
 
-Het eerste model heeft enkel betrekking op de SPRING methode sensu stricto. 
+Het eerste model heeft enkel betrekking op de SPRING methode sensu stricto.
 
 ```{r}
 data_sp_rich_spring <- data_sp_rich |>
   filter(spring_code == "s.s.")
 ```
-
 
 ```{r, fig.cap = "Aantal keren dat n aantal soorten in één pan trap of deeltransect van 50m gevonden werd."}
 ggplot(data_sp_rich_spring, aes(x = n_species)) +
@@ -641,15 +613,12 @@ marginaleffects::plot_predictions(
   ylab("Probability of having zero species")
 ```
 
-
 ### Alternatieve methoden
 
-#### Met honingbijen
-
-1. Leveren transecttellingen een andere diversiteit op dan pan trap opstellingen?
-2. Leveren transsecttellingen on sight (visual) een hogere diversiteit op dan de MP-transecttellingen?
-3. Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-pan traps op grondniveau?
-4. Leveren de UV-pan trap units een hogere diversiteit op dan de niet-UV-reflecterende pan traps? (eventueel kan er ook naar het gecombineerd effect vegetatiehoogte*UV-reflectie gekeken worden)
+1.  Leveren transecttellingen een andere diversiteit op dan pan trap opstellingen?
+2.  Leveren transsecttellingen on sight (visual) een hogere diversiteit op dan de MP-transecttellingen?
+3.  Leveren de pan trap units op vegetatiehoogte een hogere diversiteit op dan de andere UV-pan traps op grondniveau?
+4.  Leveren de UV-pan trap units een hogere diversiteit op dan de niet-UV-reflecterende pan traps? (eventueel kan er ook naar het gecombineerd effect vegetatiehoogte\*UV-reflectie gekeken worden)
 
 Interactie tussen uv en hoogte van plaatsing kan niet onderzocht worden omdat er geen niet-uv traps op vegetatieniveau geplaatst werden.
 
@@ -732,121 +701,7 @@ marginaleffects::plot_predictions(
   ylab("Probability of having zero species")
 ```
 
-#### Zonder honingbijen
-
-```{r}
-model2 <- glmmTMB(
-  n_species ~
-    (method_combi
-    + location_code
-      + maand
-    ) * taxgroup,
-  ziformula = ~1,
-  family = "nbinom2",
-  na.action = na.exclude,
-  data = data_zonder_honingbij
-)
-```
-
-```{r, class.source = "fold-show"}
-summary(model2)
-```
-
-```{r}
-car::Anova(model2)
-```
-
-```{r pwc-method zonder honingbij}
-emmeans::emmeans(model2, pairwise ~ method_combi)
-```
-
-```{r pwc-method-taxgroup zonder honingbij}
-emmeans::emmeans(model2, pairwise ~ method_combi * taxgroup)
-```
-
-```{r pwc-location zonder honingbij}
-emmeans::emmeans(model2, pairwise ~ location_code)
-```
-
-```{r pwc-location-taxgroup zonder honingbij}
-emmeans::emmeans(model2, pairwise ~ location_code * taxgroup)
-```
-
-```{r}
-performance::check_model(model2)
-performance::check_overdispersion(model2)
-```
-
-```{r, fig.cap = "Verwacht aantal soorten (zonder honingbijen) in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
-marginaleffects::plot_predictions(
-  model2,
-  condition = c("method_combi", "taxgroup"),
-  type = "response",
-  vcov = TRUE,
-  draw = FALSE
-) |>
-  left_join(
-    data_sp_rich |>
-      distinct(method_cd, spring_code, uv, level, method_combi, taxgroup)
-  ) |>
-  as_tibble() |>
-  ggplot() +
-  geom_pointrange(
-    aes(
-      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
-      colour = method_combi
-    ),
-    position = position_dodge(width = 0.5)
-  ) +
-  labs(y = "Soortenrijkdom") +
-  facet_wrap(~taxgroup, scales = "free")
-```
-
 ## Aantal individuen
-
-### Met honingbijen
-
-```{r}
-m_n_ind <- glmmTMB(
-  n_ind ~
-    (location_code
-    + maand
-      + method_cd) * taxgroup,
-  ziformula = ~taxgroup,
-  family = "nbinom1",
-  na.action = na.fail,
-  data = data_sp_rich_spring
-)
-```
-
-Verschillende distributies geprobeerd, maar deze modellen fitten niet goed.
-Wellicht omwille van de honingbijen die soms in uitzonderlijk hoge aantallen gevangen worden.
-
-```{r check_n_ind, fig.height=12, fig.cap = "Visuele controle van verschillende modelaannames."}
-performance::check_model(m_n_ind)
-performance::check_overdispersion(m_n_ind)
-```
-
-```{r, fig.cap = "Verwacht aantal soorten in een pantrap-set of transectsegment van 50 m per maand, soortgroep en SPRING methode op basis van ons model."}
-marginaleffects::plot_predictions(
-  m_n_ind,
-  condition = c("maand", "method_cd", "taxgroup"),
-  type = "response",
-  vcov = TRUE
-)
-```
-
-```{r, fig.cap = "Kans op een nulwaarneming in een pantrap-set of transectsegment van 50 m per soortgroep op basis van ons model."}
-marginaleffects::plot_predictions(
-  m_n_ind,
-  condition = c("taxgroup"),
-  type = "zprob",
-  vcov = TRUE
-) +
-  ylab("Probability of having zero individuals")
-```
-
-### Zonder honingbijen
 
 Hier fit een negatief-binomiaal model zonder zero-inflation goed.
 
@@ -854,11 +709,11 @@ Hier fit een negatief-binomiaal model zonder zero-inflation goed.
 m_n_ind_zh <- glmmTMB(
   n_ind ~
     (location_code
-    + maand
-      + method_combi) * taxgroup,
+     + maand
+     + method_combi) * taxgroup,
   family = "nbinom2",
   na.action = na.fail,
-  data = data_zonder_honingbij
+  data = data_sp_rich_spring
 )
 ```
 
@@ -895,18 +750,18 @@ marginaleffects::plot_predictions(
   facet_wrap(~taxgroup, scales = "free")
 ```
 
-
 ```{r pwc-method-taxgroup-n-ind-zh}
 emmeans::emmeans(m_n_ind_zh, pairwise ~ method_combi * taxgroup)
 ```
 
+```{r}
+car::Anova(m_n_ind_zh)
+```
 
 
 ## Alpha biodiversiteit
 
-De Shannon index wordt als volgt berekend:
-$$H' = - \sum_{i=1}^{R} p_i ln p_i$$
-Waarbij $p_i$ de proportie is van het aantal individuen van één soort ten opzichte van het totaal aantal individuen.
+De Shannon index wordt als volgt berekend: $$H' = - \sum_{i=1}^{R} p_i ln p_i$$ Waarbij $p_i$ de proportie is van het aantal individuen van één soort ten opzichte van het totaal aantal individuen.
 
 Er kan geen Shannon index berekent worden voor pan traps of deeltransecten waarin niks gevangen werd. Het gebruik van deze index leidt dus sowieso tot een verlies aan informatie. Daarnaast is de Shannon index van een sample waar slechts één soort gevonden wordt gelijk aan 0. Voor volgende berekeningen werden dan ook alle maanden per pan trap of deeltransect van 50 m samengevoegd om een teveel aan nulwaarnemingen te voorkomen.
 
@@ -999,6 +854,7 @@ flowers <- flowers |>
 ```
 
 ### visuele verkenning
+
 ```{r}
 flowers |>
   ggplot(aes(x = log(number_of_floral_units), y = n_ind, colour = group)) +
@@ -1007,6 +863,7 @@ flowers |>
 ```
 
 ### model
+
 ```{r}
 flowers <- flowers |>
   mutate(location_code = str_sub(sampling_site_cd, start = 1L, end = 8L),
@@ -1090,8 +947,132 @@ new_data |>
 ## Wilde bijen
 
 ```{r}
-apoidea_cumulative_geen_honingbij <- apoidea %>%
-  filter(species_nm != "Apis mellifera Linnaeus, 1758") %>%
+# Add unique identifier for each sampling site and method combination
+# and find the number of species for the highest number of days
+apoidea_cumulative <- apoidea_cumulative |>
+  mutate(
+    sampling_site_method = paste0(
+      sampling_site_cd, "_", spring_code)) |>
+  group_by(sampling_site_method) |>
+  mutate(n_species_final = max(cumulative_n_species)) |>
+  ungroup() |>
+  mutate(prop = cumulative_n_species/n_species_final)
+```
+
+```{r}
+model5 <- glmmTMB(prop ~ cumulative_days * method_combi + (1|sampling_site_method),
+                  family = binomial,
+                  weights = n_species_final,
+                  data = apoidea_cumulative)
+```
+
+```{r}
+# check model assumptions
+performance::check_model(model5)
+```
+
+```{r, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen."}
+pp <- marginaleffects::predictions(
+  model5,
+  by = c("cumulative_days", "method_combi"),
+  type = "link",
+  vcov = TRUE,
+  re.form = NA
+)
+
+pp <- pp |>
+  mutate(
+    prop = plogis(estimate),
+    lower = plogis(conf.low),
+    upper = plogis(conf.high)
+  )
+
+pp |>
+  ggplot() +
+  geom_line(
+    aes(x = cumulative_days, y = prop, colour = method_combi)
+  ) +
+  geom_ribbon(
+    aes(
+      x = cumulative_days,
+      ymin = lower,
+      ymax = upper,
+      fill = method_combi),
+    alpha = 0.2
+  ) +
+  labs(y = "Proportion of species found",
+       x = "Cumulative days")
+  
+```
+
+## Zweefvliegen
+
+```{r}
+# Add unique identifier for each sampling site and method combination
+# and find the number of species for the highest number of days
+syrphidae_cumulative <- syrphidae_cumulative |>
+  mutate(
+    sampling_site_method = paste0(
+      sampling_site_cd, "_", spring_code)) |>
+  group_by(sampling_site_method) |>
+  mutate(n_species_final = max(cumulative_n_species)) |>
+  ungroup() |>
+  mutate(prop = cumulative_n_species/n_species_final)
+```
+
+```{r}
+model6 <- glmmTMB(prop ~ cumulative_days * method_combi +
+                    (1|sampling_site_method),
+                  family = binomial,
+                  weights = n_species_final,
+                  data = syrphidae_cumulative)
+```
+
+```{r}
+# check model assumptions
+performance::check_model(model6)
+```
+
+```{r, fig.cap = "Proportie soorten gevonden over tijd voor zweefvliegen."}
+# plot proportion of species found over time
+pp <- marginaleffects::predictions(
+  model6,
+  by = c("cumulative_days", "method_combi"),
+  type = "link",
+  vcov = TRUE,
+  re.form = NA
+)
+
+pp <- pp |>
+  mutate(
+    prop = plogis(estimate),
+    lower = plogis(conf.low),
+    upper = plogis(conf.high)
+  )
+
+pp |>
+  ggplot() +
+  geom_line(
+    aes(x = cumulative_days, y = prop, colour = method_combi)
+  ) +
+  geom_ribbon(
+    aes(
+      x = cumulative_days,
+      ymin = lower,
+      ymax = upper,
+      fill = method_combi),
+    alpha = 0.2
+  ) +
+  labs(y = "Proportion of species found",
+       x = "Cumulative days")
+  
+```
+
+## Beide groepen
+
+```{r}
+combi <- apoidea |>
+  bind_rows(syrphidae) |>
   filter(
     time_since_previous == 0 | time_till_next == 0
   ) %>%
@@ -1118,12 +1099,8 @@ apoidea_cumulative_geen_honingbij <- apoidea %>%
     pt = str_extract(sampling_site_cd, "PT\\d*")
   ) %>%
   ungroup()
-```
 
-```{r}
-# Add unique identifier for each sampling site and method combination
-# and find the number of species for the highest number of days
-apoidea_cumulative_geen_honingbij <- apoidea_cumulative_geen_honingbij |>
+combi <- combi |>
   mutate(
     sampling_site_method = paste0(
       sampling_site_cd, "_", spring_code)) |>
@@ -1134,63 +1111,51 @@ apoidea_cumulative_geen_honingbij <- apoidea_cumulative_geen_honingbij |>
 ```
 
 ```{r}
-model5 <- glmmTMB(prop ~ time_order * method_combi + (1|sampling_site_method),
-                  family = binomial,
-                  weights = n_species_final,
-                  data = apoidea_cumulative_geen_honingbij)
-```
-
-```{r}
-# check model assumptions
-performance::check_model(model5)
-```
-
-```{r}
-# plot proportion of species found over time
-marginaleffects::plot_predictions(
-  model5,
-  condition = c("time_order"),
-  type = "response",
-  vcov = TRUE
-)
-```
-
-## Zweefvliegen
-```{r}
-# Add unique identifier for each sampling site and method combination
-# and find the number of species for the highest number of days
-syrphidae_cumulative <- syrphidae_cumulative |>
-  mutate(
-    sampling_site_method = paste0(
-      sampling_site_cd, "_", spring_code)) |>
-  group_by(sampling_site_method) |>
-  mutate(n_species_final = max(cumulative_n_species)) |>
-  ungroup() |>
-  mutate(prop = cumulative_n_species/n_species_final)
-```
-
-```{r}
-model6 <- glmmTMB(prop ~ time_order * method_combi +
-                    #location_code +
+model7 <- glmmTMB(prop ~ cumulative_days * method_combi +
                     (1|sampling_site_method),
                   family = binomial,
                   weights = n_species_final,
-                  data = syrphidae_cumulative)
+                  data = combi)
 ```
 
 ```{r}
 # check model assumptions
-performance::check_model(model6)
+performance::check_model(model7)
 ```
 
-```{r}
+```{r, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen en zweefvliegen."}
 # plot proportion of species found over time
-marginaleffects::plot_predictions(
-  model6,
-  condition = c("time_order"),
-  type = "response",
-  vcov = TRUE
+pp <- marginaleffects::predictions(
+  model7,
+  by = c("cumulative_days", "method_combi"),
+  type = "link",
+  vcov = TRUE,
+  re.form = NA
 )
+
+pp <- pp |>
+  mutate(
+    prop = plogis(estimate),
+    lower = plogis(conf.low),
+    upper = plogis(conf.high)
+  )
+
+pp |>
+  ggplot() +
+  geom_line(
+    aes(x = cumulative_days, y = prop, colour = method_combi)
+  ) +
+  geom_ribbon(
+    aes(
+      x = cumulative_days,
+      ymin = lower,
+      ymax = upper,
+      fill = method_combi),
+    alpha = 0.2
+  ) +
+  labs(y = "Proportion of species found",
+       x = "Cumulative days")
+  
 ```
 
 # Kosten
@@ -1230,7 +1195,7 @@ iden_cost <- ((time_data[14, 7] * mean_ap) + (time_data[15, 7] * mean_syr)) |>
   pull(prijs)
 ```
 
-Één staal (één pan trap of transect van 50 m) bevat gemiddelde `r round(mean_ap, 2)` soorten apoidea en  `r round(mean_syr, 2)` soorten syrphidae. Dat betekend dat het identificeren van de soorten in één staal ons `r round(iden_cost, 2)` euro aan loon kost. We nemen het gemiddelde om methoden die meer van de gewenste soorten opleveren niet af te straffen.
+Één staal (één pan trap of transect van 50 m) bevat gemiddelde `r round(mean_ap, 2)` soorten apoidea en `r round(mean_syr, 2)` soorten syrphidae. Dat betekend dat het identificeren van de soorten in één staal ons `r round(iden_cost, 2)` euro aan loon kost. We nemen het gemiddelde om methoden die meer van de gewenste soorten opleveren niet af te straffen.
 
 Verderop bekijken we wel de verschillende tijden die nodig zijn voor het uitsorteren van een staal (bijen en zweefvliegen van andere families scheiden). Dit omdat specifieke methoden, zoals bv. het plaatsen van een pan trap op de grond, kunnen leiden tot hogere restfracties dan andere.
 
@@ -1257,8 +1222,8 @@ loon_verpl <- cost_data |>
 
 Om deze afstand te rijden hebben we `r round(verpl_tijd)` minuten nodig. Als dit door een veldmedewerker (niveau B) gebeurt dan kost ons dit `r round(verpl_tijd * loon_verpl)` euro in loonkost.
 
-
 Variabele kosten pan traps:
+
 ```{r}
 time_data |>
   filter(methode == "PT") |>
@@ -1271,8 +1236,8 @@ time_data |>
   kableExtra::kable(digits = 2)
 ```
 
-
 Variabele kosten transecten:
+
 ```{r}
 time_data |>
   filter(methode == "TS") |>
@@ -1281,9 +1246,10 @@ time_data |>
 
 ## Scenario's
 
-Als we 650 meetpunten éénmaal zouden bezoeken dan zou ons dit `r round(verpl) * 650` euro aan kilometervergoeding kosten en `r round(verpl_tijd * loon_verpl) * 650` euro aan personeelskosten. 
+Als we 650 meetpunten éénmaal zouden bezoeken dan zou ons dit `r round(verpl) * 650` euro aan kilometervergoeding kosten en `r round(verpl_tijd * loon_verpl) * 650` euro aan personeelskosten.
 
 Als we één pan trap s.s. (uv - vegetatie) per locatie zouden plaatsen zouden we volgende kosten hebben:
+
 ```{r}
 pt_ss <- time_data |>
   filter(methode == "PT", submethode == "s.s.") |>
@@ -1299,6 +1265,7 @@ pt_ss |>
 ```
 
 De prijs zou als volgt toenemen (verplaatsingskost niet meegerekend) wanneer we 1 tot 5 pan traps plaatsen gedurende 1 tot 7 maanden en dit voor 650 locaties:
+
 ```{r}
 pantraps <- c(1:5)
 maanden <- c(1:7)
@@ -1331,6 +1298,7 @@ testset |>
 ```
 
 Als we twee pan traps s.s.(uv - vegetatie) en twee pan traps SSL (uv - bodem) zouden plaatsen zouden de prijzen als volgt zijn voor 1 tot 7 verschillende maanden monitoring van 650 locaties:
+
 ```{r}
 pt_ssl <- time_data |>
   filter(methode == "PT", submethode == "SSL") |>
@@ -1361,6 +1329,7 @@ data.frame("tww_ss_twee_SSL" = testset$`2` + testset2) |>
 ```
 
 Als we één transect s.s. (geen sweeping) van 250 m per locatie zouden lopen zouden we volgende kosten hebben voor 650 punten:
+
 ```{r}
 ts_ss <- time_data |>
   filter(methode == "TS", submethode == "s.s.") |>
@@ -1376,29 +1345,29 @@ Laat ons tot slot twee volledige scenario's met elkaar vergelijken:
 
 1: dit gebeurt door veldwerkers met manuele identificatie
 
-- Verplaatsingskosten: 
-  - Kilometervergoeding: `r round(verpl * 650 * 6)` euro
-  - Loonkost: `r round(verpl_tijd * loon_verpl * 650 * 6)` euro
-  
-- Aankopen, plaatsen, inzamelen en uitsorteren van 2 pan traps s.s. en 2 pan traps SSL op drie momenten: 354359 euro 
+-   Verplaatsingskosten:
 
-- Transect lopen en uitsorteren op drie momenten: 74577 euro
+    -   Kilometervergoeding: `r round(verpl * 650 * 6)` euro
+    -   Loonkost: `r round(verpl_tijd * loon_verpl * 650 * 6)` euro
 
-- Identificeren van soorten: `r round(iden_cost * 9 * 650 * 3)` euro
+-   Aankopen, plaatsen, inzamelen en uitsorteren van 2 pan traps s.s. en 2 pan traps SSL op drie momenten: 354359 euro
 
-- Totale kost: 1 220 161 euro per jaar
+-   Transect lopen en uitsorteren op drie momenten: 74577 euro
 
+-   Identificeren van soorten: `r round(iden_cost * 9 * 650 * 3)` euro
+
+-   Totale kost: 1 220 161 euro per jaar
 
 2: dit gebeurt door vrijwilligers met metabarcoding (geen aantallen individuen, alle samples worden samengevoegd per locatie)
 
-- Verplaatsingskosten: 0 euro
+-   Verplaatsingskosten: 0 euro
 
-- Aankopen pan traps: 7800 euro
+-   Aankopen pan traps: 7800 euro
 
-- Transect lopen: 0 euro
+-   Transect lopen: 0 euro
 
-- Identificeren van soorten: 45500 euro
+-   Identificeren van soorten: 45500 euro
 
-- Totale kost: 53 300 euro per jaar
+-   Totale kost: 53 300 euro per jaar
 
 Beide scenario's vereisen een senior wetenschapper die het project opvolgt en een coördinator die het veldwerk aanstuurt, wel kan er vanuit worden gegaan dat deze coördinator meer werk zou hebben met vrijwilligers. Voorlopig ben ik van een metabarcoding kost van 70 euro per staal uit gegaan, vermoedelijk komt hier nog werk voor een bioinformaticus aan te pas.
