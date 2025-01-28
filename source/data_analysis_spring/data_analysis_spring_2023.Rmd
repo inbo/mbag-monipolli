@@ -707,26 +707,26 @@ marginaleffects::plot_predictions(
 Hier fit een negatief-binomiaal model zonder zero-inflation goed.
 
 ```{r}
-m_n_ind_zh <- glmmTMB(
+model2 <- glmmTMB(
   n_ind ~
     (location_code
      + maand
      + method_combi) * taxgroup,
   family = "nbinom2",
   na.action = na.fail,
-  data = data_sp_rich_spring
+  data = data_sp_rich
 )
 ```
 
 ```{r check_n_ind_zh, fig.height=12, fig.cap = "Visuele controle van verschillende modelaannames."}
-performance::check_model(m_n_ind_zh)
-performance::check_overdispersion(m_n_ind_zh)
-performance::check_predictions(m_n_ind_zh)
+performance::check_model(model2)
+performance::check_overdispersion(model2)
+performance::check_predictions(model2)
 ```
 
 ```{r, fig.cap = "Verwacht aantal individuen (zonder honingbijen) in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
 marginaleffects::plot_predictions(
-  m_n_ind_zh,
+  model2,
   condition = c("method_combi", "taxgroup"),
   type = "response",
   vcov = TRUE,
@@ -752,11 +752,11 @@ marginaleffects::plot_predictions(
 ```
 
 ```{r pwc-method-taxgroup-n-ind-zh}
-emmeans::emmeans(m_n_ind_zh, pairwise ~ method_combi * taxgroup)
+emmeans::emmeans(model2, pairwise ~ method_combi * taxgroup)
 ```
 
 ```{r}
-car::Anova(m_n_ind_zh)
+car::Anova(model2)
 ```
 
 
@@ -803,7 +803,7 @@ ggplot(sha, aes(x = exp_sh)) +
 ```
 
 ```{r}
-model2 <- glmmTMB(
+model3 <- glmmTMB(
   exp_sh ~
     (method_combi +
       location_code) * taxgroup,
@@ -815,16 +815,16 @@ model2 <- glmmTMB(
 ```
 
 ```{r, class.source = "fold-show"}
-summary(model2)
+summary(model3)
 ```
 
 ```{r check3, fig.height=10, fig.cap = "Visuele controle van verschillende modelaannames."}
-performance::check_model(model2)
+performance::check_model(model3)
 ```
 
 ```{r, fig.cap = "Verwachte Shannon index (exp) in één pantrap-set of transectsegment van 50 m per soortgroep en methode (voor alle maanden samen) op basis van ons model."}
 marginaleffects::plot_predictions(
-  model2,
+  model3,
   condition = c("method_combi", "taxgroup"),
   type = "response",
   vcov = TRUE
@@ -872,7 +872,7 @@ flowers <- flowers |>
 ```
 
 ```{r}
-model1 <- glmmTMB(
+model4 <- glmmTMB(
   n_ind ~ (log(number_of_floral_units + 1) + location_code + maand) * group,
   ziformula = ~ group,
   family = "nbinom2",
@@ -882,17 +882,17 @@ model1 <- glmmTMB(
 ```
 
 ```{r}
-summary(model1)
+summary(model4)
 ```
 
 ```{r}
-emmeans::emmeans(model1, ~log(number_of_floral_units + 1) * group, infer = TRUE)
+emmeans::emmeans(model4, ~log(number_of_floral_units + 1) * group, infer = TRUE)
 
-car::Anova(model1)
+car::Anova(model4)
 ```
 
 ```{r}
-performance::check_model(model1)
+performance::check_model(model4)
 ```
 
 ```{r}
@@ -910,7 +910,7 @@ nd <- data.frame(
   )
 
 predictions <- predict(
-  model1,
+  model4,
   newdata = nd,
   type = "link",
   se.fit = TRUE)
@@ -973,6 +973,26 @@ model5 <- glmmTMB(prop ~ cumulative_days * method_combi +
 performance::check_model(model5)
 ```
 
+```{r}
+car::Anova(model5)
+```
+
+Verwacht percentage van de "totale" gemeenschap dat gevonden wordt voor het aantal dagen dat pan traps geplaatst worden:
+```{r}
+emmeans::emmeans(model5, pairwise ~ cumulative_days,
+                 type = "response",
+                 at = list(cumulative_days = c(0.25,
+                                               1.25,
+                                               2.25,
+                                               3.25,
+                                               4.25,
+                                               5.25,
+                                               6.25,
+                                               7.25,
+                                               8.25,
+                                               9.25)))
+```
+
 ```{r, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen."}
 pp <- marginaleffects::predictions(
   model5,
@@ -1033,6 +1053,22 @@ model6 <- glmmTMB(prop ~ cumulative_days * method_combi +
 ```{r}
 # check model assumptions
 performance::check_model(model6)
+```
+
+Verwacht percentage van de "totale" gemeenschap dat gevonden wordt voor het aantal dagen dat pan traps geplaatst worden:
+```{r}
+emmeans::emmeans(model6, pairwise ~ cumulative_days,
+                 type = "response",
+                 at = list(cumulative_days = c(0.25,
+                                               1.25,
+                                               2.25,
+                                               3.25,
+                                               4.25,
+                                               5.25,
+                                               6.25,
+                                               7.25,
+                                               8.25,
+                                               9.25)))
 ```
 
 ```{r, fig.cap = "Proportie soorten gevonden over tijd voor zweefvliegen."}
@@ -1123,6 +1159,22 @@ model7 <- glmmTMB(prop ~ cumulative_days * method_combi +
 ```{r}
 # check model assumptions
 performance::check_model(model7)
+```
+
+Verwacht percentage van de "totale" gemeenschap dat gevonden wordt voor het aantal dagen dat pan traps geplaatst worden:
+```{r}
+emmeans::emmeans(model7, pairwise ~ cumulative_days,
+                 type = "response",
+                 at = list(cumulative_days = c(0.25,
+                                               1.25,
+                                               2.25,
+                                               3.25,
+                                               4.25,
+                                               5.25,
+                                               6.25,
+                                               7.25,
+                                               8.25,
+                                               9.25)))
 ```
 
 ```{r, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen en zweefvliegen."}
