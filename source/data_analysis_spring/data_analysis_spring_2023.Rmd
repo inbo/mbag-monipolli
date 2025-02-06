@@ -983,7 +983,7 @@ car::Anova(model5)
 
 Verwacht percentage van de "totale" gemeenschap dat gevonden wordt voor het aantal dagen dat pan traps geplaatst worden:
 ```{r}
-emmeans::emmeans(model5, pairwise ~ cumulative_days,
+emmeans::emmeans(model5, trt.vs.ctrl1 ~ cumulative_days,
                  type = "response",
                  at = list(cumulative_days = c(0.25,
                                                1.25,
@@ -997,7 +997,7 @@ emmeans::emmeans(model5, pairwise ~ cumulative_days,
                                                9.25)))
 ```
 
-```{r, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen."}
+```{r time-series-wild-bees, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen."}
 pp <- marginaleffects::predictions(
   model5,
   by = c("cumulative_days", "method_combi"),
@@ -1061,7 +1061,7 @@ performance::check_model(model6)
 
 Verwacht percentage van de "totale" gemeenschap dat gevonden wordt voor het aantal dagen dat pan traps geplaatst worden:
 ```{r}
-emmeans::emmeans(model6, pairwise ~ cumulative_days,
+emmeans::emmeans(model6, trt.vs.ctrl1 ~ cumulative_days,
                  type = "response",
                  at = list(cumulative_days = c(0.25,
                                                1.25,
@@ -1075,7 +1075,7 @@ emmeans::emmeans(model6, pairwise ~ cumulative_days,
                                                9.25)))
 ```
 
-```{r, fig.cap = "Proportie soorten gevonden over tijd voor zweefvliegen."}
+```{r time-series-hoverflies, fig.cap = "Proportie soorten gevonden over tijd voor zweefvliegen."}
 # plot proportion of species found over time
 pp <- marginaleffects::predictions(
   model6,
@@ -1167,7 +1167,7 @@ performance::check_model(model7)
 
 Verwacht percentage van de "totale" gemeenschap dat gevonden wordt voor het aantal dagen dat pan traps geplaatst worden:
 ```{r}
-emmeans::emmeans(model7, pairwise ~ cumulative_days,
+emmeans::emmeans(model7, trt.vs.ctrl1 ~ cumulative_days,
                  type = "response",
                  at = list(cumulative_days = c(0.25,
                                                1.25,
@@ -1181,7 +1181,7 @@ emmeans::emmeans(model7, pairwise ~ cumulative_days,
                                                9.25)))
 ```
 
-```{r, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen en zweefvliegen."}
+```{r time-series-wild-bees-hoverflies, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen en zweefvliegen."}
 # plot proportion of species found over time
 pp <- marginaleffects::predictions(
   model7,
