@@ -256,7 +256,11 @@ Er werden 5 verschillende monitoringsmethoden getest:
     -   identieke samenstelling maar op de bodem geplaatst (PT - SSL)
     -   niet-UV-reflecterende pan trap unit (wat grotere valtypes), zowel op vegetatiehoogte als op de bodem (PT - MP)
 
-Deze methoden werden op drie verschillende locaties getest: - BE_MVS01: Proefterrein ILVO - BE_MVS02: Natuurgebied Bourgoyen-Ossemeersen in Gent - BE_MVS03: Natuurgebied Den Dotter in Haaltert
+Deze methoden werden op drie verschillende locaties getest:
+
+ -   BE_MVS01: Proefterrein ILVO 
+ -   BE_MVS02: Natuurgebied Bourgoyen-Ossemeersen in Gent 
+ -   BE_MVS03: Natuurgebied Den Dotter in Haaltert
 
 Op locatie 1 werd op vraag van ILVO een 11de pan trap geplaatst, deze werd, buiten het algemeen overzicht van het aantal soorten, niet meegenomen in de analyses.
 
