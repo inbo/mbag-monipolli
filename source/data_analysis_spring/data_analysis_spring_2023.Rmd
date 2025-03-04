@@ -1240,6 +1240,33 @@ emmeans::emmeans(
   confint()
 ```
 
+
+Berekening contrasten per dag:
+
+```{r}
+emmeans::emmeans(
+  model8,
+  trt.vs.ctrl1 ~ method_combi | cumulative_days,
+  type = "response",
+  at = list(
+    cumulative_days = c(
+      0.25,
+      1.25,
+      2.25,
+      3.25,
+      4.25,
+      5.25,
+      6.25,
+      7.25,
+      8.25,
+      9.25),
+    n_species_site = round(mean(site_totals$n_species_site), -1)
+    )
+  ) |>
+  confint()
+```
+
+
 Voorstelling predicties in figuur \@ref(fig:cns-predictions)
 
 (ref:cns-predictions) Voorspelling van het aantal soorten in functie van het aantal dagen dat een pantrap op dezelfde locatie blijft staan en in functie van het type pantrap. De voorspelling gaat uit van een soortenpoel van `r round(mean(site_totals$n_species_site), -1)` taxa.
