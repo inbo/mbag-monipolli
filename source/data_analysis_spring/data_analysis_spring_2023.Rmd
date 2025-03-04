@@ -1246,7 +1246,7 @@ Berekening contrasten per dag:
 ```{r}
 emmeans::emmeans(
   model8,
-  trt.vs.ctrl1 ~ method_combi | cumulative_days,
+  revpairwise ~ method_combi | cumulative_days,
   type = "response",
   at = list(
     cumulative_days = c(
