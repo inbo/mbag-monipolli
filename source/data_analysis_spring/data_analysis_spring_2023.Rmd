@@ -33,6 +33,7 @@ library(purrr)
 library(lubridate)
 library(stringr)
 library(googlesheets4)
+library(ggsignif)
 
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
@@ -656,7 +657,8 @@ emmeans::emmeans(model1, pairwise ~ method_combi)
 ```
 
 ```{r pwc-method-taxgroup}
-emmeans::emmeans(model1, pairwise ~ method_combi * taxgroup)
+em <- emmeans::emmeans(model1, pairwise ~ (method_combi|taxgroup))
+em$contrasts
 ```
 
 ```{r pwc-location}
@@ -671,8 +673,8 @@ emmeans::emmeans(model1, pairwise ~ location_code * taxgroup)
 performance::check_model(model1)
 ```
 
-```{r, fig.cap = "Verwacht aantal soorten in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
-marginaleffects::plot_predictions(
+```{r, fig.cap = "Verwacht aantal soorten wilde bijen in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
+pred_spec <- marginaleffects::plot_predictions(
   model1,
   condition = c("method_combi", "taxgroup"),
   type = "response",
@@ -683,17 +685,71 @@ marginaleffects::plot_predictions(
     data_sp_rich |>
       distinct(method_cd, spring_code, uv, level, method_combi, taxgroup)
   ) |>
-  as_tibble() |>
-  ggplot() +
+  as_tibble()
+
+pred_spec |>
+  filter(taxgroup == "Apoidea") |>
+  ggplot(aes(x = method_combi,
+             y = estimate,
+             group = method_combi)) +
   geom_pointrange(
-    aes(
-      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
-      colour = method_combi
-    ),
+    aes(ymin = conf.low,
+        ymax = conf.high),
+    color = "cornflowerblue",
     position = position_dodge(width = 0.5)
   ) +
-  labs(y = "Soortenrijkdom") +
-  facet_wrap(~taxgroup, scales = "free")
+  labs(y = "Spechies richness",
+       x = NULL) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2),
+                   labels = c("Pan trap: Non-UV, soil surface",
+                              "Pan trap: UV, soil surface",
+                              "Pan trap: UV, vegetation",
+                              "Transect: visual detection",
+                              "Transect: vegetation sweeping")) +
+  geom_signif(comparisons = list(c(1,2),
+                                 c(1,3),
+                                 c(3,4),
+                                 c(3,5),
+                                 c(2,4),
+                                 c(2,5)),
+              annotations = c("**", "***",
+                              "***", "***",
+                              "**", "***"),
+              y_position = c(1, 1.05, 1, 1.1, 1.15, 1.2),
+              tip_length = 0.01,
+              vjust = 0.5)
+```
+
+```{r, fig.cap = "Verwacht aantal soorten zweefvliegen in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
+
+pred_spec |>
+  filter(taxgroup == "Syrphidae") |>
+  ggplot(aes(x = method_combi,
+             y = estimate,
+             group = method_combi)) +
+  geom_pointrange(
+    aes(ymin = conf.low,
+        ymax = conf.high),
+    color = "cornflowerblue",
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(y = "Spechies richness",
+       x = NULL) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2),
+                   labels = c("Pan trap: Non-UV, soil surface",
+                              "Pan trap: UV, soil surface",
+                              "Pan trap: UV, vegetation",
+                              "Transect: visual detection",
+                              "Transect: vegetation sweeping")) +
+  geom_signif(comparisons = list(c(1,2),
+                                 c(1,3),
+                                 c(1,4),
+                                 c(1,5)),
+              annotations = c("**", "***",
+                              "***", "***"),
+              y_position = c(0.3, 0.325, 0.35, 0.375),
+              tip_length = 0.01,
+              vjust = 0.5)
 ```
 
 ```{r, fig.cap = "Kans op een nulwaarneming in een pantrap-set of transectsegment van 50 m per soortgroep op basis van ons model."}
@@ -704,6 +760,22 @@ marginaleffects::plot_predictions(
   vcov = TRUE
 ) +
   ylab("Probability of having zero species")
+```
+
+```{r pwc-month-taxgroup}
+em <- emmeans::emmeans(model1, pairwise ~ (maand|taxgroup))
+em$contrasts
+```
+
+```{r, fig.cap = "Verwacht aantal soorten in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
+marginaleffects::plot_predictions(
+  model1,
+  condition = c("maand", "taxgroup"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(x = "Month",
+       y = "Number of species")
 ```
 
 ## Aantal individuen
@@ -728,8 +800,8 @@ performance::check_overdispersion(model2)
 performance::check_predictions(model2)
 ```
 
-```{r, fig.cap = "Verwacht aantal individuen (zonder honingbijen) in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
-marginaleffects::plot_predictions(
+```{r, fig.cap = "Verwacht aantal individuen wilde bijen (zonder honingbijen) in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
+pred_ind <- marginaleffects::plot_predictions(
   model2,
   condition = c("method_combi", "taxgroup"),
   type = "response",
@@ -740,29 +812,95 @@ marginaleffects::plot_predictions(
     data_sp_rich |>
       distinct(method_cd, spring_code, uv, level, method_combi, taxgroup)
   ) |>
-  as_tibble() |>
-  ggplot() +
+  as_tibble()
+
+pred_ind |>
+  filter(taxgroup == "Apoidea") |>
+  ggplot(aes(x = method_combi,
+             y = estimate,
+             group = method_combi)) +
   geom_pointrange(
-    aes(
-      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
-      colour = method_combi
-    ),
+    aes(ymin = conf.low,
+        ymax = conf.high),
+    color = "cornflowerblue",
     position = position_dodge(width = 0.5)
   ) +
-  labs(y = "Number of individuals (without Apis mellifera)",
-       x = "",
-       colour = "") +
-  facet_wrap(~taxgroup, scales = "free")
+  labs(y = "Spechies richness",
+       x = NULL) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2),
+                   labels = c("Pan trap: Non-UV, soil surface",
+                              "Pan trap: UV, soil surface",
+                              "Pan trap: UV, vegetation",
+                              "Transect: visual detection",
+                              "Transect: vegetation sweeping")) +
+  geom_signif(comparisons = list(c(1,2),
+                                 c(1,3),
+                                 c(2,5),
+                                 c(3,5)),
+              annotations = c("*", "*",
+                              "***", "***"),
+              y_position = c(1.35, 1.4, 1.45, 1.35),
+              tip_length = 0.01,
+              vjust = 0.5)
 ```
 
+```{r, fig.cap = "Verwacht aantal individuen zweefvliegen in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
+pred_ind |>
+  filter(taxgroup == "Syrphidae") |>
+  ggplot(aes(x = method_combi,
+             y = estimate,
+             group = method_combi)) +
+  geom_pointrange(
+    aes(ymin = conf.low,
+        ymax = conf.high),
+    color = "cornflowerblue",
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(y = "Spechies richness",
+       x = NULL) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2),
+                   labels = c("Pan trap: Non-UV, soil surface",
+                              "Pan trap: UV, soil surface",
+                              "Pan trap: UV, vegetation",
+                              "Transect: visual detection",
+                              "Transect: vegetation sweeping")) +
+  geom_signif(comparisons = list(c(1,2),
+                                 c(1,3),
+                                 c(1,4),
+                                 c(1,5),
+                                 c(2,5)),
+              annotations = c("**", "***",
+                              "***", "***",
+                              "**"),
+              y_position = c(0.46, 0.50, 0.52, 0.54, 0.48),
+              tip_length = 0.01,
+              vjust = 0.5)
+```
+
+
 ```{r pwc-method-taxgroup-n-ind-zh}
-emmeans::emmeans(model2, pairwise ~ method_combi * taxgroup)
+emmeans::emmeans(model2, pairwise ~ (method_combi|taxgroup))
 ```
 
 ```{r}
 car::Anova(model2)
 ```
 
+```{r pwc-month-taxgroup-n-ind}
+em <- emmeans::emmeans(model2, pairwise ~ (maand|taxgroup))
+em$contrasts
+```
+
+```{r, fig.cap = "Verwacht aantal individuen in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
+marginaleffects::plot_predictions(
+  model2,
+  condition = c("maand", "taxgroup"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(x = "Month",
+       y = "Number of individuals")
+```
 
 ## Alpha biodiversiteit
 
@@ -887,10 +1025,9 @@ model4 <- glmmTMB(
 
 ```{r}
 summary(model4)
-```
 
-```{r}
 emmeans::emmeans(model4, ~log(number_of_floral_units + 1) * group, infer = TRUE)
+emmeans::emtrends(model4, ~ group, var = "number_of_floral_units")
 
 car::Anova(model4)
 ```
@@ -983,7 +1120,7 @@ car::Anova(model5)
 
 Verwacht percentage van de "totale" gemeenschap dat gevonden wordt voor het aantal dagen dat pan traps geplaatst worden:
 ```{r}
-emmeans::emmeans(model5, trt.vs.ctrl1 ~ cumulative_days,
+emm <- emmeans::emmeans(model5, pairwise ~ cumulative_days,
                  type = "response",
                  at = list(cumulative_days = c(0.25,
                                                1.25,
@@ -995,6 +1132,8 @@ emmeans::emmeans(model5, trt.vs.ctrl1 ~ cumulative_days,
                                                7.25,
                                                8.25,
                                                9.25)))
+
+confint(emm$contrasts, adjust = "sidak")
 ```
 
 ```{r time-series-wild-bees, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen."}
