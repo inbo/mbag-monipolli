@@ -698,7 +698,7 @@ pred_spec |>
     color = "cornflowerblue",
     position = position_dodge(width = 0.5)
   ) +
-  labs(y = "Spechies richness",
+  labs(y = "Number of species",
        x = NULL) +
   scale_x_discrete(guide = guide_axis(n.dodge = 2),
                    labels = c("Pan trap: Non-UV, soil surface",
@@ -733,7 +733,7 @@ pred_spec |>
     color = "cornflowerblue",
     position = position_dodge(width = 0.5)
   ) +
-  labs(y = "Spechies richness",
+  labs(y = "Number of species",
        x = NULL) +
   scale_x_discrete(guide = guide_axis(n.dodge = 2),
                    labels = c("Pan trap: Non-UV, soil surface",
@@ -767,15 +767,60 @@ em <- emmeans::emmeans(model1, pairwise ~ (maand|taxgroup))
 em$contrasts
 ```
 
-```{r, fig.cap = "Verwacht aantal soorten in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
-marginaleffects::plot_predictions(
+```{r, fig.cap = "Verwacht aantal soorten wilde bijen in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
+p <- marginaleffects::plot_predictions(
   model1,
   condition = c("maand", "taxgroup"),
   type = "response",
-  vcov = TRUE
-) +
+  vcov = TRUE,
+  draw = FALSE) 
+
+p |>
+  filter(taxgroup == "Apoidea") |>
+  ggplot(aes(x = maand, y = estimate)) +
+  geom_pointrange(
+    aes(ymin = conf.low,
+        ymax = conf.high),
+    color = "cornflowerblue") +
   labs(x = "Month",
-       y = "Number of species")
+       y = "Number of species") +
+  geom_signif(comparisons = list(c(1,3),
+                                 c(1,5),
+                                 c(2,3),
+                                 c(2,5),
+                                 c(3,4),
+                                 c(3,5),
+                                 c(4,5)),
+              annotations = c("***", "**",
+                              "***", "***",
+                              "***", "***", "***"),
+              y_position = c(2.1, 2.25, 2, 2.2, 2.05, 2.15, 2),
+              tip_length = 0.01,
+              vjust = 0.65)
+```
+
+```{r, fig.cap = "Verwacht aantal soorten zweefvliegen in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
+p |>
+  filter(taxgroup == "Syrphidae") |>
+  ggplot(aes(x = maand, y = estimate)) +
+  geom_pointrange(
+    aes(ymin = conf.low,
+        ymax = conf.high),
+    color = "cornflowerblue") +
+  labs(x = "Month",
+       y = "Number of species") +
+  geom_signif(comparisons = list(c(1,3),
+                                 c(2,3),
+                                 c(2,4),
+                                 c(3,4),
+                                 c(3,5),
+                                 c(4,5)),
+              annotations = c("***", "***",
+                              "**", "**",
+                              "***", "*"),
+              y_position = c(1.15, 1, 1.2, 1.05, 1.25, 1.1),
+              tip_length = 0.01,
+              vjust = 0.65)
 ```
 
 ## Aantal individuen
@@ -825,7 +870,7 @@ pred_ind |>
     color = "cornflowerblue",
     position = position_dodge(width = 0.5)
   ) +
-  labs(y = "Spechies richness",
+  labs(y = "Number of species",
        x = NULL) +
   scale_x_discrete(guide = guide_axis(n.dodge = 2),
                    labels = c("Pan trap: Non-UV, soil surface",
@@ -856,7 +901,7 @@ pred_ind |>
     color = "cornflowerblue",
     position = position_dodge(width = 0.5)
   ) +
-  labs(y = "Spechies richness",
+  labs(y = "Number of species",
        x = NULL) +
   scale_x_discrete(guide = guide_axis(n.dodge = 2),
                    labels = c("Pan trap: Non-UV, soil surface",
@@ -891,15 +936,63 @@ em <- emmeans::emmeans(model2, pairwise ~ (maand|taxgroup))
 em$contrasts
 ```
 
-```{r, fig.cap = "Verwacht aantal individuen in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
-marginaleffects::plot_predictions(
+```{r, fig.cap = "Verwacht aantal individuen wilde bijen in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
+p <- marginaleffects::plot_predictions(
   model2,
   condition = c("maand", "taxgroup"),
   type = "response",
-  vcov = TRUE
-) +
+  vcov = TRUE,
+  draw = FALSE) 
+
+p |>
+  filter(taxgroup == "Apoidea") |>
+  ggplot(aes(x = maand, y = estimate)) +
+  geom_pointrange(
+    aes(ymin = conf.low,
+        ymax = conf.high),
+    color = "cornflowerblue") +
   labs(x = "Month",
-       y = "Number of individuals")
+       y = "Number of species") +
+  geom_signif(comparisons = list(c(1,3),
+                                 c(1,5),
+                                 c(2,3),
+                                 c(2,5),
+                                 c(3,4),
+                                 c(3,5),
+                                 c(4,5)),
+              annotations = c("***", "**",
+                              "***", "***",
+                              "***", "***", "***"),
+              y_position = c(3.4, 3.7, 3.2, 3.6, 3.3, 3.5, 3.4),
+              tip_length = 0.01,
+              vjust = 0.65)
+```
+
+```{r, fig.cap = "Verwacht aantal individuen zweefvliegen in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
+p |>
+  filter(taxgroup == "Syrphidae") |>
+  ggplot(aes(x = maand, y = estimate)) +
+  geom_pointrange(
+    aes(ymin = conf.low,
+        ymax = conf.high),
+    color = "cornflowerblue") +
+  labs(x = "Month",
+       y = "Number of species") +
+  geom_signif(comparisons = list(c(1,2),
+                                 c(1,3),
+                                 c(1,5),
+                                 c(2,3),
+                                 c(2,4),
+                                 c(3,4),
+                                 c(3,5),
+                                 c(4,5)),
+              annotations = c("*", "**",
+                              "**", "***",
+                              "**", "***",
+                              "***", "***"),
+              y_position = c(1.6, 1.7, 1.85, 1.65, 1.75, 1.6, 1.8, 1.65),
+              tip_length = 0.01,
+              vjust = 0.65)
 ```
 
 ## Alpha biodiversiteit
@@ -1102,7 +1195,7 @@ apoidea_cumulative <- apoidea_cumulative |>
 ```
 
 ```{r}
-model5 <- glmmTMB(prop ~ cumulative_days * method_combi +
+model5 <- glmmTMB(prop ~ log(cumulative_days) * method_combi +
                     (1 | sampling_site_method),
                   family = binomial,
                   weights = n_species_final,
@@ -1443,8 +1536,6 @@ time_data |>
 
 ## Scenario's
 
-Als we 650 meetpunten éénmaal zouden bezoeken dan zou ons dit `r round(verpl) * 650` euro aan kilometervergoeding kosten en `r round(verpl_tijd * loon_verpl) * 650` euro aan personeelskosten.
-
 Als we één pan trap s.s. (uv - vegetatie) per locatie zouden plaatsen zouden we volgende kosten hebben:
 
 ```{r}
@@ -1455,13 +1546,13 @@ pt_ss <- time_data |>
       Activiteit = Kostencategorie, methode,
       submethode, prijs
     )) |>
-  mutate(prijs_alle_punten = prijs * 650)
+  mutate(prijs_per_locatie = prijs)
 
 pt_ss |>
   kableExtra::kable(digits = 0)
 ```
 
-De prijs zou als volgt toenemen (verplaatsingskost niet meegerekend) wanneer we 1 tot 5 pan traps plaatsen gedurende 1 tot 7 maanden en dit voor 650 locaties:
+De prijs per locatie zou als volgt toenemen (verplaatsingskost niet meegerekend) wanneer we 1 tot 5 pan traps plaatsen gedurende 1 tot 7 maanden:
 
 ```{r}
 pantraps <- c(1:5)
@@ -1477,12 +1568,12 @@ testset <- data.frame(matrix(
 for (i in maanden) {
   for (j in pantraps) {
     x <- pt_ss[c(1, 4), ] |>
-      mutate(berekening = prijs_alle_punten * j) |>
+      mutate(berekening = prijs * j) |>
       summarise(m = sum(berekening)) |>
       pull(m)
 
     y <- pt_ss[c(2, 3), ] |>
-      mutate(berekening = prijs_alle_punten * i * j) |>
+      mutate(berekening = prijs * i * j) |>
       summarise(n = sum(berekening)) |>
       pull(n)
 
@@ -1494,7 +1585,7 @@ testset |>
   kableExtra::kable(digits = 0, row.names = TRUE)
 ```
 
-Als we twee pan traps s.s.(uv - vegetatie) en twee pan traps SSL (uv - bodem) zouden plaatsen zouden de prijzen als volgt zijn voor 1 tot 7 verschillende maanden monitoring van 650 locaties:
+Als we twee pan traps s.s.(uv - vegetatie) en twee pan traps SSL (uv - bodem) zouden plaatsen zouden de prijs per locatie als volgt zijn voor 1 tot 7 verschillende maanden monitoring:
 
 ```{r}
 pt_ssl <- time_data |>
@@ -1503,18 +1594,17 @@ pt_ssl <- time_data |>
     select(
       Activiteit = Kostencategorie, methode,
       submethode, prijs
-    )) |>
-  mutate(prijs_alle_punten = prijs * 650)
+    ))
 
 testset2 <- c(NA)
 
 for (i in maanden) {
   x <- pt_ssl[c(4), ] |>
-    mutate(m = prijs_alle_punten * 2) |>
+    mutate(m = prijs * 2) |>
     pull(m)
 
   y <- pt_ssl[c(2, 3), ] |>
-    mutate(berekening = prijs_alle_punten * i * 2) |>
+    mutate(berekening = prijs * i * 2) |>
     summarise(n = sum(berekening)) |>
     pull(n)
 
@@ -1525,12 +1615,12 @@ data.frame("tww_ss_twee_SSL" = testset$`2` + testset2) |>
   kableExtra::kable(digits = 0, row.names = TRUE)
 ```
 
-Als we één transect s.s. (geen sweeping) van 250 m per locatie zouden lopen zouden we volgende kosten hebben voor 650 punten:
+Als we één transect s.s. (geen sweeping) van 250 m per locatie zouden lopen zouden we volgende kosten hebben per locatie:
 
 ```{r}
 ts_ss <- time_data |>
   filter(methode == "TS", submethode == "s.s.") |>
-  mutate(prijs_alle_punten_250 = prijs * 650 * 5)
+  mutate(prijs_per_locatie = prijs * 5)
 
 ts_ss |>
   kableExtra::kable(digits = 0)
@@ -1538,33 +1628,33 @@ ts_ss |>
 
 Laat ons tot slot twee volledige scenario's met elkaar vergelijken:
 
-650 locaties met twee pan traps s.s. (uv - vegetatie) en twee pantraps SSL (uv - bodem) die drie maal per jaar een week in het veld worden gelaten. Daarnaast wordt ook elke keer een transect van 250 m gelopen.
+Per locatie: twee pan traps s.s. (uv - vegetatie) en twee pantraps SSL (uv - bodem) die drie maal per jaar een week in het veld worden gelaten. Daarnaast wordt ook elke keer een transect van 250 m gelopen.
 
 1: dit gebeurt door veldwerkers met manuele identificatie
 
 -   Verplaatsingskosten:
 
-    -   Kilometervergoeding: `r round(verpl * 650 * 6)` euro
-    -   Loonkost: `r round(verpl_tijd * loon_verpl * 650 * 6)` euro
+    -   Kilometervergoeding: `r round(verpl * 6)` euro
+    -   Loonkost: `r round(verpl_tijd * loon_verpl * 6)` euro
 
--   Aankopen, plaatsen, inzamelen en uitsorteren van 2 pan traps s.s. en 2 pan traps SSL op drie momenten: 354359 euro
+-   Aankopen, plaatsen, inzamelen en uitsorteren van 2 pan traps s.s. en 2 pan traps SSL op drie momenten: 545 euro per locatie
 
--   Transect lopen en uitsorteren op drie momenten: 74577 euro
+-   Transect lopen en uitsorteren op drie momenten: 115 euro per locatie
 
--   Identificeren van soorten: `r round(iden_cost * 9 * 650 * 3)` euro
+-   Identificeren van soorten: `r round(iden_cost * 9 * 3)` euro
 
--   Totale kost: 1 220 161 euro per jaar
+-   Totale kost: 1877 euro per jaar per locatie
 
 2: dit gebeurt door vrijwilligers met metabarcoding (geen aantallen individuen, alle samples worden samengevoegd per locatie)
 
 -   Verplaatsingskosten: 0 euro
 
--   Aankopen pan traps: 7800 euro
+-   Aankopen pan traps: 12 euro per locatie
 
 -   Transect lopen: 0 euro
 
--   Identificeren van soorten: 45500 euro
+-   Identificeren van soorten: 70 euro per locatie
 
--   Totale kost: 53 300 euro per jaar
+-   Totale kost: 82 euro per jaar per locatie
 
 Beide scenario's vereisen een senior wetenschapper die het project opvolgt en een coördinator die het veldwerk aanstuurt, wel kan er vanuit worden gegaan dat deze coördinator meer werk zou hebben met vrijwilligers. Voorlopig ben ik van een metabarcoding kost van 70 euro per staal uit gegaan, vermoedelijk komt hier nog werk voor een bioinformaticus aan te pas.
