@@ -1345,6 +1345,16 @@ pp |>
 ## Beide groepen
 
 ```{r}
+site_totals <- apoidea |>
+  bind_rows(syrphidae) |>
+  filter(
+    time_since_previous == 0 | time_till_next == 0
+  ) %>%
+  group_by(location_code) |>
+  distinct(species_nm) |>
+  count(location_code, name = "n_species_site")
+
+
 combi <- apoidea |>
   bind_rows(syrphidae) |>
   filter(
@@ -1381,8 +1391,171 @@ combi <- combi |>
   group_by(sampling_site_method) |>
   mutate(n_species_final = max(cumulative_n_species)) |>
   ungroup() |>
-  mutate(prop = cumulative_n_species / n_species_final)
+  mutate(prop = cumulative_n_species / n_species_final) |>
+  left_join(site_totals) |>
+  select(
+    location_code,
+    sampling_site_method,
+    method_combi,
+    cumulative_days,
+    cumulative_n_species,
+    n_species_final,
+    prop,
+    n_species_site
+  )
 ```
+
+
+### Nieuwe analyse
+
+Alternatief model: cumulatief aantal soorten als responsvariabele en het totaal aantal soorten op een locatie als offset-term.
+Naast een random effect voor pantrap, ook eens een extra random effect voor locatie toegevoegd (de pantraps zijn genest in locatie).
+Dat blijkt, ondanks dat er maar drie levels zijn voor locatie, een betere AIC waarde op te leveren.
+
+```{r}
+model8 <- glmmTMB(cumulative_n_species ~
+                    cumulative_days * method_combi +
+                    (1 | sampling_site_method) + (1 | location_code),
+                  family = poisson(),
+                  offset = log(n_species_site),
+                  data = combi)
+
+model9 <- glmmTMB(cumulative_n_species ~
+                    cumulative_days * method_combi +
+                    (1 | sampling_site_method),
+                  family = poisson(),
+                  offset = log(n_species_site),
+                  data = combi)
+
+AIC(model8, model9)
+
+```
+
+Model validatie:
+
+```{r}
+performance::check_predictions(model8)
+performance::check_overdispersion(model8)
+performance::check_collinearity(model8)
+performance::check_homogeneity(model8)
+performance::check_residuals(model8)
+```
+
+Model parameterschattingen:
+
+```{r}
+model8
+```
+
+Berekening contrasten per methode:
+
+```{r}
+emmeans::emmeans(
+  model8,
+  trt.vs.ctrl1 ~ cumulative_days | method_combi,
+  type = "response",
+  at = list(
+    cumulative_days = c(
+      0.25,
+      1.25,
+      2.25,
+      3.25,
+      4.25,
+      5.25,
+      6.25,
+      7.25,
+      8.25,
+      9.25),
+    n_species_site = round(mean(site_totals$n_species_site), -1)
+    )
+  ) |>
+  confint()
+```
+
+
+Berekening contrasten per dag:
+
+```{r}
+emmeans::emmeans(
+  model8,
+  revpairwise ~ method_combi | cumulative_days,
+  type = "response",
+  at = list(
+    cumulative_days = c(
+      0.25,
+      1.25,
+      2.25,
+      3.25,
+      4.25,
+      5.25,
+      6.25,
+      7.25,
+      8.25,
+      9.25),
+    n_species_site = round(mean(site_totals$n_species_site), -1)
+    )
+  ) |>
+  confint()
+```
+
+
+Voorstelling predicties in figuur \@ref(fig:cns-predictions)
+
+(ref:cns-predictions) Voorspelling van het aantal soorten in functie van het aantal dagen dat een pantrap op dezelfde locatie blijft staan en in functie van het type pantrap. De voorspelling gaat uit van een soortenpoel van `r round(mean(site_totals$n_species_site), -1)` taxa.
+
+```{r cns-predictions, fig.cap="(ref:cns-predictions)"}
+nd <- combi |>
+  distinct(cumulative_days, method_combi) |>
+  complete(cumulative_days, method_combi) |>
+  mutate(
+    n_species_site = round(mean(site_totals$n_species_site), -1)
+  )
+  
+
+pp <- predict(
+  model8,
+  newdata = nd,
+  type = "link",
+  re.form = NA,
+  se.fit = TRUE
+)
+
+pp <- nd %>%
+  mutate(
+    estimate = pp$fit,
+    se = pp$se.fit,
+    conf.low = estimate - 2 * se,
+    conf.high = estimate + 2 * se
+  ) %>%
+  mutate(
+    across(c(estimate, conf.low, conf.high), \(x) exp(x))
+  )
+
+pp |>
+  ggplot() +
+  geom_line(
+    aes(x = cumulative_days, y = estimate, colour = method_combi)
+  ) +
+  geom_ribbon(
+    aes(
+      x = cumulative_days,
+      ymin = conf.low,
+      ymax = conf.high,
+      fill = method_combi),
+    alpha = 0.2
+  ) +
+  scale_x_continuous(
+    breaks = c(0, 2, 4, 6, 8)
+  ) +
+  labs(y = "Predicted number of species",
+       x = "Cumulative days",
+       colour = "Method",
+       fill = "Method")
+```
+
+
+### Vorige analyse
+
 
 ```{r}
 model7 <- glmmTMB(prop ~ cumulative_days * method_combi +
@@ -1391,6 +1564,8 @@ model7 <- glmmTMB(prop ~ cumulative_days * method_combi +
                   weights = n_species_final,
                   data = combi)
 ```
+
+
 
 ```{r}
 # check model assumptions
@@ -1412,6 +1587,7 @@ emmeans::emmeans(model7, trt.vs.ctrl1 ~ cumulative_days,
                                                8.25,
                                                9.25)))
 ```
+
 
 ```{r time-series-wild-bees-hoverflies, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen en zweefvliegen."}
 # plot proportion of species found over time
