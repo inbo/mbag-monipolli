@@ -22,3 +22,11 @@ spelling:
   ignore:
   - .github
   - LICENSE.md
+  - README.md
+  - source/checklist.R
+  other:
+    en-GB:
+    - source/pilot_2024.Rmd
+    - source/power_analyse.Rmd
+    - source/simple_pa.Rmd
+    - source/simple_pa_data2024.Rmd
