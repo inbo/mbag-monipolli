@@ -39,7 +39,7 @@ identifications <- identifications |>
   janitor::clean_names() |>
   as_tibble() |>
   rename(no_ind = "mm_ff") |>
-  mutate(location = substr(sample_code, 1,6),
+  mutate(location = substr(sample_code, 1, 6),
          month = substr(sample_code, 18, 19))
 
 n_ind_per_loc <- identifications |>
@@ -50,7 +50,7 @@ n_ind_per_loc <- identifications |>
 ```
 
 ```{r}
-model1 <- glmer(n_ind ~ month + (1|location),
+model1 <- glmer(n_ind ~ month + (1 | location),
                 family = "poisson",
                 data = n_ind_per_loc)
 summary(model1)
@@ -84,7 +84,7 @@ generate_data <- function(n_locations) {
       data.frame(
         location = loc,
         year = y,
-        month = sample(extra_months, size = 4, replace = TRUE),  # 3 distinct months
+        month = sample(extra_months, size = 4, replace = TRUE),
         stringsAsFactors = FALSE
       )
     }))
@@ -92,7 +92,7 @@ generate_data <- function(n_locations) {
 
   # Combine base and extra data
   full_data <- rbind(base_data, extra_visits)
-  full_data$month <- factor(full_data$month, levels = levels(months))  # ensure consistency
+  full_data$month <- factor(full_data$month, levels = levels(months))
   return(full_data)
 }
 ```
@@ -101,7 +101,7 @@ generate_data <- function(n_locations) {
 
 ```{r}
 # Fixed effects: Intercept, month 6-9, year (placeholder at index 6)
-fixed_base <- c(unname(coef(summary(model1))[,1]), NA)
+fixed_base <- c(unname(coef(summary(model1))[, 1]), NA)
 
 # Random effect variance for location
 rand <- attr(VarCorr(model1)$location, "stddev")
@@ -113,12 +113,12 @@ varcorrmat1 <- list(location = c(rand^2))
 ```{r}
 run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
   data <- generate_data(n_locations)
-  
+
   # Convert percent trend to log scale
   year_slope <- log(1 + year_slope_percent / 100)
   fixed <- fixed_base
   fixed[5] <- year_slope
-  
+
   # Simulated model with defined structure
   model <- makeGlmer(
     formula = n_ind ~ month + year + (1 | location),
@@ -127,9 +127,10 @@ run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
     VarCorr = varcorrmat1,
     data = data
   )
-  
-  test <- powerSim(model, nsim = nsim, test = fixed("year", "z"), progress = FALSE)
-  
+
+  test <- powerSim(model, nsim = nsim, test = fixed("year", "z"),
+                   progress = FALSE)
+
   return(test)
 }
 ```
@@ -159,7 +160,7 @@ for (t in trends) {
 # Print summaries
 power_df <- bind_rows(
   lapply(names(results), function(name) {
-   summary(results[[name]]) |> 
+   summary(results[[name]]) |>
       mutate(trend = str_extract(name, "([0-9]|\\.)+(?=_)"),
              points = as.numeric(str_extract(name, "[0-9]+$"))) |>
       select(trend, points, everything())

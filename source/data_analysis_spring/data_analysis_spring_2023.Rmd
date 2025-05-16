@@ -657,7 +657,7 @@ emmeans::emmeans(model1, pairwise ~ method_combi)
 ```
 
 ```{r pwc-method-taxgroup}
-em <- emmeans::emmeans(model1, pairwise ~ (method_combi|taxgroup))
+em <- emmeans::emmeans(model1, pairwise ~ (method_combi | taxgroup))
 em$contrasts
 ```
 
@@ -706,12 +706,12 @@ pred_spec |>
                               "Pan trap: UV, vegetation",
                               "Transect: visual detection",
                               "Transect: vegetation sweeping")) +
-  geom_signif(comparisons = list(c(1,2),
-                                 c(1,3),
-                                 c(3,4),
-                                 c(3,5),
-                                 c(2,4),
-                                 c(2,5)),
+  geom_signif(comparisons = list(c(1, 2),
+                                 c(1, 3),
+                                 c(3, 4),
+                                 c(3, 5),
+                                 c(2, 4),
+                                 c(2, 5)),
               annotations = c("**", "***",
                               "***", "***",
                               "**", "***"),
@@ -741,10 +741,10 @@ pred_spec |>
                               "Pan trap: UV, vegetation",
                               "Transect: visual detection",
                               "Transect: vegetation sweeping")) +
-  geom_signif(comparisons = list(c(1,2),
-                                 c(1,3),
-                                 c(1,4),
-                                 c(1,5)),
+  geom_signif(comparisons = list(c(1, 2),
+                                 c(1, 3),
+                                 c(1, 4),
+                                 c(1, 5)),
               annotations = c("**", "***",
                               "***", "***"),
               y_position = c(0.3, 0.325, 0.35, 0.375),
@@ -763,7 +763,7 @@ marginaleffects::plot_predictions(
 ```
 
 ```{r pwc-month-taxgroup}
-em <- emmeans::emmeans(model1, pairwise ~ (maand|taxgroup))
+em <- emmeans::emmeans(model1, pairwise ~ (maand | taxgroup))
 em$contrasts
 ```
 
@@ -773,7 +773,7 @@ p <- marginaleffects::plot_predictions(
   condition = c("maand", "taxgroup"),
   type = "response",
   vcov = TRUE,
-  draw = FALSE) 
+  draw = FALSE)
 
 p |>
   filter(taxgroup == "Apoidea") |>
@@ -784,13 +784,13 @@ p |>
     color = "cornflowerblue") +
   labs(x = "Month",
        y = "Number of species") +
-  geom_signif(comparisons = list(c(1,3),
-                                 c(1,5),
-                                 c(2,3),
-                                 c(2,5),
-                                 c(3,4),
-                                 c(3,5),
-                                 c(4,5)),
+  geom_signif(comparisons = list(c(1, 3),
+                                 c(1, 5),
+                                 c(2, 3),
+                                 c(2, 5),
+                                 c(3, 4),
+                                 c(3, 5),
+                                 c(4, 5)),
               annotations = c("***", "**",
                               "***", "***",
                               "***", "***", "***"),
@@ -809,12 +809,12 @@ p |>
     color = "cornflowerblue") +
   labs(x = "Month",
        y = "Number of species") +
-  geom_signif(comparisons = list(c(1,3),
-                                 c(2,3),
-                                 c(2,4),
-                                 c(3,4),
-                                 c(3,5),
-                                 c(4,5)),
+  geom_signif(comparisons = list(c(1, 3),
+                                 c(2, 3),
+                                 c(2, 4),
+                                 c(3, 4),
+                                 c(3, 5),
+                                 c(4, 5)),
               annotations = c("***", "***",
                               "**", "**",
                               "***", "*"),
@@ -878,10 +878,10 @@ pred_ind |>
                               "Pan trap: UV, vegetation",
                               "Transect: visual detection",
                               "Transect: vegetation sweeping")) +
-  geom_signif(comparisons = list(c(1,2),
-                                 c(1,3),
-                                 c(2,5),
-                                 c(3,5)),
+  geom_signif(comparisons = list(c(1, 2),
+                                 c(1, 3),
+                                 c(2, 5),
+                                 c(3, 5)),
               annotations = c("*", "*",
                               "***", "***"),
               y_position = c(1.35, 1.4, 1.45, 1.35),
@@ -909,11 +909,11 @@ pred_ind |>
                               "Pan trap: UV, vegetation",
                               "Transect: visual detection",
                               "Transect: vegetation sweeping")) +
-  geom_signif(comparisons = list(c(1,2),
-                                 c(1,3),
-                                 c(1,4),
-                                 c(1,5),
-                                 c(2,5)),
+  geom_signif(comparisons = list(c(1, 2),
+                                 c(1, 3),
+                                 c(1, 4),
+                                 c(1, 5),
+                                 c(2, 5)),
               annotations = c("**", "***",
                               "***", "***",
                               "**"),
@@ -924,7 +924,7 @@ pred_ind |>
 
 
 ```{r pwc-method-taxgroup-n-ind-zh}
-emmeans::emmeans(model2, pairwise ~ (method_combi|taxgroup))
+emmeans::emmeans(model2, pairwise ~ (method_combi | taxgroup))
 ```
 
 ```{r}
@@ -932,7 +932,7 @@ car::Anova(model2)
 ```
 
 ```{r pwc-month-taxgroup-n-ind}
-em <- emmeans::emmeans(model2, pairwise ~ (maand|taxgroup))
+em <- emmeans::emmeans(model2, pairwise ~ (maand | taxgroup))
 em$contrasts
 ```
 
@@ -942,7 +942,7 @@ p <- marginaleffects::plot_predictions(
   condition = c("maand", "taxgroup"),
   type = "response",
   vcov = TRUE,
-  draw = FALSE) 
+  draw = FALSE)
 
 p |>
   filter(taxgroup == "Apoidea") |>
@@ -953,13 +953,13 @@ p |>
     color = "cornflowerblue") +
   labs(x = "Month",
        y = "Number of species") +
-  geom_signif(comparisons = list(c(1,3),
-                                 c(1,5),
-                                 c(2,3),
-                                 c(2,5),
-                                 c(3,4),
-                                 c(3,5),
-                                 c(4,5)),
+  geom_signif(comparisons = list(c(1, 3),
+                                 c(1, 5),
+                                 c(2, 3),
+                                 c(2, 5),
+                                 c(3, 4),
+                                 c(3, 5),
+                                 c(4, 5)),
               annotations = c("***", "**",
                               "***", "***",
                               "***", "***", "***"),
@@ -978,14 +978,14 @@ p |>
     color = "cornflowerblue") +
   labs(x = "Month",
        y = "Number of species") +
-  geom_signif(comparisons = list(c(1,2),
-                                 c(1,3),
-                                 c(1,5),
-                                 c(2,3),
-                                 c(2,4),
-                                 c(3,4),
-                                 c(3,5),
-                                 c(4,5)),
+  geom_signif(comparisons = list(c(1, 2),
+                                 c(1, 3),
+                                 c(1, 5),
+                                 c(2, 3),
+                                 c(2, 4),
+                                 c(3, 4),
+                                 c(3, 5),
+                                 c(4, 5)),
               annotations = c("*", "**",
                               "**", "***",
                               "**", "***",
@@ -1446,8 +1446,8 @@ Model parameterschattingen:
 summary(model9)
 
 # berekening slopes voor elk method_combi level
-slopes <- emmeans::emtrends(model9, 
-                  specs = "method_combi", 
+slopes <- emmeans::emtrends(model9,
+                  specs = "method_combi",
                   var = "log(cumulative_days)")
 
 # summary voor de slopes
@@ -1549,7 +1549,7 @@ nd <- combi |>
   mutate(
     n_species_site = round(mean(site_totals$n_species_site), -1)
   )
-  
+
 
 pp <- predict(
   model9,
