@@ -1437,18 +1437,30 @@ Model validatie:
 performance::check_predictions(model9)
 performance::check_overdispersion(model9)
 performance::check_collinearity(model9)
-performance::check_homogeneity(
-  model9,
-  method = "bartlett",
-  group = method_combi) |> plot()
 performance::check_residuals(model9)
 ```
 
 Model parameterschattingen:
 
 ```{r}
-model9
+summary(model9)
+
+# berekening slopes voor elk method_combi level
+slopes <- emmeans::emtrends(model9, 
+                  specs = "method_combi", 
+                  var = "log(cumulative_days)")
+
+# summary voor de slopes
+summary(slopes, infer = TRUE)
+
 ```
+
+Test of de verschillen tussen slopes significant zijn
+
+```{r}
+pairs(slopes)
+```
+
 
 Berekening contrasten per methode:
 
@@ -1456,6 +1468,30 @@ Berekening contrasten per methode:
 emmeans::emmeans(
   model9,
   trt.vs.ctrl1 ~ cumulative_days | method_combi,
+  type = "response",
+  at = list(
+    cumulative_days = c(
+      0.25,
+      1.25,
+      2.25,
+      3.25,
+      4.25,
+      5.25,
+      6.25,
+      7.25,
+      8.25,
+      9.25),
+    n_species_site = round(mean(site_totals$n_species_site), -1)
+    )
+  ) |>
+  confint()
+```
+
+
+```{r}
+emmeans::emmeans(
+  model9,
+  consec ~ cumulative_days | method_combi,
   type = "response",
   at = list(
     cumulative_days = c(
