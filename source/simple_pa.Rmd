@@ -35,7 +35,7 @@ At this moment we only have a limited data set to determine our coefficients fro
 # Gemiddeld aantal individuen per soort per locatie
 conn <- odbcConnectAccess2007(
   "G:/Gedeelde drives/PRJ_MBAG/4b_bestuivers/data/SPRING.accdb" # nolint
-  )
+)
 
 identifications <- sqlFetch(conn, "identifications")
 RODBC::odbcClose(conn)
@@ -52,12 +52,16 @@ identifications <- identifications |>
   )
 
 n_ind_per_loc <- identifications |>
-  filter(order == "Lepidoptera" |
-           family %in% c("Apidae", "Andrenidae",
-                          "Colletidae", "Halictidae",
-                          "Melittidae", "Megachilidae",
-                          "Syrphidae"),
-         species_nm != "Apis mellifera Linnaeus, 1758") |>
+  filter(
+    order == "Lepidoptera" |
+      family %in% c(
+        "Apidae", "Andrenidae",
+        "Colletidae", "Halictidae",
+        "Melittidae", "Megachilidae",
+        "Syrphidae"
+      ),
+    species_nm != "Apis mellifera Linnaeus, 1758"
+  ) |>
   group_by(sample_code) |>
   summarise(n_ind = sum(no_ind, na.rm = TRUE))
 ```
@@ -65,14 +69,17 @@ n_ind_per_loc <- identifications |>
 ```{r}
 test_data <- n_ind_per_loc |>
   filter(str_detect(sample_code, ".+_TS.+")) |>
-  mutate(month = substr(sample_code, 20, 20),
-         location = substr(sample_code, 1, 8))
+  mutate(
+    month = substr(sample_code, 20, 20),
+    location = substr(sample_code, 1, 8)
+  )
 ```
 
 ```{r}
 model1 <- glmer(n_ind ~ month + (1 | location),
-                family = "poisson",
-                data = test_data)
+  family = "poisson",
+  data = test_data
+)
 summary(model1)
 
 attr(VarCorr(model1)$location, "stddev")
@@ -86,7 +93,7 @@ generate_data <- function(n_locations) {
   # Design variables
   years <- as.numeric(1:6)
   months <- as.factor(5:9)
-  extra_months <- as.factor(5:8)  # extra visits only allowed in months 5–8
+  extra_months <- as.factor(5:8) # extra visits only allowed in months 5–8
   locs <- paste0("loc_", 1:n_locations)
 
   # Base: 1 visit per month per year per location
@@ -148,8 +155,10 @@ run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
     data = data
   )
 
-  test <- powerSim(model, nsim = nsim, test = fixed("year", "z"),
-                   progress = FALSE)
+  test <- powerSim(model,
+    nsim = nsim, test = fixed("year", "z"),
+    progress = FALSE
+  )
 
   return(test)
 }
@@ -180,9 +189,11 @@ for (t in trends) {
 # Print summaries
 power_df <- bind_rows(
   lapply(names(results), function(name) {
-   summary(results[[name]]) |>
-      mutate(trend = str_extract(name, "([0-9]|\\.)+(?=_)"),
-             points = as.numeric(str_extract(name, "[0-9]+$"))) |>
+    summary(results[[name]]) |>
+      mutate(
+        trend = str_extract(name, "([0-9]|\\.)+(?=_)"),
+        points = as.numeric(str_extract(name, "[0-9]+$"))
+      ) |>
       select(trend, points, everything())
   })
 )
@@ -198,15 +209,20 @@ library(ggplot2)
 ggplot(power_df, aes(x = points, y = mean, color = trend)) +
   geom_line(size = 1.2) +
   geom_ribbon(aes(ymin = lower, ymax = upper, fill = trend, colour = NULL),
-              alpha = 0.1) +
+    alpha = 0.1
+  ) +
   geom_point() +
-  geom_hline(yintercept = 0.8,
-             linetype = 2,
-             color = "darkgrey") +
+  geom_hline(
+    yintercept = 0.8,
+    linetype = 2,
+    color = "darkgrey"
+  ) +
   scale_y_continuous(limits = c(0, 1)) +
-  labs(title = "Power to Detect Yearly Trends",
-       x = "Number of Locations",
-       y = "Power") +
+  labs(
+    title = "Power to Detect Yearly Trends",
+    x = "Number of Locations",
+    y = "Power"
+  ) +
   theme_minimal()
 ```
 

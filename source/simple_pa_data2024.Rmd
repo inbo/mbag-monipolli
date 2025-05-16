@@ -33,26 +33,32 @@ At this moment we only have a limited data set to determine our coefficients fro
 
 ```{r gegevens 2024}
 identifications <- read_excel(here("data", "zandstreek_2024.xlsx"),
-                              sheet = "identifications")
+  sheet = "identifications"
+)
 
 identifications <- identifications |>
   janitor::clean_names() |>
   as_tibble() |>
   rename(no_ind = "mm_ff") |>
-  mutate(location = substr(sample_code, 1, 6),
-         month = substr(sample_code, 18, 19))
+  mutate(
+    location = substr(sample_code, 1, 6),
+    month = substr(sample_code, 18, 19)
+  )
 
 n_ind_per_loc <- identifications |>
-  filter(species_nm != "Apis mellifera",
-         str_detect(sample_code, ".+_TS.+")) |>
+  filter(
+    species_nm != "Apis mellifera",
+    str_detect(sample_code, ".+_TS.+")
+  ) |>
   group_by(location, month) |>
   summarise(n_ind = sum(no_ind, na.rm = TRUE))
 ```
 
 ```{r}
 model1 <- glmer(n_ind ~ month + (1 | location),
-                family = "poisson",
-                data = n_ind_per_loc)
+  family = "poisson",
+  data = n_ind_per_loc
+)
 summary(model1)
 
 attr(VarCorr(model1)$location, "stddev")
@@ -66,7 +72,7 @@ generate_data <- function(n_locations) {
   # Design variables
   years <- as.numeric(1:6)
   months <- as.factor(6:9)
-  extra_months <- as.factor(6:8)  # extra visits only allowed in months 5–8
+  extra_months <- as.factor(6:8) # extra visits only allowed in months 5–8
   locs <- paste0("loc_", 1:n_locations)
 
   # Base: 1 visit per month per year per location
@@ -128,8 +134,10 @@ run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
     data = data
   )
 
-  test <- powerSim(model, nsim = nsim, test = fixed("year", "z"),
-                   progress = FALSE)
+  test <- powerSim(model,
+    nsim = nsim, test = fixed("year", "z"),
+    progress = FALSE
+  )
 
   return(test)
 }
@@ -160,9 +168,11 @@ for (t in trends) {
 # Print summaries
 power_df <- bind_rows(
   lapply(names(results), function(name) {
-   summary(results[[name]]) |>
-      mutate(trend = str_extract(name, "([0-9]|\\.)+(?=_)"),
-             points = as.numeric(str_extract(name, "[0-9]+$"))) |>
+    summary(results[[name]]) |>
+      mutate(
+        trend = str_extract(name, "([0-9]|\\.)+(?=_)"),
+        points = as.numeric(str_extract(name, "[0-9]+$"))
+      ) |>
       select(trend, points, everything())
   })
 )
@@ -178,15 +188,20 @@ library(ggplot2)
 ggplot(power_df, aes(x = points, y = mean, color = trend)) +
   geom_line(size = 1.2) +
   geom_ribbon(aes(ymin = lower, ymax = upper, fill = trend, colour = NULL),
-              alpha = 0.1) +
+    alpha = 0.1
+  ) +
   geom_point() +
-  geom_hline(yintercept = 0.8,
-             linetype = 2,
-             color = "darkgrey") +
+  geom_hline(
+    yintercept = 0.8,
+    linetype = 2,
+    color = "darkgrey"
+  ) +
   scale_y_continuous(limits = c(0, 1)) +
-  labs(title = "Power to Detect Yearly Trends",
-       x = "Number of Locations",
-       y = "Power") +
+  labs(
+    title = "Power to Detect Yearly Trends",
+    x = "Number of Locations",
+    y = "Power"
+  ) +
   theme_minimal()
 ```
 
@@ -194,9 +209,11 @@ ggplot(power_df, aes(x = points, y = mean, color = trend)) +
 
 ```{r}
 n_ind_per_loc <- identifications |>
-  filter(order == "Apoidea",
-         species_nm != "Apis mellifera",
-         str_detect(sample_code, ".+_TS.+")) |>
+  filter(
+    order == "Apoidea",
+    species_nm != "Apis mellifera",
+    str_detect(sample_code, ".+_TS.+")
+  ) |>
   group_by(location, month) |>
   summarise(n_ind = sum(no_ind, na.rm = TRUE))
 ```
