@@ -33,6 +33,7 @@ library(purrr)
 library(lubridate)
 library(stringr)
 library(googlesheets4)
+library(ggsignif)
 
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
@@ -109,7 +110,7 @@ Van de eerste twee tabellen wordt een versimpelde versie gemaakt.
 ```{r load-data}
 conn <- odbcConnectAccess2007(
   "G:/Gedeelde drives/PRJ_MBAG/4b_bestuivers/data/SPRING.accdb" # nolint
-  )
+)
 
 identifications <- sqlFetch(conn, "identifications")
 samples <- sqlFetch(conn, "samples")
@@ -136,11 +137,15 @@ samples <- samples |>
   mutate(
     date_b = lubridate::as_date(date_b),
     date_e = lubridate::as_date(date_e),
-    spring_code = ifelse(spring_code == "MP",
-                       ifelse(method_cd == "TS",
-                              "SWEEP",
-                              "NO-UV"),
-                       spring_code)
+    spring_code = ifelse(
+      spring_code == "MP",
+      ifelse(
+        method_cd == "TS",
+        "SWEEP",
+        "NO-UV"
+      ),
+      spring_code
+    )
   )
 
 sampling_sites <- sampling_sites |>
@@ -249,18 +254,18 @@ identifications_basic <- identifications_basic |>
 Er werden 5 verschillende monitoringsmethoden getest:
 
 -   2 transecttypen. Een transect beslaat 500 m en is verdeeld in 10 secties:
-    -   SPRING s.s.: waargenomen of op het zicht verzameld (TS - s.s.)
-    -   MP: verzameld via het afslepen van de vegetatie of bodem (TS - MP)
+-   SPRING s.s.: waargenomen of op het zicht verzameld (TS - s.s.)
+-   MP: verzameld via het afslepen van de vegetatie of bodem (TS - MP)
 -   3 pan traps opstellingen. Één pan trap sample is de gecombineerde vangst van één pan trap unit bestaande uit één blauwe, één witte en één gele val. Per transect worden steeds 10 units geplaatst, dus één per sectie:
-    -   UV-reflecterende pan traps op vegetatiehoogte geplaatst (PT - s.s.)
-    -   identieke samenstelling maar op de bodem geplaatst (PT - SSL)
-    -   niet-UV-reflecterende pan trap unit (wat grotere valtypes), zowel op vegetatiehoogte als op de bodem (PT - MP)
+-   UV-reflecterende pan traps op vegetatiehoogte geplaatst (PT - s.s.)
+-   identieke samenstelling maar op de bodem geplaatst (PT - SSL)
+-   niet-UV-reflecterende pan trap unit (wat grotere valtypes), zowel op vegetatiehoogte als op de bodem (PT - MP)
 
 Deze methoden werden op drie verschillende locaties getest:
 
- -   BE_MVS01: Proefterrein ILVO 
- -   BE_MVS02: Natuurgebied Bourgoyen-Ossemeersen in Gent 
- -   BE_MVS03: Natuurgebied Den Dotter in Haaltert
+-   BE_MVS01: Proefterrein ILVO 
+-   BE_MVS02: Natuurgebied Bourgoyen-Ossemeersen in Gent 
+-   BE_MVS03: Natuurgebied Den Dotter in Haaltert
 
 Op locatie 1 werd op vraag van ILVO een 11de pan trap geplaatst, deze werd, buiten het algemeen overzicht van het aantal soorten, niet meegenomen in de analyses.
 
@@ -458,13 +463,17 @@ identifications_basic |>
 ## Aantallen per soort
 
 ```{r species-num, results="asis"}
-cat("<table><table width=100%>",
-    paste0("<caption>",
-           "(#tab:species-num)",
-           "Aantal individuen per soort.",
-           "</caption>"),
-    "</table>",
-    sep = "\n")
+cat(
+  "<table><table width=100%>",
+  paste0(
+    "<caption>",
+    "(#tab:species-num)",
+    "Aantal individuen per soort.",
+    "</caption>"
+  ),
+  "</table>",
+  sep = "\n"
+)
 
 identifications |>
   group_by(order, family, species_nm) |>
@@ -489,8 +498,7 @@ purrr::pmap(
     ),
     group = c("apoidea", "syrphidae")
   ),
-  function(
-      title = title, group = group, familyvec = familyvec) {
+  function(title = title, group = group, familyvec = familyvec) {
     knit_expand(
       "_verkenning.Rmd",
       title = title,
@@ -582,8 +590,8 @@ ggplot(data_sp_rich_spring) +
 model0 <- glmmTMB(
   n_species ~
     (location_code
-    + maand
-      + method_cd) * taxgroup,
+     + maand
+     + method_cd) * taxgroup,
   family = "poisson",
   ziformula = ~taxgroup,
   na.action = na.fail,
@@ -629,11 +637,11 @@ Interactie tussen uv en hoogte van plaatsing kan niet onderzocht worden omdat er
 
 ```{r}
 model1 <- glmmTMB(
-  n_species ~
-    (method_combi
+  n_species ~ (
+    method_combi
     + location_code
-      + maand
-    ) * taxgroup,
+    + maand
+  ) * taxgroup,
   ziformula = ~taxgroup,
   family = "poisson",
   na.action = na.exclude,
@@ -656,7 +664,8 @@ emmeans::emmeans(model1, pairwise ~ method_combi)
 ```
 
 ```{r pwc-method-taxgroup}
-emmeans::emmeans(model1, pairwise ~ method_combi * taxgroup)
+em <- emmeans::emmeans(model1, pairwise ~ (method_combi | taxgroup))
+em$contrasts
 ```
 
 ```{r pwc-location}
@@ -671,8 +680,8 @@ emmeans::emmeans(model1, pairwise ~ location_code * taxgroup)
 performance::check_model(model1)
 ```
 
-```{r, fig.cap = "Verwacht aantal soorten in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
-marginaleffects::plot_predictions(
+```{r, fig.cap = "Verwacht aantal soorten wilde bijen in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
+pred_spec <- marginaleffects::plot_predictions(
   model1,
   condition = c("method_combi", "taxgroup"),
   type = "response",
@@ -683,17 +692,102 @@ marginaleffects::plot_predictions(
     data_sp_rich |>
       distinct(method_cd, spring_code, uv, level, method_combi, taxgroup)
   ) |>
-  as_tibble() |>
-  ggplot() +
+  as_tibble()
+
+pred_spec |>
+  filter(taxgroup == "Apoidea") |>
+  ggplot(aes(
+    x = method_combi,
+    y = estimate,
+    group = method_combi
+  )) +
   geom_pointrange(
     aes(
-      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
-      colour = method_combi
+      ymin = conf.low,
+      ymax = conf.high
     ),
+    color = "cornflowerblue",
     position = position_dodge(width = 0.5)
   ) +
-  labs(y = "Soortenrijkdom") +
-  facet_wrap(~taxgroup, scales = "free")
+  labs(
+    y = "Number of species",
+    x = NULL
+  ) +
+  scale_x_discrete(
+    guide = guide_axis(n.dodge = 2),
+    labels = c(
+      "Pan trap: Non-UV, soil surface",
+      "Pan trap: UV, soil surface",
+      "Pan trap: UV, vegetation",
+      "Transect: visual detection",
+      "Transect: vegetation sweeping"
+    )
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 2),
+      c(1, 3),
+      c(3, 4),
+      c(3, 5),
+      c(2, 4),
+      c(2, 5)
+    ),
+    annotations = c(
+      "**", "***",
+      "***", "***",
+      "**", "***"
+    ),
+    y_position = c(1, 1.05, 1, 1.1, 1.15, 1.2),
+    tip_length = 0.01,
+    vjust = 0.5
+  )
+```
+
+```{r, fig.cap = "Verwacht aantal soorten zweefvliegen in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
+pred_spec |>
+  filter(taxgroup == "Syrphidae") |>
+  ggplot(aes(
+    x = method_combi,
+    y = estimate,
+    group = method_combi
+  )) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue",
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(
+    y = "Number of species",
+    x = NULL
+  ) +
+  scale_x_discrete(
+    guide = guide_axis(n.dodge = 2),
+    labels = c(
+      "Pan trap: Non-UV, soil surface",
+      "Pan trap: UV, soil surface",
+      "Pan trap: UV, vegetation",
+      "Transect: visual detection",
+      "Transect: vegetation sweeping"
+    )
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 2),
+      c(1, 3),
+      c(1, 4),
+      c(1, 5)
+    ),
+    annotations = c(
+      "**", "***",
+      "***", "***"
+    ),
+    y_position = c(0.3, 0.325, 0.35, 0.375),
+    tip_length = 0.01,
+    vjust = 0.5
+  )
 ```
 
 ```{r, fig.cap = "Kans op een nulwaarneming in een pantrap-set of transectsegment van 50 m per soortgroep op basis van ons model."}
@@ -704,6 +798,90 @@ marginaleffects::plot_predictions(
   vcov = TRUE
 ) +
   ylab("Probability of having zero species")
+```
+
+```{r pwc-month-taxgroup}
+em <- emmeans::emmeans(model1, pairwise ~ (maand | taxgroup))
+em$contrasts
+```
+
+```{r, fig.cap = "Verwacht aantal soorten wilde bijen in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
+p <- marginaleffects::plot_predictions(
+  model1,
+  condition = c("maand", "taxgroup"),
+  type = "response",
+  vcov = TRUE,
+  draw = FALSE
+)
+
+p |>
+  filter(taxgroup == "Apoidea") |>
+  ggplot(aes(x = maand, y = estimate)) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue"
+  ) +
+  labs(
+    x = "Month",
+    y = "Number of species"
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 3),
+      c(1, 5),
+      c(2, 3),
+      c(2, 5),
+      c(3, 4),
+      c(3, 5),
+      c(4, 5)
+    ),
+    annotations = c(
+      "***", "**",
+      "***", "***",
+      "***", "***", "***"
+    ),
+    y_position = c(2.1, 2.25, 2, 2.2, 2.05, 2.15, 2),
+    tip_length = 0.01,
+    vjust = 0.65
+  )
+```
+
+```{r, fig.cap = "Verwacht aantal soorten zweefvliegen in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
+p |>
+  filter(taxgroup == "Syrphidae") |>
+  ggplot(aes(x = maand, y = estimate)) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue"
+  ) +
+  labs(
+    x = "Month",
+    y = "Number of species"
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 3),
+      c(2, 3),
+      c(2, 4),
+      c(3, 4),
+      c(3, 5),
+      c(4, 5)
+    ),
+    annotations = c(
+      "***", "***",
+      "**", "**",
+      "***", "*"
+    ),
+    y_position = c(1.15, 1, 1.2, 1.05, 1.25, 1.1),
+    tip_length = 0.01,
+    vjust = 0.65
+  )
 ```
 
 ## Aantal individuen
@@ -728,8 +906,8 @@ performance::check_overdispersion(model2)
 performance::check_predictions(model2)
 ```
 
-```{r, fig.cap = "Verwacht aantal individuen (zonder honingbijen) in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
-marginaleffects::plot_predictions(
+```{r, fig.cap = "Verwacht aantal individuen wilde bijen (zonder honingbijen) in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
+pred_ind <- marginaleffects::plot_predictions(
   model2,
   condition = c("method_combi", "taxgroup"),
   type = "response",
@@ -740,29 +918,198 @@ marginaleffects::plot_predictions(
     data_sp_rich |>
       distinct(method_cd, spring_code, uv, level, method_combi, taxgroup)
   ) |>
-  as_tibble() |>
-  ggplot() +
+  as_tibble()
+
+pred_ind |>
+  filter(taxgroup == "Apoidea") |>
+  ggplot(aes(
+    x = method_combi,
+    y = estimate,
+    group = method_combi
+  )) +
   geom_pointrange(
     aes(
-      x = method_cd, y = estimate, ymin = conf.low, ymax = conf.high,
-      colour = method_combi
+      ymin = conf.low,
+      ymax = conf.high
     ),
+    color = "cornflowerblue",
     position = position_dodge(width = 0.5)
   ) +
-  labs(y = "Number of individuals (without Apis mellifera)",
-       x = "",
-       colour = "") +
-  facet_wrap(~taxgroup, scales = "free")
+  labs(
+    y = "Number of species",
+    x = NULL
+  ) +
+  scale_x_discrete(
+    guide = guide_axis(n.dodge = 2),
+    labels = c(
+      "Pan trap: Non-UV, soil surface",
+      "Pan trap: UV, soil surface",
+      "Pan trap: UV, vegetation",
+      "Transect: visual detection",
+      "Transect: vegetation sweeping"
+    )
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 2),
+      c(1, 3),
+      c(2, 5),
+      c(3, 5)
+    ),
+    annotations = c(
+      "*", "*",
+      "***", "***"
+    ),
+    y_position = c(1.35, 1.4, 1.45, 1.35),
+    tip_length = 0.01,
+    vjust = 0.5
+  )
 ```
 
+```{r, fig.cap = "Verwacht aantal individuen zweefvliegen in een pantrap-set of transectsegment van 50 m per soortgroep en methode op basis van ons model."}
+pred_ind |>
+  filter(taxgroup == "Syrphidae") |>
+  ggplot(aes(
+    x = method_combi,
+    y = estimate,
+    group = method_combi
+  )) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue",
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(
+    y = "Number of species",
+    x = NULL
+  ) +
+  scale_x_discrete(
+    guide = guide_axis(n.dodge = 2),
+    labels = c(
+      "Pan trap: Non-UV, soil surface",
+      "Pan trap: UV, soil surface",
+      "Pan trap: UV, vegetation",
+      "Transect: visual detection",
+      "Transect: vegetation sweeping"
+    )
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 2),
+      c(1, 3),
+      c(1, 4),
+      c(1, 5),
+      c(2, 5)
+    ),
+    annotations = c(
+      "**", "***",
+      "***", "***",
+      "**"
+    ),
+    y_position = c(0.46, 0.50, 0.52, 0.54, 0.48),
+    tip_length = 0.01,
+    vjust = 0.5
+  )
+```
+
+
 ```{r pwc-method-taxgroup-n-ind-zh}
-emmeans::emmeans(model2, pairwise ~ method_combi * taxgroup)
+emmeans::emmeans(model2, pairwise ~ (method_combi | taxgroup))
 ```
 
 ```{r}
 car::Anova(model2)
 ```
 
+```{r pwc-month-taxgroup-n-ind}
+em <- emmeans::emmeans(model2, pairwise ~ (maand | taxgroup))
+em$contrasts
+```
+
+```{r, fig.cap = "Verwacht aantal individuen wilde bijen in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
+p <- marginaleffects::plot_predictions(
+  model2,
+  condition = c("maand", "taxgroup"),
+  type = "response",
+  vcov = TRUE,
+  draw = FALSE
+)
+
+p |>
+  filter(taxgroup == "Apoidea") |>
+  ggplot(aes(x = maand, y = estimate)) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue"
+  ) +
+  labs(
+    x = "Month",
+    y = "Number of species"
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 3),
+      c(1, 5),
+      c(2, 3),
+      c(2, 5),
+      c(3, 4),
+      c(3, 5),
+      c(4, 5)
+    ),
+    annotations = c(
+      "***", "**",
+      "***", "***",
+      "***", "***", "***"
+    ),
+    y_position = c(3.4, 3.7, 3.2, 3.6, 3.3, 3.5, 3.4),
+    tip_length = 0.01,
+    vjust = 0.65
+  )
+```
+
+```{r, fig.cap = "Verwacht aantal individuen zweefvliegen in een pantrap-set of transectsegment van 50 m per maand en soortgroep op basis van ons model."}
+p |>
+  filter(taxgroup == "Syrphidae") |>
+  ggplot(aes(x = maand, y = estimate)) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue"
+  ) +
+  labs(
+    x = "Month",
+    y = "Number of species"
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 2),
+      c(1, 3),
+      c(1, 5),
+      c(2, 3),
+      c(2, 4),
+      c(3, 4),
+      c(3, 5),
+      c(4, 5)
+    ),
+    annotations = c(
+      "*", "**",
+      "**", "***",
+      "**", "***",
+      "***", "***"
+    ),
+    y_position = c(1.6, 1.7, 1.85, 1.65, 1.75, 1.6, 1.8, 1.65),
+    tip_length = 0.01,
+    vjust = 0.65
+  )
+```
 
 ## Alpha biodiversiteit
 
@@ -810,7 +1157,7 @@ ggplot(sha, aes(x = exp_sh)) +
 model3 <- glmmTMB(
   exp_sh ~
     (method_combi +
-      location_code) * taxgroup,
+       location_code) * taxgroup,
   family = "Gamma",
   ziformula = ~taxgroup,
   na.action = na.fail,
@@ -839,23 +1186,33 @@ marginaleffects::plot_predictions(
 
 ```{r}
 flowers <- readr::read_csv2("../../data/number_of_flowers.csv") |>
-   janitor::clean_names()
+  janitor::clean_names()
 
 flowers <- flowers |>
-  left_join(apoidea_richness |>
-              select(n_ind_ap = n_ind,
-                     sample_code),
-            by = join_by(sampling_site_cd == sample_code)) |>
-  left_join(syrphidae_richness |>
-              select(n_ind_syr = n_ind,
-                     sample_code),
-            by = join_by(sampling_site_cd == sample_code))
+  left_join(
+    apoidea_richness |>
+      select(
+        n_ind_ap = n_ind,
+        sample_code
+      ),
+    by = join_by(sampling_site_cd == sample_code)
+  ) |>
+  left_join(
+    syrphidae_richness |>
+      select(
+        n_ind_syr = n_ind,
+        sample_code
+      ),
+    by = join_by(sampling_site_cd == sample_code)
+  )
 
 flowers <- flowers |>
-  pivot_longer(cols = starts_with("n_ind"),
-               names_prefix = "n_ind_",
-               names_to = "group",
-               values_to = "n_ind")
+  pivot_longer(
+    cols = starts_with("n_ind"),
+    names_prefix = "n_ind_",
+    names_to = "group",
+    values_to = "n_ind"
+  )
 ```
 
 ### visuele verkenning
@@ -871,14 +1228,16 @@ flowers |>
 
 ```{r}
 flowers <- flowers |>
-  mutate(location_code = str_sub(sampling_site_cd, start = 1L, end = 8L),
-         maand = str_sub(sampling_site_cd, start = 20L, end = 20L))
+  mutate(
+    location_code = str_sub(sampling_site_cd, start = 1L, end = 8L),
+    maand = str_sub(sampling_site_cd, start = 20L, end = 20L)
+  )
 ```
 
 ```{r}
 model4 <- glmmTMB(
   n_ind ~ (log(number_of_floral_units + 1) + location_code + maand) * group,
-  ziformula = ~ group,
+  ziformula = ~group,
   family = "nbinom2",
   na.action = na.exclude,
   data = flowers
@@ -887,10 +1246,13 @@ model4 <- glmmTMB(
 
 ```{r}
 summary(model4)
-```
 
-```{r}
-emmeans::emmeans(model4, ~log(number_of_floral_units + 1) * group, infer = TRUE)
+emmeans::emmeans(
+  model4,
+  ~ log(number_of_floral_units + 1) * group,
+  infer = TRUE
+)
+emmeans::emtrends(model4, ~group, var = "number_of_floral_units")
 
 car::Anova(model4)
 ```
@@ -904,7 +1266,9 @@ nd <- data.frame(
   number_of_floral_units = seq(
     from = min(flowers$number_of_floral_units),
     to = max(flowers$number_of_floral_units),
-    length.out = 100)) |>
+    length.out = 100
+  )
+) |>
   expand_grid(
     data.frame(
       group = c("ap", "syr"),
@@ -917,7 +1281,8 @@ predictions <- predict(
   model4,
   newdata = nd,
   type = "link",
-  se.fit = TRUE)
+  se.fit = TRUE
+)
 
 # Add predictions and confidence intervals to the new data frame
 new_data <- nd %>%
@@ -930,21 +1295,28 @@ new_data <- nd %>%
 # Plot the data and model fit
 new_data |>
   ggplot(aes(x = number_of_floral_units, y = predicted)) +
-  geom_line(aes(colour = group),
-            linewidth = 1) +
-  geom_ribbon(aes(ymin = lower, ymax = upper, fill = group),
-              alpha = 0.2) +
+  geom_line(
+    aes(colour = group),
+    linewidth = 1
+  ) +
+  geom_ribbon(
+    aes(ymin = lower, ymax = upper, fill = group),
+    alpha = 0.2
+  ) +
   labs(x = "Number of flowering units", y = "Number of individuals") +
   theme_minimal() +
-  scale_x_continuous(trans = "log1p",
-                     breaks = c(1, 5, 10, 50, 100, 500, 1000, 5000, 10000)) +
-  scale_colour_manual(values = c("darkgreen", "gold"),
-                       labels = c("Apoidea", "Syrpidae")) +
-  scale_fill_manual(values = c("darkgreen", "gold"),
-                     labels = c("Apoidea", "Syrpidae"))
-
-
-
+  scale_x_continuous(
+    trans = "log1p",
+    breaks = c(1, 5, 10, 50, 100, 500, 1000, 5000, 10000)
+  ) +
+  scale_colour_manual(
+    values = c("darkgreen", "gold"),
+    labels = c("Apoidea", "Syrpidae")
+  ) +
+  scale_fill_manual(
+    values = c("darkgreen", "gold"),
+    labels = c("Apoidea", "Syrpidae")
+  )
 ```
 
 # Analyse tijdsreeksen
@@ -957,7 +1329,9 @@ new_data |>
 apoidea_cumulative <- apoidea_cumulative |>
   mutate(
     sampling_site_method = paste0(
-      sampling_site_cd, "_", spring_code)) |>
+      sampling_site_cd, "_", spring_code
+    )
+  ) |>
   group_by(sampling_site_method) |>
   mutate(n_species_final = max(cumulative_n_species)) |>
   ungroup() |>
@@ -965,11 +1339,13 @@ apoidea_cumulative <- apoidea_cumulative |>
 ```
 
 ```{r}
-model5 <- glmmTMB(prop ~ cumulative_days * method_combi +
-                    (1 | sampling_site_method),
-                  family = binomial,
-                  weights = n_species_final,
-                  data = apoidea_cumulative)
+model5 <- glmmTMB(
+  prop ~ log(cumulative_days) * method_combi +
+    (1 | sampling_site_method),
+  family = binomial,
+  weights = n_species_final,
+  data = apoidea_cumulative
+)
 ```
 
 ```{r}
@@ -983,18 +1359,25 @@ car::Anova(model5)
 
 Verwacht percentage van de "totale" gemeenschap dat gevonden wordt voor het aantal dagen dat pan traps geplaatst worden:
 ```{r}
-emmeans::emmeans(model5, trt.vs.ctrl1 ~ cumulative_days,
-                 type = "response",
-                 at = list(cumulative_days = c(0.25,
-                                               1.25,
-                                               2.25,
-                                               3.25,
-                                               4.25,
-                                               5.25,
-                                               6.25,
-                                               7.25,
-                                               8.25,
-                                               9.25)))
+emm <- emmeans::emmeans(
+  model5,
+  pairwise ~ cumulative_days,
+  type = "response",
+  at = list(cumulative_days = c(
+    0.25,
+    1.25,
+    2.25,
+    3.25,
+    4.25,
+    5.25,
+    6.25,
+    7.25,
+    8.25,
+    9.25
+  ))
+)
+
+confint(emm$contrasts, adjust = "sidak")
 ```
 
 ```{r time-series-wild-bees, fig.cap = "Proportie soorten gevonden over tijd voor wilde bijen."}
@@ -1023,12 +1406,14 @@ pp |>
       x = cumulative_days,
       ymin = lower,
       ymax = upper,
-      fill = method_combi),
+      fill = method_combi
+    ),
     alpha = 0.2
   ) +
-  labs(y = "Proportion of species found",
-       x = "Cumulative days")
-
+  labs(
+    y = "Proportion of species found",
+    x = "Cumulative days"
+  )
 ```
 
 ## Zweefvliegen
@@ -1039,7 +1424,9 @@ pp |>
 syrphidae_cumulative <- syrphidae_cumulative |>
   mutate(
     sampling_site_method = paste0(
-      sampling_site_cd, "_", spring_code)) |>
+      sampling_site_cd, "_", spring_code
+    )
+  ) |>
   group_by(sampling_site_method) |>
   mutate(n_species_final = max(cumulative_n_species)) |>
   ungroup() |>
@@ -1047,11 +1434,13 @@ syrphidae_cumulative <- syrphidae_cumulative |>
 ```
 
 ```{r}
-model6 <- glmmTMB(prop ~ cumulative_days * method_combi +
-                    (1 | sampling_site_method),
-                  family = binomial,
-                  weights = n_species_final,
-                  data = syrphidae_cumulative)
+model6 <- glmmTMB(
+  prop ~ cumulative_days * method_combi +
+    (1 | sampling_site_method),
+  family = binomial,
+  weights = n_species_final,
+  data = syrphidae_cumulative
+)
 ```
 
 ```{r}
@@ -1061,18 +1450,23 @@ performance::check_model(model6)
 
 Verwacht percentage van de "totale" gemeenschap dat gevonden wordt voor het aantal dagen dat pan traps geplaatst worden:
 ```{r}
-emmeans::emmeans(model6, trt.vs.ctrl1 ~ cumulative_days,
-                 type = "response",
-                 at = list(cumulative_days = c(0.25,
-                                               1.25,
-                                               2.25,
-                                               3.25,
-                                               4.25,
-                                               5.25,
-                                               6.25,
-                                               7.25,
-                                               8.25,
-                                               9.25)))
+emmeans::emmeans(
+  model6,
+  trt.vs.ctrl1 ~ cumulative_days,
+  type = "response",
+  at = list(cumulative_days = c(
+    0.25,
+    1.25,
+    2.25,
+    3.25,
+    4.25,
+    5.25,
+    6.25,
+    7.25,
+    8.25,
+    9.25
+  ))
+)
 ```
 
 ```{r time-series-hoverflies, fig.cap = "Proportie soorten gevonden over tijd voor zweefvliegen."}
@@ -1102,12 +1496,14 @@ pp |>
       x = cumulative_days,
       ymin = lower,
       ymax = upper,
-      fill = method_combi),
+      fill = method_combi
+    ),
     alpha = 0.2
   ) +
-  labs(y = "Proportion of species found",
-       x = "Cumulative days")
-
+  labs(
+    y = "Proportion of species found",
+    x = "Cumulative days"
+  )
 ```
 
 ## Beide groepen
@@ -1143,7 +1539,9 @@ combi <- apoidea |>
   mutate(
     duration = ifelse(duration == 0, 6 / 24, duration),
     accumulated_species_list = accumulate(
-      species_list, union, .simplify = FALSE),
+      species_list, union,
+      .simplify = FALSE
+    ),
     cumulative_n_species = map_dbl(accumulated_species_list, length),
     cumulative_days = cumsum(duration),
     extra_n_species = cumulative_n_species - dplyr::first(cumulative_n_species),
@@ -1155,7 +1553,9 @@ combi <- apoidea |>
 combi <- combi |>
   mutate(
     sampling_site_method = paste0(
-      sampling_site_cd, "_", spring_code)) |>
+      sampling_site_cd, "_", spring_code
+    )
+  ) |>
   group_by(sampling_site_method) |>
   mutate(n_species_final = max(cumulative_n_species)) |>
   ungroup() |>
@@ -1181,45 +1581,64 @@ Naast een random effect voor pantrap, ook eens een extra random effect voor loca
 Dat blijkt, ondanks dat er maar drie levels zijn voor locatie, een betere AIC waarde op te leveren.
 
 ```{r}
-model8 <- glmmTMB(cumulative_n_species ~
-                    cumulative_days * method_combi +
-                    (1 | sampling_site_method) + (1 | location_code),
-                  family = poisson(),
-                  offset = log(n_species_site),
-                  data = combi)
+model8 <- glmmTMB(
+  cumulative_n_species ~
+    log(cumulative_days) * method_combi +
+      (1 | sampling_site_method) + (1 | location_code),
+  family = poisson(),
+  offset = log(n_species_site),
+  data = combi
+)
 
-model9 <- glmmTMB(cumulative_n_species ~
-                    cumulative_days * method_combi +
-                    (1 | sampling_site_method),
-                  family = poisson(),
-                  offset = log(n_species_site),
-                  data = combi)
+model9 <- glmmTMB(
+  cumulative_n_species ~
+    log(cumulative_days) * method_combi +
+      (1 | sampling_site_method),
+  family = poisson(),
+  offset = log(n_species_site),
+  data = combi
+)
 
 AIC(model8, model9)
-
 ```
 
 Model validatie:
 
 ```{r}
-performance::check_predictions(model8)
-performance::check_overdispersion(model8)
-performance::check_collinearity(model8)
-performance::check_homogeneity(model8)
-performance::check_residuals(model8)
+performance::check_predictions(model9)
+performance::check_overdispersion(model9)
+performance::check_collinearity(model9)
+performance::check_residuals(model9)
 ```
 
 Model parameterschattingen:
 
 ```{r}
-model8
+summary(model9)
+
+# berekening slopes voor elk method_combi level
+slopes <- emmeans::emtrends(
+  model9,
+  specs = "method_combi",
+  var = "log(cumulative_days)"
+)
+
+# summary voor de slopes
+summary(slopes, infer = TRUE)
 ```
+
+Test of de verschillen tussen slopes significant zijn
+
+```{r}
+pairs(slopes)
+```
+
 
 Berekening contrasten per methode:
 
 ```{r}
 emmeans::emmeans(
-  model8,
+  model9,
   trt.vs.ctrl1 ~ cumulative_days | method_combi,
   type = "response",
   at = list(
@@ -1233,10 +1652,36 @@ emmeans::emmeans(
       6.25,
       7.25,
       8.25,
-      9.25),
+      9.25
+    ),
     n_species_site = round(mean(site_totals$n_species_site), -1)
-    )
-  ) |>
+  )
+) |>
+  confint()
+```
+
+
+```{r}
+emmeans::emmeans(
+  model9,
+  consec ~ cumulative_days | method_combi,
+  type = "response",
+  at = list(
+    cumulative_days = c(
+      0.25,
+      1.25,
+      2.25,
+      3.25,
+      4.25,
+      5.25,
+      6.25,
+      7.25,
+      8.25,
+      9.25
+    ),
+    n_species_site = round(mean(site_totals$n_species_site), -1)
+  )
+) |>
   confint()
 ```
 
@@ -1245,7 +1690,7 @@ Berekening contrasten per dag:
 
 ```{r}
 emmeans::emmeans(
-  model8,
+  model9,
   revpairwise ~ method_combi | cumulative_days,
   type = "response",
   at = list(
@@ -1259,10 +1704,11 @@ emmeans::emmeans(
       6.25,
       7.25,
       8.25,
-      9.25),
+      9.25
+    ),
     n_species_site = round(mean(site_totals$n_species_site), -1)
-    )
-  ) |>
+  )
+) |>
   confint()
 ```
 
@@ -1278,10 +1724,10 @@ nd <- combi |>
   mutate(
     n_species_site = round(mean(site_totals$n_species_site), -1)
   )
-  
+
 
 pp <- predict(
-  model8,
+  model9,
   newdata = nd,
   type = "link",
   re.form = NA,
@@ -1309,16 +1755,19 @@ pp |>
       x = cumulative_days,
       ymin = conf.low,
       ymax = conf.high,
-      fill = method_combi),
+      fill = method_combi
+    ),
     alpha = 0.2
   ) +
   scale_x_continuous(
     breaks = c(0, 2, 4, 6, 8)
   ) +
-  labs(y = "Predicted number of species",
-       x = "Cumulative days",
-       colour = "Method",
-       fill = "Method")
+  labs(
+    y = "Predicted number of species",
+    x = "Cumulative days",
+    colour = "Method",
+    fill = "Method"
+  )
 ```
 
 
@@ -1326,11 +1775,13 @@ pp |>
 
 
 ```{r}
-model7 <- glmmTMB(prop ~ cumulative_days * method_combi +
-                    (1 | sampling_site_method),
-                  family = binomial,
-                  weights = n_species_final,
-                  data = combi)
+model7 <- glmmTMB(
+  prop ~ cumulative_days * method_combi +
+    (1 | sampling_site_method),
+  family = binomial,
+  weights = n_species_final,
+  data = combi
+)
 ```
 
 
@@ -1342,18 +1793,23 @@ performance::check_model(model7)
 
 Verwacht percentage van de "totale" gemeenschap dat gevonden wordt voor het aantal dagen dat pan traps geplaatst worden:
 ```{r}
-emmeans::emmeans(model7, trt.vs.ctrl1 ~ cumulative_days,
-                 type = "response",
-                 at = list(cumulative_days = c(0.25,
-                                               1.25,
-                                               2.25,
-                                               3.25,
-                                               4.25,
-                                               5.25,
-                                               6.25,
-                                               7.25,
-                                               8.25,
-                                               9.25)))
+emmeans::emmeans(
+  model7,
+  trt.vs.ctrl1 ~ cumulative_days,
+  type = "response",
+  at = list(cumulative_days = c(
+    0.25,
+    1.25,
+    2.25,
+    3.25,
+    4.25,
+    5.25,
+    6.25,
+    7.25,
+    8.25,
+    9.25
+  ))
+)
 ```
 
 
@@ -1384,12 +1840,14 @@ pp |>
       x = cumulative_days,
       ymin = lower,
       ymax = upper,
-      fill = method_combi),
+      fill = method_combi
+    ),
     alpha = 0.2
   ) +
-  labs(y = "Proportion of species found",
-       x = "Cumulative days")
-
+  labs(
+    y = "Proportion of species found",
+    x = "Cumulative days"
+  )
 ```
 
 # Kosten
@@ -1461,11 +1919,11 @@ Variabele kosten pan traps:
 ```{r}
 time_data |>
   filter(methode == "PT") |>
-  add_row(cost_data |> filter(!is.na(submethode)) |>  # nolint: pipe_continuation_linter, line_length_linter.
-    select(
-      Activiteit = Kostencategorie, methode,
-      submethode, prijs
-    )) |>
+  add_row(
+    cost_data |>
+      filter(!is.na(submethode)) |>
+      select(Activiteit = Kostencategorie, methode, submethode, prijs)
+  ) |>
   arrange(submethode) |>
   kableExtra::kable(digits = 2)
 ```
@@ -1480,25 +1938,23 @@ time_data |>
 
 ## Scenario's
 
-Als we 650 meetpunten éénmaal zouden bezoeken dan zou ons dit `r round(verpl) * 650` euro aan kilometervergoeding kosten en `r round(verpl_tijd * loon_verpl) * 650` euro aan personeelskosten.
-
 Als we één pan trap s.s. (uv - vegetatie) per locatie zouden plaatsen zouden we volgende kosten hebben:
 
 ```{r}
 pt_ss <- time_data |>
   filter(methode == "PT", submethode == "s.s.") |>
-  add_row(cost_data |> filter(submethode == "s.s.") |>   # nolint: pipe_continuation_linter, line_length_linter.
-    select(
-      Activiteit = Kostencategorie, methode,
-      submethode, prijs
-    )) |>
-  mutate(prijs_alle_punten = prijs * 650)
+  add_row(
+    cost_data |>
+      filter(submethode == "s.s.") |>
+      select(Activiteit = Kostencategorie, methode, submethode, prijs)
+  ) |>
+  mutate(prijs_per_locatie = prijs)
 
 pt_ss |>
   kableExtra::kable(digits = 0)
 ```
 
-De prijs zou als volgt toenemen (verplaatsingskost niet meegerekend) wanneer we 1 tot 5 pan traps plaatsen gedurende 1 tot 7 maanden en dit voor 650 locaties:
+De prijs per locatie zou als volgt toenemen (verplaatsingskost niet meegerekend) wanneer we 1 tot 5 pan traps plaatsen gedurende 1 tot 7 maanden:
 
 ```{r}
 pantraps <- c(1:5)
@@ -1514,12 +1970,12 @@ testset <- data.frame(matrix(
 for (i in maanden) {
   for (j in pantraps) {
     x <- pt_ss[c(1, 4), ] |>
-      mutate(berekening = prijs_alle_punten * j) |>
+      mutate(berekening = prijs * j) |>
       summarise(m = sum(berekening)) |>
       pull(m)
 
     y <- pt_ss[c(2, 3), ] |>
-      mutate(berekening = prijs_alle_punten * i * j) |>
+      mutate(berekening = prijs * i * j) |>
       summarise(n = sum(berekening)) |>
       pull(n)
 
@@ -1531,27 +1987,26 @@ testset |>
   kableExtra::kable(digits = 0, row.names = TRUE)
 ```
 
-Als we twee pan traps s.s.(uv - vegetatie) en twee pan traps SSL (uv - bodem) zouden plaatsen zouden de prijzen als volgt zijn voor 1 tot 7 verschillende maanden monitoring van 650 locaties:
+Als we twee pan traps s.s.(uv - vegetatie) en twee pan traps SSL (uv - bodem) zouden plaatsen zouden de prijs per locatie als volgt zijn voor 1 tot 7 verschillende maanden monitoring:
 
 ```{r}
 pt_ssl <- time_data |>
   filter(methode == "PT", submethode == "SSL") |>
-  add_row(cost_data |> filter(submethode == "SSL") |>   # nolint: pipe_continuation_linter, line_length_linter.
-    select(
-      Activiteit = Kostencategorie, methode,
-      submethode, prijs
-    )) |>
-  mutate(prijs_alle_punten = prijs * 650)
+  add_row(
+    cost_data |>
+      filter(submethode == "SSL") |>
+      select(activiteit = Kostencategorie, methode, submethode, prijs)
+  )
 
 testset2 <- c(NA)
 
 for (i in maanden) {
   x <- pt_ssl[c(4), ] |>
-    mutate(m = prijs_alle_punten * 2) |>
+    mutate(m = prijs * 2) |>
     pull(m)
 
   y <- pt_ssl[c(2, 3), ] |>
-    mutate(berekening = prijs_alle_punten * i * 2) |>
+    mutate(berekening = prijs * i * 2) |>
     summarise(n = sum(berekening)) |>
     pull(n)
 
@@ -1562,12 +2017,12 @@ data.frame("tww_ss_twee_SSL" = testset$`2` + testset2) |>
   kableExtra::kable(digits = 0, row.names = TRUE)
 ```
 
-Als we één transect s.s. (geen sweeping) van 250 m per locatie zouden lopen zouden we volgende kosten hebben voor 650 punten:
+Als we één transect s.s. (geen sweeping) van 250 m per locatie zouden lopen zouden we volgende kosten hebben per locatie:
 
 ```{r}
 ts_ss <- time_data |>
   filter(methode == "TS", submethode == "s.s.") |>
-  mutate(prijs_alle_punten_250 = prijs * 650 * 5)
+  mutate(prijs_per_locatie = prijs * 5)
 
 ts_ss |>
   kableExtra::kable(digits = 0)
@@ -1575,33 +2030,33 @@ ts_ss |>
 
 Laat ons tot slot twee volledige scenario's met elkaar vergelijken:
 
-650 locaties met twee pan traps s.s. (uv - vegetatie) en twee pantraps SSL (uv - bodem) die drie maal per jaar een week in het veld worden gelaten. Daarnaast wordt ook elke keer een transect van 250 m gelopen.
+Per locatie: twee pan traps s.s. (uv - vegetatie) en twee pantraps SSL (uv - bodem) die drie maal per jaar een week in het veld worden gelaten. Daarnaast wordt ook elke keer een transect van 250 m gelopen.
 
 1: dit gebeurt door veldwerkers met manuele identificatie
 
 -   Verplaatsingskosten:
 
-    -   Kilometervergoeding: `r round(verpl * 650 * 6)` euro
-    -   Loonkost: `r round(verpl_tijd * loon_verpl * 650 * 6)` euro
+-   Kilometervergoeding: `r round(verpl * 6)` euro
+-   Loonkost: `r round(verpl_tijd * loon_verpl * 6)` euro
 
--   Aankopen, plaatsen, inzamelen en uitsorteren van 2 pan traps s.s. en 2 pan traps SSL op drie momenten: 354359 euro
+-   Aankopen, plaatsen, inzamelen en uitsorteren van 2 pan traps s.s. en 2 pan traps SSL op drie momenten: 545 euro per locatie
 
--   Transect lopen en uitsorteren op drie momenten: 74577 euro
+-   Transect lopen en uitsorteren op drie momenten: 115 euro per locatie
 
--   Identificeren van soorten: `r round(iden_cost * 9 * 650 * 3)` euro
+-   Identificeren van soorten: `r round(iden_cost * 9 * 3)` euro
 
--   Totale kost: 1 220 161 euro per jaar
+-   Totale kost: 1877 euro per jaar per locatie
 
 2: dit gebeurt door vrijwilligers met metabarcoding (geen aantallen individuen, alle samples worden samengevoegd per locatie)
 
 -   Verplaatsingskosten: 0 euro
 
--   Aankopen pan traps: 7800 euro
+-   Aankopen pan traps: 12 euro per locatie
 
 -   Transect lopen: 0 euro
 
--   Identificeren van soorten: 45500 euro
+-   Identificeren van soorten: 70 euro per locatie
 
--   Totale kost: 53 300 euro per jaar
+-   Totale kost: 82 euro per jaar per locatie
 
 Beide scenario's vereisen een senior wetenschapper die het project opvolgt en een coördinator die het veldwerk aanstuurt, wel kan er vanuit worden gegaan dat deze coördinator meer werk zou hebben met vrijwilligers. Voorlopig ben ik van een metabarcoding kost van 70 euro per staal uit gegaan, vermoedelijk komt hier nog werk voor een bioinformaticus aan te pas.

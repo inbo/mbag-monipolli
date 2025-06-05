@@ -1,0 +1,216 @@
+---
+title: "Super simple power analysis for 2024 data"
+author: "Emma Cartuyvels"
+date: "2025-05-05"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+# Intro
+
+In this document I attempt to make a simple simulation and power analysis using the simr package.
+
+We use the following model:
+$$
+n = m + y + (1|l)
+$$
+With $n$ being the number of individuals, $m$ the month, $y$ the year and $l$ the location.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(here)
+library(tidyverse)
+library(simr)
+```
+
+# Information from SPRING experiment
+
+At this moment we only have a limited data set to determine our coefficients from.
+
+```{r gegevens 2024}
+identifications <- read_excel(here("data", "zandstreek_2024.xlsx"),
+  sheet = "identifications"
+)
+
+identifications <- identifications |>
+  janitor::clean_names() |>
+  as_tibble() |>
+  rename(no_ind = "mm_ff") |>
+  mutate(
+    location = substr(sample_code, 1, 6),
+    month = substr(sample_code, 18, 19)
+  )
+
+n_ind_per_loc <- identifications |>
+  filter(
+    species_nm != "Apis mellifera",
+    str_detect(sample_code, ".+_TS.+")
+  ) |>
+  group_by(location, month) |>
+  summarise(n_ind = sum(no_ind, na.rm = TRUE)) |>
+  # correct for shorter transects compared to proposed protocol
+  mutate(n_ind = n_ind * 7)
+```
+
+```{r}
+model1 <- glmer(n_ind ~ month + (1 | location),
+  family = "poisson",
+  data = n_ind_per_loc
+)
+summary(model1)
+
+attr(VarCorr(model1)$location, "stddev")
+```
+```{r}
+emmeans::emmeans(model1, ~month)
+```
+
+## Design Setup
+
+```{r}
+# Define design variables
+generate_data <- function(n_locations) {
+  # Design variables
+  years <- as.numeric(1:6)
+  months <- as.factor(4:9)
+  locs <- paste0("loc_", 1:n_locations)
+
+  # Base: 1 visit per month per year per location
+  data <- expand.grid(
+    location = locs,
+    year = years,
+    month = months,
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  )
+
+  data$month <- factor(data$month, levels = levels(months))
+  return(data)
+}
+```
+
+## Model Specification
+
+```{r}
+# Fixed effects: Intercept, month 6-9, year (placeholder at index 7)
+fixed_base <- c(0.991, 0,
+                unname(coef(summary(model1))[1, 1]) - 0.991,
+                unname(coef(summary(model1))[2:4, 1]),
+                NA)
+
+# Random effect variance for location
+rand <- attr(VarCorr(model1)$location, "stddev")
+varcorrmat1 <- list(location = c(rand^2))
+```
+
+## Power Analysis Function
+
+```{r}
+run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
+  data <- generate_data(n_locations)
+
+  # Convert percent trend to log scale
+  year_slope <- log(1 + year_slope_percent / 100)
+  fixed <- fixed_base
+  fixed[7] <- year_slope
+
+  # Simulated model with defined structure
+  model <- makeGlmer(
+    formula = n_ind ~ month + year + (1 | location),
+    family = poisson,
+    fixef = fixed,
+    VarCorr = varcorrmat1,
+    data = data
+  )
+
+  test <- powerSim(model,
+    nsim = nsim, test = fixed("year", "z"),
+    progress = FALSE
+  )
+
+  return(test)
+}
+```
+
+## Run Power Simulations
+
+```{r}
+# Define trends and locations
+trends <- c(1, 2)
+locations <- c(seq(10, 100, 10), 125, 150, 175, 200)
+
+# Run all combinations
+results <- list()
+
+for (t in trends) {
+  for (l in locations) {
+    message(sprintf("Running trend %.1f%% with %d locations", t, l))
+    result <- run_power_analysis(t, l, nsim = 25)
+    results[[paste0("trend", t, "_loc", l)]] <- result
+  }
+}
+```
+
+## Summarize Results
+
+```{r}
+# Print summaries
+power_df <- bind_rows(
+  lapply(names(results), function(name) {
+    summary(results[[name]]) |>
+      mutate(
+        trend = str_extract(name, "([0-9]|\\.)+(?=_)"),
+        points = as.numeric(str_extract(name, "[0-9]+$"))
+      ) |>
+      select(trend, points, everything())
+  })
+)
+
+power_df
+```
+
+## Extract and Plot Power Results
+
+```{r}
+# Plot power curve
+library(ggplot2)
+ggplot(power_df, aes(x = points, y = mean, color = trend)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = trend, colour = NULL),
+    alpha = 0.1
+  ) +
+  geom_point() +
+  geom_hline(
+    yintercept = 0.8,
+    linetype = 2,
+    color = "darkgrey"
+  ) +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(
+    title = "Power to Detect Yearly Trends",
+    x = "Number of Locations",
+    y = "Power"
+  ) +
+  theme_minimal()
+```
+
+# Wild bees
+
+```{r}
+n_ind_per_loc <- identifications |>
+  filter(
+    order == "Apoidea",
+    species_nm != "Apis mellifera",
+    str_detect(sample_code, ".+_TS.+")
+  ) |>
+  group_by(location, month) |>
+  summarise(n_ind = sum(no_ind, na.rm = TRUE))
+```
+
+
+
+
