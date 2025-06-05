@@ -85,6 +85,11 @@ summary(model1)
 attr(VarCorr(model1)$location, "stddev")
 ```
 
+```{r}
+emmeans::emmeans(model1, ~ month)
+```
+
+
 ## Design Setup
 
 ```{r}

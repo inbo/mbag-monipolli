@@ -51,7 +51,9 @@ n_ind_per_loc <- identifications |>
     str_detect(sample_code, ".+_TS.+")
   ) |>
   group_by(location, month) |>
-  summarise(n_ind = sum(no_ind, na.rm = TRUE))
+  summarise(n_ind = sum(no_ind, na.rm = TRUE)) |>
+  # correct for shorter transects compared to proposed protocol
+  mutate(n_ind = n_ind * 7)
 ```
 
 ```{r}
@@ -63,6 +65,9 @@ summary(model1)
 
 attr(VarCorr(model1)$location, "stddev")
 ```
+```{r}
+emmeans::emmeans(model1, ~month)
+```
 
 ## Design Setup
 
@@ -71,12 +76,11 @@ attr(VarCorr(model1)$location, "stddev")
 generate_data <- function(n_locations) {
   # Design variables
   years <- as.numeric(1:6)
-  months <- as.factor(6:9)
-  extra_months <- as.factor(6:8) # extra visits only allowed in months 5–8
+  months <- as.factor(4:9)
   locs <- paste0("loc_", 1:n_locations)
 
   # Base: 1 visit per month per year per location
-  base_data <- expand.grid(
+  data <- expand.grid(
     location = locs,
     year = years,
     month = months,
@@ -84,30 +88,19 @@ generate_data <- function(n_locations) {
     stringsAsFactors = FALSE
   )
 
-  # Add 3 extra visits per location per year in months 5–8
-  extra_visits <- do.call(rbind, lapply(locs, function(loc) {
-    do.call(rbind, lapply(years, function(y) {
-      data.frame(
-        location = loc,
-        year = y,
-        month = sample(extra_months, size = 4, replace = TRUE),
-        stringsAsFactors = FALSE
-      )
-    }))
-  }))
-
-  # Combine base and extra data
-  full_data <- rbind(base_data, extra_visits)
-  full_data$month <- factor(full_data$month, levels = levels(months))
-  return(full_data)
+  data$month <- factor(data$month, levels = levels(months))
+  return(data)
 }
 ```
 
 ## Model Specification
 
 ```{r}
-# Fixed effects: Intercept, month 6-9, year (placeholder at index 6)
-fixed_base <- c(unname(coef(summary(model1))[, 1]), NA)
+# Fixed effects: Intercept, month 6-9, year (placeholder at index 7)
+fixed_base <- c(0.991, 0,
+                unname(coef(summary(model1))[1, 1]) - 0.991,
+                unname(coef(summary(model1))[2:4, 1]),
+                NA)
 
 # Random effect variance for location
 rand <- attr(VarCorr(model1)$location, "stddev")
@@ -123,7 +116,7 @@ run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
   # Convert percent trend to log scale
   year_slope <- log(1 + year_slope_percent / 100)
   fixed <- fixed_base
-  fixed[5] <- year_slope
+  fixed[7] <- year_slope
 
   # Simulated model with defined structure
   model <- makeGlmer(
@@ -147,8 +140,8 @@ run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
 
 ```{r}
 # Define trends and locations
-trends <- c(0.3, 1, 2)
-locations <- c(50, 100, 200, 500)
+trends <- c(1, 2)
+locations <- c(seq(10, 100, 10), 125, 150, 175, 200)
 
 # Run all combinations
 results <- list()
@@ -156,7 +149,7 @@ results <- list()
 for (t in trends) {
   for (l in locations) {
     message(sprintf("Running trend %.1f%% with %d locations", t, l))
-    result <- run_power_analysis(t, l, nsim = 50)
+    result <- run_power_analysis(t, l, nsim = 25)
     results[[paste0("trend", t, "_loc", l)]] <- result
   }
 }
