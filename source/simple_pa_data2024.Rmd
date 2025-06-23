@@ -53,6 +53,7 @@ n_ind_per_loc <- identifications |>
   group_by(location, month) |>
   summarise(n_ind = sum(no_ind, na.rm = TRUE)) |>
   # correct for shorter transects compared to proposed protocol
+  # length new transects / length old transects = (1500 * 3) / (160 * 4) ~= 7
   mutate(n_ind = n_ind * 7)
 ```
 
@@ -97,8 +98,8 @@ generate_data <- function(n_locations) {
 
 ```{r}
 # Fixed effects: Intercept, month 6-9, year (placeholder at index 7)
-fixed_base <- c(0.991, 0,
-                unname(coef(summary(model1))[1, 1]) - 0.991,
+fixed_base <- c(2.077, 0,
+                unname(coef(summary(model1))[1, 1]) - 2.077,
                 unname(coef(summary(model1))[2:4, 1]),
                 NA)
 
@@ -149,7 +150,7 @@ results <- list()
 for (t in trends) {
   for (l in locations) {
     message(sprintf("Running trend %.1f%% with %d locations", t, l))
-    result <- run_power_analysis(t, l, nsim = 25)
+    result <- run_power_analysis(t, l, nsim = 1000)
     results[[paste0("trend", t, "_loc", l)]] <- result
   }
 }
