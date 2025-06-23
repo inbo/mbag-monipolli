@@ -1,0 +1,182 @@
+---
+title: "Explorative analyses 2024 data"
+author: "Emma Cartuyvels"
+format: 
+  html:
+    code-fold: true
+    toc: true
+    toc_float: true
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r set-up}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+
+library(readxl)
+library(here)
+library(sf)
+library(tidyverse)
+library(VennDiagram)
+library(INBOtheme)
+
+conflicted::conflicts_prefer(dplyr::filter)
+```
+
+```{r read data}
+#| warning: false
+identifications <- read_excel(here("data", "zandstreek_2024.xlsx"),
+  sheet = "identifications"
+)
+
+samples <- read_excel(here("data", "zandstreek_2024.xlsx"),
+  sheet = "samples"
+)
+
+locations <- read_excel(here("data", "zandstreek_2024.xlsx"),
+  sheet = "locations-localities"
+)
+```
+
+```{r read point data}
+locations <- locations |>
+  mutate(pointid = str_extract(location_nm, "Zn_.*")) |>
+  select(location_id, location_code, Crops, pointid)
+
+punten <- read_sf(here("data", "punten_2024.shp")) |>
+  left_join(locations, by = "pointid") |>
+  separate_wider_delim(opnhd_s,
+                       names = c("openheid", "beheer"),
+                       delim = " ",
+                       too_many = "merge")
+```
+
+We filteren de data om enkel wilde bijen over te houden, dus geen honingbijen.
+
+```{r clean data}
+identifications <- identifications |>
+  janitor::clean_names() |>
+  select(sample_id, sample_code, method,
+         order, species_nm, n_ind = mm_ff) |>
+  mutate(n_ind = ifelse(
+    is.na(n_ind),
+    0,
+    n_ind)
+  ) |>
+  filter(species_nm != "Apis mellifera")
+
+samples <- samples |>
+  select(-c(monitored_by, `Number of flowers (2m diameter)`, remarks))
+
+# Do a full join to include samples without individuals
+dat_2024 <- identifications |>
+  left_join(samples, by = "sample_id")
+```
+
+# Proefopzet
+
+Er werden 40 punten gemonitord, allen gelegen in landbouwgebied in de zandstreek. 20 punten lagen op plaatsen zonder beheermaatregelen en 20 punten op plaatsen met beheermaatregelen. Op elk punt werden elke maand 4 transecten van 160m gelopen: 2x voor wilde bijen en zweefvliegen en 2x voor vlinders. Op elke locatie werden ook 4 sets kleurvallen opgesteld, twee op vegetatie niveau en twee op grond niveau. Deze kleurvallen werden steeds drie dagen in het veld gelaten.
+
+# Data verkenning
+
+## Transecten vs pan traps
+
+```{r number of spec pt vs ts}
+ts <- dat_2024 |>
+  #filter(order == "Apoidea") |>
+  filter(method_cd == "TS") |>
+  distinct(species_nm) |>
+  drop_na() |>
+  pull()
+
+pt <- dat_2024 |>
+  #filter(order == "Apoidea") |>
+  filter(method_cd == "PT") |>
+  distinct(species_nm) |>
+  drop_na() |>
+  pull()
+
+
+venn.diagram(list(TS = ts, PT = pt),
+             filename = "ts_vs_pt.png")
+```
+
+![Aantal unieke soorten in pan traps (PT) en transecten (TS).](ts_vs_pt.png)
+
+```{r number of ind pt vs ts}
+dat_2024 |>
+  ggplot(aes(x = method, y = n_ind)) +
+  geom_bar(stat = "identity")
+```
+
+## Binnen beheerplan vs buiten beheerplan
+
+```{r}
+beheer_data <- dat_2024 |>
+  left_join(punten, by = "location_code")
+```
+
+```{r}
+buiten <- beheer_data |>
+  #filter(order == "Apoidea") |>
+  filter(beheer == "buiten plan") |>
+  distinct(species_nm) |>
+  drop_na() |>
+  pull()
+
+binnen <- beheer_data |>
+  #filter(order == "Apoidea") |>
+  filter(beheer == "binnen plan") |>
+  distinct(species_nm) |>
+  drop_na() |>
+  pull()
+
+
+venn.diagram(list(`Buiten beheerplan` = buiten,
+                  `Binnen beheerplan` = binnen),
+             filename = "buiten_vs_binnen.png")
+```
+
+```{r}
+beheer_data |>
+  ggplot(aes(x = beheer, y = n_ind)) +
+  geom_bar(stat = "identity")
+```
+
+## Open vs halfopen landschap
+
+```{r}
+open <- beheer_data |>
+  #filter(order == "Apoidea") |>
+  filter(openheid == "OL") |>
+  distinct(species_nm) |>
+  drop_na() |>
+  pull()
+
+halfopen <- beheer_data |>
+  #filter(order == "Apoidea") |>
+  filter(openheid == "HOL") |>
+  distinct(species_nm) |>
+  drop_na() |>
+  pull()
+
+
+venn.diagram(list(`Open landschap` = open,
+                  `Halfopen landschap` = halfopen),
+             filename = "open_vs_halfopen.png")
+```
+
+```{r}
+beheer_data |>
+  ggplot(aes(x = openheid, y = n_ind)) +
+  geom_bar(stat = "identity")
+```
+
+
+
+
+
+
+
