@@ -18,8 +18,9 @@ knitr::opts_chunk$set(message = FALSE,
 library(readxl)
 library(here)
 library(sf)
+library(ggvenn)
+library(cowplot)
 library(tidyverse)
-library(VennDiagram)
 library(INBOtheme)
 
 conflicted::conflicts_prefer(dplyr::filter)
@@ -81,29 +82,52 @@ Er werden 40 punten gemonitord, allen gelegen in landbouwgebied in de zandstreek
 
 # Data verkenning
 
+```{r}
+venn <- function(data, group,
+                 count_id = "species_nm",
+                 order_list = c("Apoidea", "Syrpidae", "Lepidoptera")) {
+  groups <- data |>
+    filter(!is.na(!!sym(group))) |>
+    distinct(!!sym(group)) |>
+    pull(!!sym(group))
+
+  x <- vector(mode = "list", length = length(groups))
+  x <- setNames(x, groups)
+
+  for (i in groups) {
+    int <- data |>
+      filter(
+        order %in% order_list,
+        !!sym(group) == i
+      ) |>
+      distinct(!!sym(count_id)) |>
+      filter(!is.na(!!sym(count_id))) |>
+      pull(!!sym(count_id))
+    x[[i]] <- int
+  }
+
+  ggvenn(x,
+         fill_color = inbo_palette(),
+         set_name_size = 3,
+         stroke_size = NULL,
+         auto_scale = TRUE)
+}
+```
+
 ## Transecten vs pan traps
 
 ```{r number of spec pt vs ts}
-ts <- dat_2024 |>
-  #filter(order == "Apoidea") |>
-  filter(method_cd == "TS") |>
-  distinct(species_nm) |>
-  drop_na() |>
-  pull()
+p1 <- venn(dat_2024, "method_cd")
 
-pt <- dat_2024 |>
-  #filter(order == "Apoidea") |>
-  filter(method_cd == "PT") |>
-  distinct(species_nm) |>
-  drop_na() |>
-  pull()
+p2 <- venn(dat_2024, "method_cd", order_list = "Apoidea")
 
+p3 <- venn(dat_2024, "method_cd", order_list = "Syrpidae")
 
-venn.diagram(list(TS = ts, PT = pt),
-             filename = "ts_vs_pt.png")
+p4 <- venn(dat_2024, "method_cd", order_list = "Lepidoptera")
+
+plot_grid(p1, p2, p3, p4,
+          labels = c("AUTO"))
 ```
-
-![Aantal unieke soorten in pan traps (PT) en transecten (TS).](ts_vs_pt.png)
 
 ```{r number of ind pt vs ts}
 dat_2024 |>
@@ -119,24 +143,16 @@ beheer_data <- dat_2024 |>
 ```
 
 ```{r}
-buiten <- beheer_data |>
-  #filter(order == "Apoidea") |>
-  filter(beheer == "buiten plan") |>
-  distinct(species_nm) |>
-  drop_na() |>
-  pull()
+p1 <- venn(beheer_data, "beheer")
 
-binnen <- beheer_data |>
-  #filter(order == "Apoidea") |>
-  filter(beheer == "binnen plan") |>
-  distinct(species_nm) |>
-  drop_na() |>
-  pull()
+p2 <- venn(beheer_data, "beheer", order_list = "Apoidea")
 
+p3 <- venn(beheer_data, "beheer", order_list = "Syrpidae")
 
-venn.diagram(list(`Buiten beheerplan` = buiten,
-                  `Binnen beheerplan` = binnen),
-             filename = "buiten_vs_binnen.png")
+p4 <- venn(beheer_data, "beheer", order_list = "Lepidoptera")
+
+plot_grid(p1, p2, p3, p4,
+          labels = c("AUTO"))
 ```
 
 ```{r}
@@ -148,24 +164,16 @@ beheer_data |>
 ## Open vs halfopen landschap
 
 ```{r}
-open <- beheer_data |>
-  #filter(order == "Apoidea") |>
-  filter(openheid == "OL") |>
-  distinct(species_nm) |>
-  drop_na() |>
-  pull()
+p1 <- venn(beheer_data, "openheid")
 
-halfopen <- beheer_data |>
-  #filter(order == "Apoidea") |>
-  filter(openheid == "HOL") |>
-  distinct(species_nm) |>
-  drop_na() |>
-  pull()
+p2 <- venn(beheer_data, "openheid", order_list = "Apoidea")
 
+p3 <- venn(beheer_data, "openheid", order_list = "Syrpidae")
 
-venn.diagram(list(`Open landschap` = open,
-                  `Halfopen landschap` = halfopen),
-             filename = "open_vs_halfopen.png")
+p4 <- venn(beheer_data, "openheid", order_list = "Lepidoptera")
+
+plot_grid(p1, p2, p3, p4,
+          labels = c("AUTO"))
 ```
 
 ```{r}
@@ -173,10 +181,3 @@ beheer_data |>
   ggplot(aes(x = openheid, y = n_ind)) +
   geom_bar(stat = "identity")
 ```
-
-
-
-
-
-
-
