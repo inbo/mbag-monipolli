@@ -12,6 +12,9 @@ editor_options:
 ---
 
 ```{r set-up}
+#| results: hide
+#| message: false
+#| warning: false
 knitr::opts_chunk$set(message = FALSE,
                       warning = FALSE)
 
@@ -20,6 +23,7 @@ library(here)
 library(sf)
 library(ggvenn)
 library(cowplot)
+library(glmmTMB)
 library(tidyverse)
 library(INBOtheme)
 
@@ -27,7 +31,6 @@ conflicted::conflicts_prefer(dplyr::filter)
 ```
 
 ```{r read data}
-#| warning: false
 identifications <- read_excel(here("data", "zandstreek_2024.xlsx"),
   sheet = "identifications"
 )
@@ -46,12 +49,13 @@ locations <- locations |>
   mutate(pointid = str_extract(location_nm, "Zn_.*")) |>
   select(location_id, location_code, Crops, pointid)
 
-punten <- read_sf(here("data", "punten_2024.shp")) |>
-  left_join(locations, by = "pointid") |>
-  separate_wider_delim(opnhd_s,
+punten <- read_sf(here("data", "steekproef_zandstreek_avimap.gpkg")) |>
+  right_join(locations, by = "pointid") |>
+  separate_wider_delim(openheid_sbp,
                        names = c("openheid", "beheer"),
                        delim = " ",
-                       too_many = "merge")
+                       too_many = "merge",
+                       cols_remove = FALSE)
 ```
 
 We filteren de data om enkel wilde bijen over te houden, dus geen honingbijen.
@@ -73,12 +77,26 @@ samples <- samples |>
 
 # Do a full join to include samples without individuals
 dat_2024 <- identifications |>
-  left_join(samples, by = "sample_id")
+  full_join(samples, by = "sample_id") |>
+  mutate(n_ind = ifelse(
+    is.na(n_ind),
+    0,
+    n_ind)
+  ) |>
+  filter(!is.na(date_b))
 ```
 
 # Proefopzet
 
-Er werden 40 punten gemonitord, allen gelegen in landbouwgebied in de zandstreek. 20 punten lagen op plaatsen zonder beheermaatregelen en 20 punten op plaatsen met beheermaatregelen. Op elk punt werden elke maand 4 transecten van 160m gelopen: 2x voor wilde bijen en zweefvliegen en 2x voor vlinders. Op elke locatie werden ook 4 sets kleurvallen opgesteld, twee op vegetatie niveau en twee op grond niveau. Deze kleurvallen werden steeds drie dagen in het veld gelaten.
+Er werden 40 punten gemonitord, allen gelegen in landbouwgebied in de zandstreek. De punten werden gestratificeerd op open versus halfopen landschap en punten met beheermaatregelen en zonder beheermaatregelen.
+
+Op elke locatie werden 4 sets kleurvallen opgesteld, twee op vegetatie niveau en twee op grond niveau. Deze kleurvallen werden elke maand voor drie dagen in het veld gelaten. Bij de start en einde van die drie dagen werden steeds 2 transecten van 160m gelopen: één voor wilde bijen en zweefvliegen en één voor vlinders. Dit levert een totaal van 4 transecten per maand.
+
+```{r}
+mapview::mapview(st_as_sf(punten),
+                 zcol = "openheid_sbp",
+                 layer.name = "Stratificatie")
+```
 
 # Data verkenning
 
@@ -117,6 +135,8 @@ venn <- function(data, group,
 ## Transecten vs pan traps
 
 ```{r number of spec pt vs ts}
+#| label: pt-ts-venn
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in transecten (TS) versus in kleurvallen (PT), voor A) alle soorten, B) wilde bijen, C) zweefvliegen en D) vlinders. "
 p1 <- venn(dat_2024, "method_cd")
 
 p2 <- venn(dat_2024, "method_cd", order_list = "Apoidea")
@@ -131,8 +151,10 @@ plot_grid(p1, p2, p3, p4,
 
 ```{r number of ind pt vs ts}
 dat_2024 |>
-  ggplot(aes(x = method, y = n_ind)) +
-  geom_bar(stat = "identity")
+  ggplot(aes(x = method_cd, y = n_ind)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Aantal individuen",
+       x = "Methode")
 ```
 
 ## Binnen beheerplan vs buiten beheerplan
@@ -143,6 +165,8 @@ beheer_data <- dat_2024 |>
 ```
 
 ```{r}
+#| label: beheer-venn
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in locaties binnen versus buiten beheerplannen, voor A) alle soorten, B) wilde bijen, C) zweefvliegen en D) vlinders. "
 p1 <- venn(beheer_data, "beheer")
 
 p2 <- venn(beheer_data, "beheer", order_list = "Apoidea")
@@ -164,6 +188,8 @@ beheer_data |>
 ## Open vs halfopen landschap
 
 ```{r}
+#| label: openheid-venn
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in open (OL) versus halfopen landschap (HOL), voor A) alle soorten, B) wilde bijen, C) zweefvliegen en D) vlinders. "
 p1 <- venn(beheer_data, "openheid")
 
 p2 <- venn(beheer_data, "openheid", order_list = "Apoidea")
@@ -181,3 +207,85 @@ beheer_data |>
   ggplot(aes(x = openheid, y = n_ind)) +
   geom_bar(stat = "identity")
 ```
+
+# Modellering
+
+```{r}
+mod_dat <- beheer_data |>
+  mutate(maand = as.factor(month(date_b))) |>
+  group_by(maand, order, location_code, openheid, beheer, method_cd, Crops) |>
+  summarise(n_ind = sum(n_ind),
+            n_spec = n_distinct(species_nm, na.rm = TRUE))
+```
+
+Dataset nog aanvullen met combinaties orders en locaties waar 0 ind gevonden werden. Maand april verwijderen.
+
+
+## Aantal soorten
+
+```{r}
+model1 <- glmmTMB(
+  n_spec ~
+    (maand
+     + method_cd
+     + openheid
+     + beheer) * order + (1|location_code),
+  family = "poisson",
+  ziformula = ~order,
+  na.action = na.omit,
+  data = mod_dat
+)
+```
+
+```{r}
+summary(model1)
+```
+
+```{r}
+performance::check_model(model1)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model1,
+  condition = c("maand", "method_cd", "order"),
+  type = "response",
+  vcov = TRUE
+)
+```
+
+
+## Aantal individuen
+
+```{r}
+model2 <- glmmTMB(
+  n_ind ~
+    (maand
+     + method_cd
+     + openheid
+     + beheer) * order + (1|location_code),
+  family = "poisson",
+  ziformula = ~order,
+  na.action = na.omit,
+  data = mod_dat
+)
+```
+
+```{r}
+summary(model2)
+```
+
+```{r}
+performance::check_model(model2)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  model2,
+  condition = c("maand", "method_cd", "order"),
+  type = "response",
+  vcov = TRUE
+)
+```
+
+
