@@ -1995,7 +1995,7 @@ pt_ssl <- time_data |>
   add_row(
     cost_data |>
       filter(submethode == "SSL") |>
-      select(activiteit = Kostencategorie, methode, submethode, prijs)
+      select(Activiteit = Kostencategorie, methode, submethode, prijs)
   )
 
 testset2 <- c(NA)
