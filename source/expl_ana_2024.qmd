@@ -11,13 +11,13 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r set-up}
-#| results: hide
-#| message: false
-#| warning: false
+```{r}
 knitr::opts_chunk$set(message = FALSE,
                       warning = FALSE)
+```
 
+
+```{r set-up}
 library(readxl)
 library(here)
 library(sf)
@@ -70,14 +70,23 @@ identifications <- identifications |>
     0,
     n_ind)
   ) |>
-  filter(species_nm != "Apis mellifera")
+  filter(species_nm != "Apis mellifera",
+         str_detect(sample_code, "2024"))
 
 samples <- samples |>
+  filter(str_detect(sample_code, "2024")) |>
   select(-c(monitored_by, `Number of flowers (2m diameter)`, remarks))
 
-# Do a full join to include samples without individuals
+# Do a full join to include samples without individuals (for all orders)
+samples_order <- samples|>
+  mutate(order = "Apoidea") |>
+  add_row(samples |>
+            mutate(order = "Syrpidae")) |>
+  add_row(samples |>
+            mutate(order = "Lepidoptera"))
+
 dat_2024 <- identifications |>
-  full_join(samples, by = "sample_id") |>
+  full_join(samples_order, by = c("sample_id", "order")) |>
   mutate(n_ind = ifelse(
     is.na(n_ind),
     0,
@@ -134,9 +143,9 @@ venn <- function(data, group,
 
 ## Transecten vs pan traps
 
-```{r number of spec pt vs ts}
+```{r}
 #| label: pt-ts-venn
-#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in transecten (TS) versus in kleurvallen (PT), voor A) alle soorten, B) wilde bijen, C) zweefvliegen en D) vlinders. "
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in transecten (TS) versus in kleurvallen (PT), voor A) alle soorten, B) wilde bijen, C) zweefvliegen en D) vlinders."
 p1 <- venn(dat_2024, "method_cd")
 
 p2 <- venn(dat_2024, "method_cd", order_list = "Apoidea")
@@ -149,7 +158,9 @@ plot_grid(p1, p2, p3, p4,
           labels = c("AUTO"))
 ```
 
-```{r number of ind pt vs ts}
+```{r}
+#| label: pt-ts-ind
+#| fig-cap: "Aantal gevonden individuen in transecten (TS) versus in kleurvallen (PT)."
 dat_2024 |>
   ggplot(aes(x = method_cd, y = n_ind)) +
   geom_bar(stat = "identity") +
@@ -180,9 +191,14 @@ plot_grid(p1, p2, p3, p4,
 ```
 
 ```{r}
+#| label: beheer-ind
+#| fig-cap: "Aantal gevonden individuen in locaties binnen versus buiten beheerplannen."
+
 beheer_data |>
   ggplot(aes(x = beheer, y = n_ind)) +
-  geom_bar(stat = "identity")
+  geom_bar(stat = "identity") +
+  labs(y = "Aantal individuen",
+       x = NULL)
 ```
 
 ## Open vs halfopen landschap
@@ -203,23 +219,32 @@ plot_grid(p1, p2, p3, p4,
 ```
 
 ```{r}
+#| label: openheid-ind
+#| fig-cap: "Aantal gevonden individuen in open (OL) versus halfopen landschap (HOL)."
+
 beheer_data |>
   ggplot(aes(x = openheid, y = n_ind)) +
-  geom_bar(stat = "identity")
+  geom_bar(stat = "identity") +
+  labs(y = "Aantal individuen",
+       x = NULL)
 ```
 
 # Modellering
 
 ```{r}
-mod_dat <- beheer_data |>
+sum_dat <- beheer_data |>
   mutate(maand = as.factor(month(date_b))) |>
   group_by(maand, order, location_code, openheid, beheer, method_cd, Crops) |>
   summarise(n_ind = sum(n_ind),
-            n_spec = n_distinct(species_nm, na.rm = TRUE))
+            n_spec = n_distinct(species_nm, na.rm = TRUE)) |>
+  ungroup()
+
+aanvul <- sum_dat |>
+  expand(maand, order, location_code, method_cd)
+
+mod_dat <- sum_dat |>
+  right_join(aanvul)
 ```
-
-Dataset nog aanvullen met combinaties orders en locaties waar 0 ind gevonden werden. Maand april verwijderen.
-
 
 ## Aantal soorten
 
@@ -233,7 +258,7 @@ model1 <- glmmTMB(
   family = "poisson",
   ziformula = ~order,
   na.action = na.omit,
-  data = mod_dat
+  data = mod_dat |> filter(order != "Syrpidae")
 )
 ```
 
@@ -246,14 +271,43 @@ performance::check_model(model1)
 ```
 
 ```{r}
+#| label: model1-method
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en methode van inzamelen."
+
 marginaleffects::plot_predictions(
   model1,
   condition = c("maand", "method_cd", "order"),
   type = "response",
   vcov = TRUE
-)
+) +
+  labs(y = "Aantal soorten")
 ```
 
+```{r}
+#| label: model1-openheid
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en openheid landschap."
+
+marginaleffects::plot_predictions(
+  model1,
+  condition = c("maand", "openheid", "order"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(y = "Aantal soorten")
+```
+
+```{r}
+#| label: model1-beheer
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en of de locatie al dan niet binnen een beheerplan valt."
+
+marginaleffects::plot_predictions(
+  model1,
+  condition = c("maand", "beheer", "order"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(y = "Aantal soorten")
+```
 
 ## Aantal individuen
 
@@ -267,7 +321,7 @@ model2 <- glmmTMB(
   family = "poisson",
   ziformula = ~order,
   na.action = na.omit,
-  data = mod_dat
+  data = mod_dat |> filter(order != "Syrpidae")
 )
 ```
 
@@ -276,16 +330,49 @@ summary(model2)
 ```
 
 ```{r}
+#| error: true
 performance::check_model(model2)
+
+performance::check_homogeneity(model2)
+
+performance::check_overdispersion(model2)
 ```
 
 ```{r}
+#| label: model2-method
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en methode van inzamelen."
+
 marginaleffects::plot_predictions(
   model2,
   condition = c("maand", "method_cd", "order"),
   type = "response",
   vcov = TRUE
-)
+) +
+  labs(y = "Aantal individuen")
 ```
 
+```{r}
+#| label: model2-openheid
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en openheid landschap."
 
+marginaleffects::plot_predictions(
+  model2,
+  condition = c("maand", "openheid", "order"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(y = "Aantal individuen")
+```
+
+```{r}
+#| label: model2-beheer
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en of de locatie al dan niet binnen een beheerplan valt."
+
+marginaleffects::plot_predictions(
+  model2,
+  condition = c("maand", "beheer", "order"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(y = "Aantal individuen")
+```
