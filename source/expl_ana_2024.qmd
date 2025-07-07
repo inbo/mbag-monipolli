@@ -229,6 +229,67 @@ beheer_data |>
        x = NULL)
 ```
 
+# Nulwaarnemingen
+
+```{r}
+#| label: order-ind_zero
+#| fig-cap: "Aantal punten met nul waarnemingen per orde."
+dat_2024 |>
+  filter(n_ind == 0) |>
+  ggplot(aes(x = order)) +
+  geom_bar(stat = "count") +
+  labs(y = "Aantal punten met nul waarnemingen",
+       x = "Orde")
+```
+
+```{r}
+#| label: pt-ts-ind_zero
+#| fig-cap: "Aantal punten met nul waarnemingen in transecten (TS) versus in kleurvallen (PT)."
+dat_2024 |>
+  filter(n_ind == 0) |>
+  ggplot(aes(x = method_cd)) +
+  geom_bar(stat = "count") +
+  labs(y = "Aantal punten met nul waarnemingen",
+       x = "Methode")
+```
+
+```{r}
+#| label: beheer-ind_zero
+#| fig-cap: "Aantal punten met nul waarnemingen in gebieden met beheersplannen versus gebieden zonder."
+beheer_data |>
+  filter(n_ind == 0) |>
+  ggplot(aes(x = beheer)) +
+  geom_bar(stat = "count") +
+  labs(y = "Aantal punten met nul waarnemingen",
+       x = NULL)
+```
+
+```{r}
+#| label: openheid-ind_zero
+#| fig-cap: "Aantal punten met nul waarnemingen in open (OL) versus halfopen (HOL) landschap."
+beheer_data |>
+  filter(n_ind == 0) |>
+  ggplot(aes(x = openheid)) +
+  geom_bar(stat = "count") +
+  labs(y = "Aantal punten met nul waarnemingen",
+       x = "Openheid landschap")
+```
+
+Er is een effect op het aantal nulwaarnemingen voor order en methode, we bekijken ook de interactie:
+
+```{r}
+#| label: order-method-ind_zero
+#| fig-cap: "Aantal punten met nul waarnemingen per orde en methode."
+beheer_data |>
+  filter(n_ind == 0) |>
+  ggplot(aes(x = order, fill = method_cd)) +
+  geom_bar(stat = "count", position = "dodge") +
+  labs(y = "Aantal punten met nul waarnemingen",
+       x = "Orde")
+```
+
+Er lijkt geen interactie op te treden.
+
 # Modellering
 
 ```{r}
@@ -256,7 +317,7 @@ model1 <- glmmTMB(
      + openheid
      + beheer) * order + (1|location_code),
   family = "poisson",
-  ziformula = ~order,
+  ziformula = ~method_cd + order,
   na.action = na.omit,
   data = mod_dat |> filter(order != "Syrpidae")
 )
@@ -268,6 +329,8 @@ summary(model1)
 
 ```{r}
 performance::check_model(model1)
+
+performance::check_overdispersion(model1)
 ```
 
 ```{r}
@@ -316,10 +379,10 @@ model2 <- glmmTMB(
   n_ind ~
     (maand
      + method_cd
-     + openheid
-     + beheer) * order + (1|location_code),
-  family = "poisson",
-  ziformula = ~order,
+    ) * order + beheer + openheid
+  + (1|location_code),
+  family = "nbinom2",
+  ziformula = ~order + method_cd,
   na.action = na.omit,
   data = mod_dat |> filter(order != "Syrpidae")
 )
