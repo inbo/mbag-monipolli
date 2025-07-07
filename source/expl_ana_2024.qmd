@@ -1,5 +1,5 @@
 ---
-title: "Explorative analyses 2024 data"
+title: "Exploratieve analyses 2024 data"
 author: "Emma Cartuyvels"
 format: 
   html:
@@ -65,10 +65,9 @@ identifications <- identifications |>
   janitor::clean_names() |>
   select(sample_id, sample_code, method,
          order, species_nm, n_ind = mm_ff) |>
-  mutate(n_ind = ifelse(
-    is.na(n_ind),
-    0,
-    n_ind)
+  mutate(n_ind = ifelse(is.na(n_ind),
+                        0,
+                        n_ind)
   ) |>
   filter(species_nm != "Apis mellifera",
          str_detect(sample_code, "2024"))
@@ -78,7 +77,7 @@ samples <- samples |>
   select(-c(monitored_by, `Number of flowers (2m diameter)`, remarks))
 
 # Do a full join to include samples without individuals (for all orders)
-samples_order <- samples|>
+samples_order <- samples |>
   mutate(order = "Apoidea") |>
   add_row(samples |>
             mutate(order = "Syrpidae")) |>
@@ -87,10 +86,9 @@ samples_order <- samples|>
 
 dat_2024 <- identifications |>
   full_join(samples_order, by = c("sample_id", "order")) |>
-  mutate(n_ind = ifelse(
-    is.na(n_ind),
-    0,
-    n_ind)
+  mutate(n_ind = ifelse(is.na(n_ind),
+                        0,
+                        n_ind)
   ) |>
   filter(!is.na(date_b))
 ```
@@ -99,7 +97,7 @@ dat_2024 <- identifications |>
 
 Er werden 40 punten gemonitord, allen gelegen in landbouwgebied in de zandstreek. De punten werden gestratificeerd op open versus halfopen landschap en punten met beheermaatregelen en zonder beheermaatregelen.
 
-Op elke locatie werden 4 sets kleurvallen opgesteld, twee op vegetatie niveau en twee op grond niveau. Deze kleurvallen werden elke maand voor drie dagen in het veld gelaten. Bij de start en einde van die drie dagen werden steeds 2 transecten van 160m gelopen: één voor wilde bijen en zweefvliegen en één voor vlinders. Dit levert een totaal van 4 transecten per maand.
+Op elke locatie werden 4 sets kleurvallen opgesteld, twee op vegetatie niveau en twee op grond niveau. Deze kleurvallen werden elke maand voor drie dagen in het veld gelaten. Bij de start en einde van die drie dagen werden steeds 2 transecten van 160 m gelopen: één voor wilde bijen en zweefvliegen en één voor vlinders. Dit levert een totaal van 4 transecten per maand.
 
 ```{r}
 mapview::mapview(st_as_sf(punten),
@@ -141,11 +139,13 @@ venn <- function(data, group,
 }
 ```
 
-## Transecten vs pan traps
+## Transecten versus pan traps
 
 ```{r}
 #| label: pt-ts-venn
-#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in transecten (TS) versus in kleurvallen (PT), voor A) alle soorten, B) wilde bijen, C) zweefvliegen en D) vlinders."
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in transecten (TS)
+#|  versus in kleurvallen (PT), voor A) alle soorten, B) wilde bijen,
+#|   C) zweefvliegen en D) vlinders."
 p1 <- venn(dat_2024, "method_cd")
 
 p2 <- venn(dat_2024, "method_cd", order_list = "Apoidea")
@@ -160,7 +160,8 @@ plot_grid(p1, p2, p3, p4,
 
 ```{r}
 #| label: pt-ts-ind
-#| fig-cap: "Aantal gevonden individuen in transecten (TS) versus in kleurvallen (PT)."
+#| fig-cap: "Aantal gevonden individuen in transecten (TS) versus in kleurvallen
+#|  (PT)."
 dat_2024 |>
   ggplot(aes(x = method_cd, y = n_ind)) +
   geom_bar(stat = "identity") +
@@ -168,7 +169,7 @@ dat_2024 |>
        x = "Methode")
 ```
 
-## Binnen beheerplan vs buiten beheerplan
+## Binnen beheerplan versus buiten beheerplan
 
 ```{r}
 beheer_data <- dat_2024 |>
@@ -177,7 +178,9 @@ beheer_data <- dat_2024 |>
 
 ```{r}
 #| label: beheer-venn
-#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in locaties binnen versus buiten beheerplannen, voor A) alle soorten, B) wilde bijen, C) zweefvliegen en D) vlinders. "
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in locaties binnen
+#|  versus buiten beheerplannen, voor A) alle soorten, B) wilde bijen,
+#|   C) zweefvliegen en D) vlinders. "
 p1 <- venn(beheer_data, "beheer")
 
 p2 <- venn(beheer_data, "beheer", order_list = "Apoidea")
@@ -192,7 +195,8 @@ plot_grid(p1, p2, p3, p4,
 
 ```{r}
 #| label: beheer-ind
-#| fig-cap: "Aantal gevonden individuen in locaties binnen versus buiten beheerplannen."
+#| fig-cap: "Aantal gevonden individuen in locaties binnen versus
+#|  buiten beheerplannen."
 
 beheer_data |>
   ggplot(aes(x = beheer, y = n_ind)) +
@@ -201,11 +205,13 @@ beheer_data |>
        x = NULL)
 ```
 
-## Open vs halfopen landschap
+## Open versus halfopen landschap
 
 ```{r}
 #| label: openheid-venn
-#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in open (OL) versus halfopen landschap (HOL), voor A) alle soorten, B) wilde bijen, C) zweefvliegen en D) vlinders. "
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in open (OL) versus
+#|  halfopen landschap (HOL), voor A) alle soorten, B) wilde bijen,
+#|   C) zweefvliegen en D) vlinders. "
 p1 <- venn(beheer_data, "openheid")
 
 p2 <- venn(beheer_data, "openheid", order_list = "Apoidea")
@@ -220,7 +226,8 @@ plot_grid(p1, p2, p3, p4,
 
 ```{r}
 #| label: openheid-ind
-#| fig-cap: "Aantal gevonden individuen in open (OL) versus halfopen landschap (HOL)."
+#| fig-cap: "Aantal gevonden individuen in open (OL) versus halfopen landschap
+#|  (HOL)."
 
 beheer_data |>
   ggplot(aes(x = openheid, y = n_ind)) +
@@ -244,7 +251,8 @@ dat_2024 |>
 
 ```{r}
 #| label: pt-ts-ind_zero
-#| fig-cap: "Aantal punten met nul waarnemingen in transecten (TS) versus in kleurvallen (PT)."
+#| fig-cap: "Aantal punten met nul waarnemingen in transecten (TS) versus in
+#|  kleurvallen (PT)."
 dat_2024 |>
   filter(n_ind == 0) |>
   ggplot(aes(x = method_cd)) +
@@ -255,7 +263,8 @@ dat_2024 |>
 
 ```{r}
 #| label: beheer-ind_zero
-#| fig-cap: "Aantal punten met nul waarnemingen in gebieden met beheersplannen versus gebieden zonder."
+#| fig-cap: "Aantal punten met nul waarnemingen in gebieden met beheersplannen
+#|  versus gebieden zonder."
 beheer_data |>
   filter(n_ind == 0) |>
   ggplot(aes(x = beheer)) +
@@ -266,7 +275,8 @@ beheer_data |>
 
 ```{r}
 #| label: openheid-ind_zero
-#| fig-cap: "Aantal punten met nul waarnemingen in open (OL) versus halfopen (HOL) landschap."
+#| fig-cap: "Aantal punten met nul waarnemingen in open (OL) versus halfopen
+#|  (HOL) landschap."
 beheer_data |>
   filter(n_ind == 0) |>
   ggplot(aes(x = openheid)) +
@@ -315,7 +325,7 @@ model1 <- glmmTMB(
     (maand
      + method_cd
      + openheid
-     + beheer) * order + (1|location_code),
+     + beheer) * order + (1 | location_code),
   family = "poisson",
   ziformula = ~method_cd + order,
   na.action = na.omit,
@@ -335,7 +345,8 @@ performance::check_overdispersion(model1)
 
 ```{r}
 #| label: model1-method
-#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en methode van inzamelen."
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en
+#|  methode van inzamelen."
 
 marginaleffects::plot_predictions(
   model1,
@@ -348,7 +359,8 @@ marginaleffects::plot_predictions(
 
 ```{r}
 #| label: model1-openheid
-#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en openheid landschap."
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en
+#|  openheid landschap."
 
 marginaleffects::plot_predictions(
   model1,
@@ -361,7 +373,8 @@ marginaleffects::plot_predictions(
 
 ```{r}
 #| label: model1-beheer
-#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en of de locatie al dan niet binnen een beheerplan valt."
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en of
+#|  de locatie al dan niet binnen een beheerplan valt."
 
 marginaleffects::plot_predictions(
   model1,
@@ -376,11 +389,8 @@ marginaleffects::plot_predictions(
 
 ```{r}
 model2 <- glmmTMB(
-  n_ind ~
-    (maand
-     + method_cd
-    ) * order + beheer + openheid
-  + (1|location_code),
+  n_ind ~ (maand + method_cd) * order +
+    beheer + openheid + (1 | location_code),
   family = "nbinom2",
   ziformula = ~order + method_cd,
   na.action = na.omit,
@@ -403,7 +413,8 @@ performance::check_overdispersion(model2)
 
 ```{r}
 #| label: model2-method
-#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en methode van inzamelen."
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
+#|  methode van inzamelen."
 
 marginaleffects::plot_predictions(
   model2,
@@ -416,7 +427,8 @@ marginaleffects::plot_predictions(
 
 ```{r}
 #| label: model2-openheid
-#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en openheid landschap."
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
+#|  openheid landschap."
 
 marginaleffects::plot_predictions(
   model2,
@@ -429,7 +441,8 @@ marginaleffects::plot_predictions(
 
 ```{r}
 #| label: model2-beheer
-#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en of de locatie al dan niet binnen een beheerplan valt."
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
+#|  of de locatie al dan niet binnen een beheerplan valt."
 
 marginaleffects::plot_predictions(
   model2,

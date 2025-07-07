@@ -75,7 +75,7 @@ test_data <- n_ind_per_loc |>
   ) |>
   # correct for shorter transects compared to proposed protocol
   # length new transects / length old transects = (1500 * 3) / (500 * 3) = 3
-   mutate(n_ind = n_ind * 3)
+  mutate(n_ind = n_ind * 3)
 ```
 
 ```{r}
