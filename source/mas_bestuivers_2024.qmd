@@ -1,0 +1,136 @@
+---
+title: "MONIPOLLI - MAS 2024"
+author: "Emma Cartuyvels"
+format: 
+  html:
+    code-fold: true
+    toc: true
+    toc_float: true
+    embed-resources: true
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+```
+
+```{r set-up}
+library(here)
+library(sf)
+library(ggpubr)
+library(tidyverse)
+library(INBOtheme)
+
+conflicted::conflicts_prefer(dplyr::filter)
+```
+
+## Read data
+
+```{r}
+beheer_data <- read_csv(here("data", "processed", "bestuivers_2024"))
+```
+
+```{r}
+mas_data <- read.csv(here("data", "mas_data_vlaanderen_2018_2024.csv")) |> 
+  filter(is_mas_sample == TRUE, #(om enkel correcte MAS-protocol data te behouden)
+         year == 2024)
+```
+
+```{r}
+locations <- beheer_data |>
+  distinct(pointid) |>
+  pull()
+
+mas_filtered <- mas_data |>
+  filter(locationID %in% locations) |>
+  mutate(organismQuantity = ifelse(
+    organismQuantityType == "individuals",
+    organismQuantity,
+    1
+  ))
+```
+
+```{r}
+grouped_poll <- beheer_data |>
+  group_by(order, pointid) |>
+  summarise(n_spec = n_distinct(species_nm),
+            n_ind = sum(n_ind))
+
+grouped_mas <- mas_filtered |>
+  group_by(locationID) |>
+  summarise(n_spec = n_distinct(scientificName),
+            n_ind = sum(organismQuantity))
+```
+
+```{r}
+grouped_poll |>
+  filter(order == "Apoidea") |>
+  left_join(grouped_mas , by = c("pointid" = "locationID"),
+            suffix = c("_pol", "_mas")) |>
+  ggplot(aes(x = n_ind_pol, y = n_ind_mas)) +
+  geom_point() +
+  stat_cor() +
+  geom_smooth(method='lm')
+```
+
+```{r}
+grouped_poll |>
+  filter(order == "Apoidea") |>
+  left_join(grouped_mas , by = c("pointid" = "locationID"),
+            suffix = c("_pol", "_mas")) |>
+  ggplot(aes(x = n_spec_pol, y = n_spec_mas)) +
+  geom_point() +
+  stat_cor() +
+  geom_smooth(method='lm')
+```
+
+```{r}
+grouped_poll |>
+  filter(order == "Lepidoptera") |>
+  left_join(grouped_mas , by = c("pointid" = "locationID"),
+            suffix = c("_pol", "_mas")) |>
+  ggplot(aes(x = n_ind_pol, y = n_ind_mas)) +
+  geom_point() +
+  stat_cor() +
+  geom_smooth(method='lm')
+```
+
+```{r}
+grouped_poll |>
+  filter(order == "Lepidoptera") |>
+  left_join(grouped_mas , by = c("pointid" = "locationID"),
+            suffix = c("_pol", "_mas")) |>
+  ggplot(aes(x = n_spec_pol, y = n_spec_mas)) +
+  geom_point() +
+  stat_cor() +
+  geom_smooth(method='lm')
+```
+
+```{r}
+grouped_poll |>
+  group_by(pointid) |>
+   summarise(n_spec = sum(n_spec),
+            n_ind = sum(n_ind)) |>
+  left_join(grouped_mas , by = c("pointid" = "locationID"),
+            suffix = c("_pol", "_mas")) |>
+  ggplot(aes(x = n_ind_pol, y = n_ind_mas)) +
+  geom_point() +
+  stat_cor() +
+  geom_smooth(method='lm')
+```
+
+```{r}
+grouped_poll |>
+  group_by(pointid) |>
+   summarise(n_spec = sum(n_spec),
+            n_ind = sum(n_ind)) |>
+  left_join(grouped_mas , by = c("pointid" = "locationID"),
+            suffix = c("_pol", "_mas")) |>
+  ggplot(aes(x = n_spec_pol, y = n_spec_mas)) +
+  geom_point() +
+  stat_cor() +
+  geom_smooth(method='lm')
+```
