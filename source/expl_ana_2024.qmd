@@ -6,6 +6,7 @@ format:
     code-fold: true
     toc: true
     toc_float: true
+    embed-resources: true
 editor: visual
 editor_options: 
   chunk_output_type: console
@@ -15,7 +16,6 @@ editor_options:
 knitr::opts_chunk$set(message = FALSE,
                       warning = FALSE)
 ```
-
 
 ```{r set-up}
 library(readxl)
@@ -144,8 +144,8 @@ venn <- function(data, group,
 ```{r}
 #| label: pt-ts-venn
 #| fig-cap: "Venn diagrammen van het aantal gevonden soorten in transecten (TS)
-#|  versus in kleurvallen (PT), voor A) alle soorten, B) wilde bijen,
-#|   C) zweefvliegen en D) vlinders."
+#|  versus in kleurvallen (PT), voor A) alle soorten, B) wilde bijen en
+#|   C) vlinders."
 p1 <- venn(dat_2024, "method_cd")
 
 p2 <- venn(dat_2024, "method_cd", order_list = "Apoidea")
@@ -154,8 +154,10 @@ p3 <- venn(dat_2024, "method_cd", order_list = "Syrpidae")
 
 p4 <- venn(dat_2024, "method_cd", order_list = "Lepidoptera")
 
-plot_grid(p1, p2, p3, p4,
-          labels = c("AUTO"))
+plot_grid(p1, plot_grid(p2, p4,
+          labels = c("B", "C")),
+          nrow = 2,
+          labels = c("A"))
 ```
 
 ```{r}
@@ -174,6 +176,9 @@ dat_2024 |>
 ```{r}
 beheer_data <- dat_2024 |>
   left_join(punten, by = "location_code")
+
+write.csv(beheer_data,
+          here("data", "processed", "bestuivers_2024"))
 ```
 
 ```{r}
@@ -189,8 +194,10 @@ p3 <- venn(beheer_data, "beheer", order_list = "Syrpidae")
 
 p4 <- venn(beheer_data, "beheer", order_list = "Lepidoptera")
 
-plot_grid(p1, p2, p3, p4,
-          labels = c("AUTO"))
+plot_grid(p1, plot_grid(p2, p4,
+          labels = c("B", "C")),
+          nrow = 2,
+          labels = c("A"))
 ```
 
 ```{r}
@@ -220,8 +227,10 @@ p3 <- venn(beheer_data, "openheid", order_list = "Syrpidae")
 
 p4 <- venn(beheer_data, "openheid", order_list = "Lepidoptera")
 
-plot_grid(p1, p2, p3, p4,
-          labels = c("AUTO"))
+plot_grid(p1, plot_grid(p2, p4,
+          labels = c("B", "C")),
+          nrow = 2,
+          labels = c("A"))
 ```
 
 ```{r}
