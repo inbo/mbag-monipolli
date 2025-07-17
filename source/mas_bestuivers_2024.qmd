@@ -65,6 +65,8 @@ grouped_mas <- mas_filtered |>
             n_ind = sum(organismQuantity))
 ```
 
+## Wilde bijen versus vogels
+
 ```{r}
 grouped_poll |>
   filter(order == "Apoidea") |>
@@ -87,6 +89,8 @@ grouped_poll |>
   geom_smooth(method='lm')
 ```
 
+## Vlinders versus vogels
+
 ```{r}
 grouped_poll |>
   filter(order == "Lepidoptera") |>
@@ -108,6 +112,8 @@ grouped_poll |>
   stat_cor() +
   geom_smooth(method='lm')
 ```
+
+## Wilde bijen + vlinders versus vogels
 
 ```{r}
 grouped_poll |>
