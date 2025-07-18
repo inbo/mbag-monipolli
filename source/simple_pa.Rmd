@@ -74,8 +74,8 @@ test_data <- n_ind_per_loc |>
     location = substr(sample_code, 1, 8)
   ) |>
   # correct for shorter transects compared to proposed protocol
-  # length new transects / length old transects = (1500 * 3) / (500 * 3) = 3
-  mutate(n_ind = n_ind * 3)
+  # length new transects / length old transects = (1000 * 3) / (500 * 3) = 2
+  mutate(n_ind = n_ind * 2)
 ```
 
 ```{r}
@@ -174,7 +174,7 @@ results <- list()
 for (t in trends) {
   for (l in locations) {
     message(sprintf("Running trend %.1f%% with %d locations", t, l))
-    result <- run_power_analysis(t, l, nsim = 1000)
+    result <- run_power_analysis(t, l, nsim = 250)
     results[[paste0("trend", t, "_loc", l)]] <- result
   }
 }
@@ -216,7 +216,7 @@ ggplot(power_df, aes(x = points, y = mean, color = trend)) +
   ) +
   scale_y_continuous(limits = c(0, 1)) +
   labs(
-    title = "Power to Detect Yearly Trends",
+    title = "Power to detect yearly trends in number of individuals",
     x = "Number of Locations",
     y = "Power"
   ) +
