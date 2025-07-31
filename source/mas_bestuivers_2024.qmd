@@ -21,6 +21,7 @@ knitr::opts_chunk$set(message = FALSE,
 library(here)
 library(sf)
 library(ggpubr)
+library(lme4)
 library(tidyverse)
 library(INBOtheme)
 
@@ -45,12 +46,9 @@ locations <- beheer_data |>
   pull()
 
 mas_filtered <- mas_data |>
-  filter(locationID %in% locations) |>
-  mutate(organismQuantity = ifelse(
-    organismQuantityType == "individuals",
-    organismQuantity,
-    1
-  ))
+  filter(locationID %in% locations,
+         organismQuantityType != "individuals") |>
+  mutate(organismQuantity = 1)
 ```
 
 ```{r}
@@ -65,7 +63,8 @@ grouped_mas <- mas_filtered |>
             n_ind = sum(organismQuantity))
 ```
 
-## Wilde bijen versus vogels
+## Verkennende analyses
+### Wilde bijen versus vogels
 
 ```{r}
 grouped_poll |>
@@ -89,7 +88,7 @@ grouped_poll |>
   geom_smooth(method='lm')
 ```
 
-## Vlinders versus vogels
+### Vlinders versus vogels
 
 ```{r}
 grouped_poll |>
@@ -113,10 +112,11 @@ grouped_poll |>
   geom_smooth(method='lm')
 ```
 
-## Wilde bijen + vlinders versus vogels
+### Wilde bijen + vlinders versus vogels
 
 ```{r}
 grouped_poll |>
+  filter(order != "Syrpidae") |>
   group_by(pointid) |>
    summarise(n_spec = sum(n_spec),
             n_ind = sum(n_ind)) |>
@@ -140,3 +140,105 @@ grouped_poll |>
   stat_cor() +
   geom_smooth(method='lm')
 ```
+
+## Modellering
+
+```{r}
+pollinators <- grouped_poll |>
+  filter(order != "Syrpidae") |>
+  group_by(pointid) |>
+  summarise(n_spec = sum(n_spec),
+            n_ind = sum(n_ind))
+
+jaar = "2024"
+
+ver_var <- beheer_data |>
+  distinct(pointid, openheid_sbp)
+
+mod_dat <- mas_filtered |>
+  mutate(
+    datum = ymd(eventDate),
+    periode_in_jaar = case_when(
+      datum %within% interval(
+        ymd(paste(jaar, "04-01", sep = "-")),
+        ymd(paste(jaar, "04-20", sep = "-"))
+      ) ~ "R1",
+      datum %within% interval(
+        ymd(paste(jaar, "04-21", sep = "-")),
+        ymd(paste(jaar, "05-10", sep = "-"))
+      ) ~ "R2",
+      datum %within% interval(
+        ymd(paste(jaar, "05-11", sep = "-")),
+        ymd(paste(jaar, "06-10", sep = "-"))
+      ) ~ "R3",
+      datum %within% interval(
+        ymd(paste(jaar, "06-21", sep = "-")),
+        ymd(paste(jaar, "07-15", sep = "-"))
+      ) ~ "R4"
+    )
+  ) |>
+  filter(!is.na(.data$periode_in_jaar)) |> 
+  group_by(locationID, periode_in_jaar) |>
+  summarise(n_spec = n_distinct(scientificName),
+            n_ind = sum(organismQuantity)) |>
+  left_join(pollinators, by = c("locationID" = "pointid"),
+            suffix = c("_bird", "_pol")) |>
+  left_join(ver_var, by = c("locationID" = "pointid"))
+```
+
+```{r}
+hist(log(mod_dat$n_ind_pol))
+
+hist(mod_dat$n_spec_bird)
+
+ggplot(mod_dat, aes(x = n_ind_pol, y =n_spec_bird)) +
+  geom_point() +
+  geom_smooth()
+```
+
+
+```{r}
+model1 <- glmer(n_spec_bird ~ n_ind_pol + (1|locationID) + (1|periode_in_jaar),
+                data = mod_dat,
+                family = "poisson")
+```
+
+```{r}
+performance::check_model(model1)
+```
+
+```{r}
+summary(model1)
+```
+
+
+```{r}
+model2 <- glmer(n_ind_bird ~ n_ind_pol + openheid_sbp + (1|locationID) +
+                  (1|periode_in_jaar),
+                data = mod_dat,
+                family = "poisson")
+```
+
+```{r}
+performance::check_model(model2)
+```
+
+```{r}
+summary(model2)
+```
+
+
+```{r}
+test <- glmer(n_spec_bird ~ scale(n_ind_pol)*openheid_sbp + (1|locationID) + (1|periode_in_jaar),
++               data = mod_dat)
+
+summary(test)
+
+marginaleffects::plot_predictions(model = test, condition = c("n_ind_pol", "openheid_sbp"))
+
+ ggplot(mod_dat, aes(x = n_ind_pol, y =n_spec_bird, colour = openheid_sbp, group = openheid_sbp)) +
++   geom_point() +
++   geom_smooth(method = "lm") + theme_minimal()
+```
+
+
