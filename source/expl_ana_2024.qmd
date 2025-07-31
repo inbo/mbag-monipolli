@@ -7,6 +7,7 @@ format:
     toc: true
     toc_float: true
     embed-resources: true
+    page-layout: full
 editor: visual
 editor_options: 
   chunk_output_type: console
@@ -90,16 +91,17 @@ samples_order <- samples |>
             mutate(order = "Syrphidae")) |>
   add_row(samples |>
             mutate(order = "Lepidoptera")) |>
-  filter(!(order ==  "Lepidoptera" & location_code %in% but_1)) |>
-  filter(!(order ==  "Lepidoptera" & location_code %in% but_2 &
-             month(date_b) %in% c(8,9)))
+  filter(!(method_cd == "TS" & order ==  "Lepidoptera" &
+             location_code %in% but_1)) |>
+  filter(!(method_cd == "TS" & order ==  "Lepidoptera" &
+             location_code %in% but_2 & month(date_b) %in% c(8,9)))
 
 dat_2024 <- identifications |>
   full_join(samples_order, by = c("sample_id", "order")) |>
   mutate(n_ind = ifelse(is.na(n_ind),
                         0,
-                        n_ind)
-  )
+                        n_ind)) |>
+  filter(!(is.na(method_cd)))
 ```
 
 # Proefopzet
@@ -108,7 +110,7 @@ Er werden 40 punten gemonitord, allen gelegen in landbouwgebied in de zandstreek
 
 Op elke locatie werden 4 sets kleurvallen opgesteld, twee op vegetatie niveau en twee op grond niveau. Deze kleurvallen werden elke maand voor drie dagen in het veld gelaten. Bij de start en einde van die drie dagen werden steeds 2 transecten van 160 m gelopen: één voor wilde bijen en zweefvliegen en één voor vlinders. Dit levert een totaal van 4 transecten per maand.
 
-Vlinders werden op 17 van de 40 locaties niet gemonitord en op drie andere locaties werden ze niet gemonitord in de maanden augustus en september.
+Vlinders werden op 17 van de 40 locaties niet gemonitord via transecten en op drie andere locaties werden ze niet gemonitord via een transect in de maanden augustus en september.
 
 ```{r}
 mapview::mapview(st_as_sf(punten),
@@ -121,7 +123,7 @@ mapview::mapview(st_as_sf(punten),
 ```{r}
 venn <- function(data, group,
                  count_id = "species_nm",
-                 order_list = c("Apoidea", "Syrpidae", "Lepidoptera")) {
+                 order_list = c("Apoidea", "Syrphidae", "Lepidoptera")) {
   groups <- data |>
     filter(!is.na(!!sym(group))) |>
     distinct(!!sym(group)) |>
@@ -146,9 +148,68 @@ venn <- function(data, group,
          fill_color = inbo_palette(),
          set_name_size = 3,
          stroke_size = NULL,
-         auto_scale = TRUE)
+         auto_scale = FALSE)
 }
 ```
+
+## Per orde
+
+```{r}
+#| label: fig-order-ind
+#| fig-cap: "Aantal gevonden individuen per orde."
+dat_2024 |>
+  ggplot(aes(x = order, y = n_ind)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Aantal individuen",
+       x = "Orde")
+```
+
+## Per maand
+```{r}
+dat_maand <- dat_2024 |>
+  mutate(maand = as.character(month(date_b)))
+```
+
+
+```{r}
+#| label: maand-venn
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten per maand,
+#|  voor A) alle soorten, B) wilde bijen en C) vlinders."
+p1 <- venn(dat_maand, "maand")
+
+p2 <- venn(dat_maand, "maand", order_list = "Apoidea")
+
+p3 <- venn(dat_maand, "maand", order_list = "Syrphidae")
+
+p4 <- venn(dat_maand, "maand", order_list = "Lepidoptera")
+
+plot_grid(p1, plot_grid(p2, p4,
+          labels = c("B", "C")),
+          nrow = 2,
+          labels = c("A"))
+```
+
+:::{layout-ncol="2"}
+```{r}
+#| label: fig-maand-ind
+#| fig-cap: "Aantal gevonden individuen per maand."
+dat_maand |>
+  ggplot(aes(x = maand, y = n_ind)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Aantal individuen",
+       x = "Maand")
+```
+
+```{r}
+#| label: maand-ind-order
+#| fig-cap: "Aantal gevonden individuen per maand en per orde."
+dat_maand |>
+  ggplot(aes(x = maand, y = n_ind, fill = order)) +
+  geom_bar(position = "dodge", stat = "summary", fun = "sum") +
+  labs(y = "Aantal individuen",
+       x = "Maand")
+```
+:::
 
 ## Transecten versus pan traps
 
@@ -171,16 +232,29 @@ plot_grid(p1, plot_grid(p2, p4,
           labels = c("A"))
 ```
 
+:::{layout-ncol="2"}
 ```{r}
-#| label: pt-ts-ind
-#| fig-cap: "Aantal gevonden individuen in transecten (TS) versus in kleurvallen
-#|  (PT)."
+#| label: fig-pt-ts-ind
+#| fig-cap: "Aantal gevonden individuen in kleurvallen(PT) versus in transecten
+#|  (TS)."
 dat_2024 |>
   ggplot(aes(x = method_cd, y = n_ind)) +
   geom_bar(stat = "identity") +
   labs(y = "Aantal individuen",
        x = "Methode")
 ```
+
+```{r}
+#| label: pt-ts-ind-order
+#| fig-cap: "Aantal gevonden individuen in kleurvallen(PT) versus in transecten
+#|  (TS) per orde."
+dat_2024 |>
+  ggplot(aes(x = method_cd, y = n_ind, fill = order)) +
+  geom_bar(position = "dodge", stat = "summary", fun = "sum") +
+  labs(y = "Aantal individuen",
+       x = "Methode")
+```
+:::
 
 ## Binnen beheerplan versus buiten beheerplan
 
@@ -211,6 +285,7 @@ plot_grid(p1, plot_grid(p2, p4,
           labels = c("A"))
 ```
 
+:::{layout-ncol="2"}
 ```{r}
 #| label: beheer-ind
 #| fig-cap: "Aantal gevonden individuen in locaties binnen versus
@@ -222,6 +297,19 @@ beheer_data |>
   labs(y = "Aantal individuen",
        x = NULL)
 ```
+
+```{r}
+#| label: beheer-ind-order
+#| fig-cap: "Aantal gevonden individuen in locaties binnen versus
+#|  buiten beheerplannen per orde."
+
+beheer_data |>
+  ggplot(aes(x = beheer, y = n_ind, fill = order)) +
+  geom_bar(position = "dodge", stat = "summary", fun = "sum") +
+  labs(y = "Aantal individuen",
+       x = NULL)
+```
+:::
 
 ## Open versus halfopen landschap
 
@@ -244,6 +332,7 @@ plot_grid(p1, plot_grid(p2, p4,
           labels = c("A"))
 ```
 
+:::{layout-ncol="2"}
 ```{r}
 #| label: openheid-ind
 #| fig-cap: "Aantal gevonden individuen in open (OL) versus halfopen landschap
@@ -255,6 +344,19 @@ beheer_data |>
   labs(y = "Aantal individuen",
        x = NULL)
 ```
+
+```{r}
+#| label: openheid-ind-order
+#| fig-cap: "Aantal gevonden individuen in open (OL) versus halfopen landschap
+#|  (HOL) per orde."
+
+beheer_data |>
+  ggplot(aes(x = openheid, y = n_ind, fill = order)) +
+  geom_bar(position = "dodge", stat = "summary", fun = "sum") +
+  labs(y = "Aantal individuen",
+       x = NULL)
+```
+:::
 
 # Nulwaarnemingen
 
@@ -305,7 +407,7 @@ beheer_data |>
        x = "Openheid landschap")
 ```
 
-Er is een effect op het aantal nulwaarnemingen voor order en methode, we bekijken ook de interactie:
+Er is een effect op het aantal nulwaarnemingen voor orde en methode, we bekijken ook de interactie:
 
 ```{r}
 #| label: order-method-ind_zero
@@ -318,7 +420,7 @@ beheer_data |>
        x = "Orde")
 ```
 
-Er lijkt geen interactie op te treden.
+Er lijkt interactie op te treden.
 
 # Modellering
 
@@ -409,10 +511,10 @@ marginaleffects::plot_predictions(
 
 ```{r}
 model2 <- glmmTMB(
-  n_ind ~ (maand + method_cd +
-    beheer + openheid) * order  + (1 | location_code),
+  n_ind ~ maand + method_cd + openheid +
+    beheer * order  + (1 | location_code),
   family = "poisson",
-  ziformula = ~order * method_cd,
+  ziformula = ~ order * method_cd,
   na.action = na.omit,
   data = mod_dat
 )
