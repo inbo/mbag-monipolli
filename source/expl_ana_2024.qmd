@@ -77,20 +77,29 @@ samples <- samples |>
   select(-c(monitored_by, `Number of flowers (2m diameter)`, remarks))
 
 # Do a full join to include samples without individuals (for all orders)
+# Locations without butterfly monitoring:
+but_1 <- c("BE_A01", "BE_A02", "BE_A03", "BE_B01", "BE_B02", "BE_B03", "BE_B04",
+           "BE_B05", "BE_B06", "BE_C06", "BE_C07", "BE_C09", "BE_C10", "BE_D05",
+           "BE_D06", "BE_D07", "BE_D08", "BE_D09", "BE_D10")
+# Locations with no butterfly monitoring in August and September:
+but_2 <- c("BE_A04", "BE_A05", "BE_C08")
+
 samples_order <- samples |>
   mutate(order = "Apoidea") |>
   add_row(samples |>
-            mutate(order = "Syrpidae")) |>
+            mutate(order = "Syrphidae")) |>
   add_row(samples |>
-            mutate(order = "Lepidoptera"))
+            mutate(order = "Lepidoptera")) |>
+  filter(!(order ==  "Lepidoptera" & location_code %in% but_1)) |>
+  filter(!(order ==  "Lepidoptera" & location_code %in% but_2 &
+             month(date_b) %in% c(8,9)))
 
 dat_2024 <- identifications |>
   full_join(samples_order, by = c("sample_id", "order")) |>
   mutate(n_ind = ifelse(is.na(n_ind),
                         0,
                         n_ind)
-  ) |>
-  filter(!is.na(date_b))
+  )
 ```
 
 # Proefopzet
@@ -98,6 +107,8 @@ dat_2024 <- identifications |>
 Er werden 40 punten gemonitord, allen gelegen in landbouwgebied in de zandstreek. De punten werden gestratificeerd op open versus halfopen landschap en punten met beheermaatregelen en zonder beheermaatregelen.
 
 Op elke locatie werden 4 sets kleurvallen opgesteld, twee op vegetatie niveau en twee op grond niveau. Deze kleurvallen werden elke maand voor drie dagen in het veld gelaten. Bij de start en einde van die drie dagen werden steeds 2 transecten van 160 m gelopen: één voor wilde bijen en zweefvliegen en één voor vlinders. Dit levert een totaal van 4 transecten per maand.
+
+Vlinders werden op 17 van de 40 locaties niet gemonitord en op drie andere locaties werden ze niet gemonitord in de maanden augustus en september.
 
 ```{r}
 mapview::mapview(st_as_sf(punten),
@@ -150,7 +161,7 @@ p1 <- venn(dat_2024, "method_cd")
 
 p2 <- venn(dat_2024, "method_cd", order_list = "Apoidea")
 
-p3 <- venn(dat_2024, "method_cd", order_list = "Syrpidae")
+p3 <- venn(dat_2024, "method_cd", order_list = "Syrphidae")
 
 p4 <- venn(dat_2024, "method_cd", order_list = "Lepidoptera")
 
@@ -185,12 +196,12 @@ write.csv(beheer_data,
 #| label: beheer-venn
 #| fig-cap: "Venn diagrammen van het aantal gevonden soorten in locaties binnen
 #|  versus buiten beheerplannen, voor A) alle soorten, B) wilde bijen,
-#|   C) zweefvliegen en D) vlinders. "
+#|   en C) vlinders. "
 p1 <- venn(beheer_data, "beheer")
 
 p2 <- venn(beheer_data, "beheer", order_list = "Apoidea")
 
-p3 <- venn(beheer_data, "beheer", order_list = "Syrpidae")
+p3 <- venn(beheer_data, "beheer", order_list = "Syrphidae")
 
 p4 <- venn(beheer_data, "beheer", order_list = "Lepidoptera")
 
@@ -218,12 +229,12 @@ beheer_data |>
 #| label: openheid-venn
 #| fig-cap: "Venn diagrammen van het aantal gevonden soorten in open (OL) versus
 #|  halfopen landschap (HOL), voor A) alle soorten, B) wilde bijen,
-#|   C) zweefvliegen en D) vlinders. "
+#|   en C) vlinders. "
 p1 <- venn(beheer_data, "openheid")
 
 p2 <- venn(beheer_data, "openheid", order_list = "Apoidea")
 
-p3 <- venn(beheer_data, "openheid", order_list = "Syrpidae")
+p3 <- venn(beheer_data, "openheid", order_list = "Syrphidae")
 
 p4 <- venn(beheer_data, "openheid", order_list = "Lepidoptera")
 
@@ -338,7 +349,7 @@ model1 <- glmmTMB(
   family = "poisson",
   ziformula = ~method_cd + order,
   na.action = na.omit,
-  data = mod_dat |> filter(order != "Syrpidae")
+  data = mod_dat |> filter(order != "Syrphidae")
 )
 ```
 
@@ -398,12 +409,12 @@ marginaleffects::plot_predictions(
 
 ```{r}
 model2 <- glmmTMB(
-  n_ind ~ (maand + method_cd) * order +
-    beheer + openheid + (1 | location_code),
-  family = "nbinom2",
-  ziformula = ~order + method_cd,
+  n_ind ~ (maand + method_cd +
+    beheer + openheid) * order  + (1 | location_code),
+  family = "poisson",
+  ziformula = ~order * method_cd,
   na.action = na.omit,
-  data = mod_dat |> filter(order != "Syrpidae")
+  data = mod_dat
 )
 ```
 
