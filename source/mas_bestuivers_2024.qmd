@@ -112,11 +112,23 @@ grouped_poll |>
   geom_smooth(method='lm')
 ```
 
-### Wilde bijen + vlinders versus vogels
+### Zweefvliegen versus vogels
 
 ```{r}
 grouped_poll |>
-  filter(order != "Syrpidae") |>
+  filter(order == "Syrphidae") |>
+  left_join(grouped_mas , by = c("pointid" = "locationID"),
+            suffix = c("_pol", "_mas")) |>
+  ggplot(aes(x = n_ind_pol, y = n_ind_mas)) +
+  geom_point() +
+  stat_cor() +
+  geom_smooth(method='lm')
+```
+
+### Alle bestuivers versus vogels
+
+```{r}
+grouped_poll |>
   group_by(pointid) |>
    summarise(n_spec = sum(n_spec),
             n_ind = sum(n_ind)) |>
@@ -128,8 +140,11 @@ grouped_poll |>
   geom_smooth(method='lm')
 ```
 
+Voorlopig geen aantal soorten van zweefvliegen dus deze zitten er niet bij.
+
 ```{r}
 grouped_poll |>
+  filter(order != "Syrpidae") |>
   group_by(pointid) |>
    summarise(n_spec = sum(n_spec),
             n_ind = sum(n_ind)) |>
@@ -145,7 +160,6 @@ grouped_poll |>
 
 ```{r}
 pollinators <- grouped_poll |>
-  filter(order != "Syrpidae") |>
   group_by(pointid) |>
   summarise(n_spec = sum(n_spec),
             n_ind = sum(n_ind))
@@ -229,16 +243,51 @@ summary(model2)
 
 
 ```{r}
-test <- glmer(n_spec_bird ~ scale(n_ind_pol)*openheid_sbp + (1|locationID) + (1|periode_in_jaar),
-+               data = mod_dat)
+test <- glmer(n_spec_bird ~ scale(n_ind_pol) * openheid_sbp +
+                (1|locationID) +
+                (1|periode_in_jaar),
+              data = mod_dat)
 
 summary(test)
 
 marginaleffects::plot_predictions(model = test, condition = c("n_ind_pol", "openheid_sbp"))
 
- ggplot(mod_dat, aes(x = n_ind_pol, y =n_spec_bird, colour = openheid_sbp, group = openheid_sbp)) +
-+   geom_point() +
-+   geom_smooth(method = "lm") + theme_minimal()
+ggplot(mod_dat, aes(x = n_ind_pol, y =n_spec_bird, colour = openheid_sbp, group = openheid_sbp)) +
+  geom_point() +
+  geom_smooth(method = "lm") + theme_minimal()
 ```
 
+```{r}
+library(ggpmisc)
+
+ggplot(mod_dat, aes(x = n_ind_pol, y = n_spec_bird)) +
+  geom_point(aes(colour = openheid_sbp)) +
+  geom_smooth(method = "lm", se = FALSE, aes(colour = openheid_sbp)) +
+  facet_wrap(~ openheid_sbp) +
+  stat_poly_eq(
+    aes(label = paste(..eq.label.., ..p.value.label.., sep = "~~~")),
+    formula = y ~ x,
+    parse = TRUE,
+    label.x.npc = "left", label.y.npc = 0.95,
+    size = 3
+  ) +
+  labs(x = "Totaal aantal bestuivers", y = "Aantal soorten vogels") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(mod_dat, aes(x = n_ind_pol, y = n_ind_bird)) +
+  geom_point(aes(colour = openheid_sbp)) +
+  geom_smooth(method = "lm", se = FALSE, aes(colour = openheid_sbp)) +
+  facet_wrap(~ openheid_sbp) +
+  stat_poly_eq(
+    aes(label = paste(..eq.label.., ..p.value.label.., sep = "~~~")),
+    formula = y ~ x,
+    parse = TRUE,
+    label.x.npc = "left", label.y.npc = 0.95,
+    size = 3
+  ) +
+  labs(x = "Totaal aantal bestuivers", y = "Totaal aantal vogels") +
+  theme_minimal()
+```
 
