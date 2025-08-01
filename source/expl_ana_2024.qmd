@@ -71,10 +71,12 @@ identifications <- identifications |>
                         n_ind)
   ) |>
   filter(species_nm != "Apis mellifera",
-         str_detect(sample_code, "2024"))
+         str_detect(sample_code, "2024"),
+         !str_detect(sample_code, "2024-10"))
 
 samples <- samples |>
-  filter(str_detect(sample_code, "2024")) |>
+  filter(str_detect(sample_code, "2024"),
+         !str_detect(sample_code, "2024-10")) |>
   select(-c(monitored_by, `Number of flowers (2m diameter)`, remarks))
 
 # Do a full join to include samples without individuals (for all orders)
@@ -445,11 +447,10 @@ mod_dat <- sum_dat |>
 model1 <- glmmTMB(
   n_spec ~
     (maand
-     + method_cd
      + openheid
-     + beheer) * order + (1 | location_code),
+     + beheer) * method_cd * order + (1 | location_code),
   family = "poisson",
-  ziformula = ~method_cd + order,
+  ziformula = ~method_cd * order,
   na.action = na.omit,
   data = mod_dat |> filter(order != "Syrphidae")
 )
@@ -511,9 +512,11 @@ marginaleffects::plot_predictions(
 
 ```{r}
 model2 <- glmmTMB(
-  n_ind ~ maand + method_cd + openheid +
-    beheer * order  + (1 | location_code),
-  family = "poisson",
+  n_ind ~ (maand +
+             openheid +
+             beheer) * method_cd * order  +
+    (1 | location_code),
+  family = "nbinom2",
   ziformula = ~ order * method_cd,
   na.action = na.omit,
   data = mod_dat
