@@ -8,15 +8,14 @@ output:
     toc: true
     toc_float: true
 ---
+
 # Intro
 
 In this document I attempt to make a simple simulation and power analysis using the simr package.
 
-We use the following model:
-$$
+We use the following model: $$
 n = m + y + (1|l)
-$$
-With $n$ being the number of individuals, $m$ the month, $y$ the year and $l$ the location.
+$$ With $n$ being the number of individuals, $m$ the month, $y$ the year and $l$ the location.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -29,7 +28,7 @@ library(simr)
 
 # Information from SPRING experiment
 
-At this moment we only have a limited data set to determine our coefficients from.
+This power analysis is based on data from the SPRING experiment in Flanders in 2023, which gives us a limited data set to determine our coefficients from. The SPRING experiment measured pollinator abundances on three locations and this in the months of May to September.
 
 ```{r gegevens SPRING}
 # Gemiddeld aantal individuen per soort per locatie
@@ -66,6 +65,14 @@ n_ind_per_loc <- identifications |>
   summarise(n_ind = sum(no_ind, na.rm = TRUE))
 ```
 
+We select the number of individuals collected during transects, as this is the proposed method for monitoring under the Nature Restoration Law. We increase the number of expected individuals, since the proposed transects are longer than those walked during the SPRING experiment. During SPRING Flanders 500 m transects were walked three times:
+
+-   one time normally for bees and hoverflies
+-   one time normally for butterflies
+-   one time sweeping for bees and hoverflies
+
+Following the proposed protocol 1000 m transects will be walked three times as well, once each for bees, hoverflies and butterflies.
+
 ```{r}
 test_data <- n_ind_per_loc |>
   filter(str_detect(sample_code, ".+_TS.+")) |>
@@ -73,8 +80,8 @@ test_data <- n_ind_per_loc |>
     month = substr(sample_code, 20, 20),
     location = substr(sample_code, 1, 8)
   ) |>
-  # correct for shorter transects compared to proposed protocol
-  # length new transects / length old transects = (1000 * 3) / (500 * 3) = 2
+  #' correct for shorter transects compared to proposed protocol
+  #' length new transects / length old transects = (1000 * 3) / (500 * 3) = 2
   mutate(n_ind = n_ind * 2)
 ```
 
@@ -91,7 +98,6 @@ attr(VarCorr(model1)$location, "stddev")
 ```{r}
 emmeans::emmeans(model1, ~ month)
 ```
-
 
 ## Design Setup
 
@@ -222,8 +228,3 @@ ggplot(power_df, aes(x = points, y = mean, color = trend)) +
   ) +
   theme_minimal()
 ```
-
-
-
-
-
