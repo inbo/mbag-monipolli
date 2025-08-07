@@ -71,8 +71,7 @@ identifications <- identifications |>
                         n_ind)
   ) |>
   filter(species_nm != "Apis mellifera",
-         str_detect(sample_code, "2024"),
-         !str_detect(sample_code, "2024-10"))
+         str_detect(sample_code, "2024"))
 
 samples <- samples |>
   filter(str_detect(sample_code, "2024"),
@@ -103,7 +102,9 @@ dat_2024 <- identifications |>
   mutate(n_ind = ifelse(is.na(n_ind),
                         0,
                         n_ind)) |>
-  filter(!(is.na(method_cd)))
+  filter(!(is.na(method_cd))) |>
+  mutate(maand = as.character(month(date_b))) |>
+  mutate(maand = ifelse(maand == 10, 9, maand))
 ```
 
 # Proefopzet
@@ -167,23 +168,18 @@ dat_2024 |>
 ```
 
 ## Per maand
-```{r}
-dat_maand <- dat_2024 |>
-  mutate(maand = as.character(month(date_b)))
-```
-
 
 ```{r}
 #| label: maand-venn
 #| fig-cap: "Venn diagrammen van het aantal gevonden soorten per maand,
 #|  voor A) alle soorten, B) wilde bijen en C) vlinders."
-p1 <- venn(dat_maand, "maand")
+p1 <- venn(dat_2024, "maand")
 
-p2 <- venn(dat_maand, "maand", order_list = "Apoidea")
+p2 <- venn(dat_2024, "maand", order_list = "Apoidea")
 
-p3 <- venn(dat_maand, "maand", order_list = "Syrphidae")
+p3 <- venn(dat_2024, "maand", order_list = "Syrphidae")
 
-p4 <- venn(dat_maand, "maand", order_list = "Lepidoptera")
+p4 <- venn(dat_2024, "maand", order_list = "Lepidoptera")
 
 plot_grid(p1, plot_grid(p2, p4,
           labels = c("B", "C")),
@@ -191,11 +187,11 @@ plot_grid(p1, plot_grid(p2, p4,
           labels = c("A"))
 ```
 
-:::{layout-ncol="2"}
+::: {layout-ncol="2"}
 ```{r}
 #| label: fig-maand-ind
 #| fig-cap: "Aantal gevonden individuen per maand."
-dat_maand |>
+dat_2024 |>
   ggplot(aes(x = maand, y = n_ind)) +
   geom_bar(stat = "identity") +
   labs(y = "Aantal individuen",
@@ -205,7 +201,7 @@ dat_maand |>
 ```{r}
 #| label: maand-ind-order
 #| fig-cap: "Aantal gevonden individuen per maand en per orde."
-dat_maand |>
+dat_2024 |>
   ggplot(aes(x = maand, y = n_ind, fill = order)) +
   geom_bar(position = "dodge", stat = "summary", fun = "sum") +
   labs(y = "Aantal individuen",
@@ -234,7 +230,7 @@ plot_grid(p1, plot_grid(p2, p4,
           labels = c("A"))
 ```
 
-:::{layout-ncol="2"}
+::: {layout-ncol="2"}
 ```{r}
 #| label: fig-pt-ts-ind
 #| fig-cap: "Aantal gevonden individuen in kleurvallen(PT) versus in transecten
@@ -287,7 +283,7 @@ plot_grid(p1, plot_grid(p2, p4,
           labels = c("A"))
 ```
 
-:::{layout-ncol="2"}
+::: {layout-ncol="2"}
 ```{r}
 #| label: beheer-ind
 #| fig-cap: "Aantal gevonden individuen in locaties binnen versus
@@ -334,7 +330,7 @@ plot_grid(p1, plot_grid(p2, p4,
           labels = c("A"))
 ```
 
-:::{layout-ncol="2"}
+::: {layout-ncol="2"}
 ```{r}
 #| label: openheid-ind
 #| fig-cap: "Aantal gevonden individuen in open (OL) versus halfopen landschap
