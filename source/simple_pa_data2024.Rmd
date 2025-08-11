@@ -16,7 +16,7 @@ We use the following model:
 $$
 n = m + y + (1|l)
 $$
-With $n$ being the number of individuals, $m$ the month, $y$ the year and $l$ the location.
+With $n$ being the number of individuals (modeled using a Poisson distribution), $m$ the month, $y$ the year and $l$ the location. Since we are using a random effect for location we will be using the `simr` package which allows us to create an artificial mixed model object.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -32,35 +32,27 @@ library(simr)
 At this moment we only have a limited data set to determine our coefficients from.
 
 ```{r gegevens 2024}
-identifications <- read_excel(here("data", "zandstreek_2024.xlsx"),
-  sheet = "identifications"
-)
+bestuivers_2024 <- read_csv(here("data", "processed", "bestuivers_2024"))
 
-identifications <- identifications |>
-  janitor::clean_names() |>
-  as_tibble() |>
-  rename(no_ind = "mm_ff") |>
-  mutate(
-    location = substr(sample_code, 1, 6),
-    month = substr(sample_code, 18, 19)
-  )
-
-n_ind_per_loc <- identifications |>
+bestuivers_2024 <- bestuivers_2024 |>
+  rename(location = location_code,
+         month = maand) |>
   filter(
     species_nm != "Apis mellifera",
-    str_detect(sample_code, ".+_TS.+")
+    method_cd == "TS"
   ) |>
   group_by(location, month) |>
-  summarise(n_ind = sum(no_ind, na.rm = TRUE)) |>
+  summarise(n_ind = sum(n_ind, na.rm = TRUE)) |>
   # correct for shorter transects compared to proposed protocol
-  # length new transects / length old transects = (1500 * 3) / (160 * 4) ~= 7
-  mutate(n_ind = n_ind * 7)
+  # length new transects / length old transects = (1000 * 3) / (160 * 4) ~= 5
+  mutate(n_ind = n_ind * 5,
+         month = as.factor(month))
 ```
 
 ```{r}
 model1 <- glmer(n_ind ~ month + (1 | location),
   family = "poisson",
-  data = n_ind_per_loc
+  data = bestuivers_2024
 )
 summary(model1)
 
@@ -97,15 +89,21 @@ generate_data <- function(n_locations) {
 ## Model Specification
 
 ```{r}
-# Fixed effects: Intercept, month 6-9, year (placeholder at index 7)
-fixed_base <- c(2.077, 0,
-                unname(coef(summary(model1))[1, 1]) - 2.077,
+#' Fixed effects: Intercept (month 4), month 5-9, year (placeholder at index 7)
+#' Month 4 and 5 based on SPRING data
+fixed_base <- c(1.674776, 0,
+                unname(coef(summary(model1))[1, 1]) - 1.674776,
                 unname(coef(summary(model1))[2:4, 1]),
                 NA)
 
-# Random effect variance for location
-rand <- attr(VarCorr(model1)$location, "stddev")
-varcorrmat1 <- list(location = c(rand^2))
+# Random effect variance for location and year
+rand_loc <- attr(VarCorr(model1)$location, "stddev")
+rand_year <- 0.5
+
+varcorrmat1 <- list(
+  location = c(rand_loc^2),
+  year = c(rand_year^2)
+)
 ```
 
 ## Power Analysis Function
@@ -121,7 +119,7 @@ run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
 
   # Simulated model with defined structure
   model <- makeGlmer(
-    formula = n_ind ~ month + year + (1 | location),
+    formula = n_ind ~ month + year + (1 | location) + (1 | year),
     family = poisson,
     fixef = fixed,
     VarCorr = varcorrmat1,
@@ -141,7 +139,7 @@ run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
 
 ```{r}
 # Define trends and locations
-trends <- c(1, 2)
+trends <- c(0.5, 1, 2)
 locations <- c(seq(10, 100, 10), 125, 150, 175, 200)
 
 # Run all combinations
@@ -150,7 +148,7 @@ results <- list()
 for (t in trends) {
   for (l in locations) {
     message(sprintf("Running trend %.1f%% with %d locations", t, l))
-    result <- run_power_analysis(t, l, nsim = 1000)
+    result <- run_power_analysis(t, l, nsim = 10)
     results[[paste0("trend", t, "_loc", l)]] <- result
   }
 }
@@ -201,8 +199,8 @@ ggplot(power_df, aes(x = points, y = mean, color = trend)) +
 
 # Wild bees
 
-```{r}
-n_ind_per_loc <- identifications |>
+```{r, eval=FALSE}
+n_ind_per_loc <- bestuivers_2024 |>
   filter(
     order == "Apoidea",
     species_nm != "Apis mellifera",
