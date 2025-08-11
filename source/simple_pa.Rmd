@@ -15,7 +15,7 @@ In this document I attempt to make a simple simulation and power analysis using 
 
 We use the following model: $$
 n = m + y + (1|l)
-$$ With $n$ being the number of individuals, $m$ the month, $y$ the year and $l$ the location.
+$$ With $n$ being the number of individuals (modeled using a Poisson distribution), $m$ the month, $y$ the year and $l$ the location. Since we are using a random effect for location we will be using the `simr` package which allows us to create an artificial mixed model object.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -71,7 +71,7 @@ We select the number of individuals collected during transects, as this is the p
 -   one time normally for butterflies
 -   one time sweeping for bees and hoverflies
 
-Following the proposed protocol 1000 m transects will be walked three times as well, once each for bees, hoverflies and butterflies.
+Following the proposed protocol 1000 m transects will be walked three times as well, once each for bees, hoverflies and butterflies. Therefore we double the number of expected individuals.
 
 ```{r}
 test_data <- n_ind_per_loc |>
@@ -171,7 +171,7 @@ run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
 
 ```{r}
 # Define trends and locations
-trends <- c(1, 2)
+trends <- c(0.5, 1, 2)
 locations <- c(seq(10, 100, 10), 125, 150, 175, 200)
 
 # Run all combinations
@@ -180,7 +180,7 @@ results <- list()
 for (t in trends) {
   for (l in locations) {
     message(sprintf("Running trend %.1f%% with %d locations", t, l))
-    result <- run_power_analysis(t, l, nsim = 250)
+    result <- run_power_analysis(t, l, nsim = 500)
     results[[paste0("trend", t, "_loc", l)]] <- result
   }
 }
