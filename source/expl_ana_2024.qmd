@@ -260,7 +260,7 @@ dat_2024 |>
 beheer_data <- dat_2024 |>
   left_join(punten, by = "location_code")
 
-write.csv(beheer_data,
+write_csv(beheer_data,
           here("data", "processed", "bestuivers_2024"))
 ```
 
