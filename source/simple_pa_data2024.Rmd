@@ -98,7 +98,7 @@ fixed_base <- c(1.674776, 0,
 
 # Random effect variance for location and year
 rand_loc <- attr(VarCorr(model1)$location, "stddev")
-rand_year <- 0.5
+rand_year <- 0.3
 
 varcorrmat1 <- list(
   location = c(rand_loc^2),
@@ -148,7 +148,7 @@ results <- list()
 for (t in trends) {
   for (l in locations) {
     message(sprintf("Running trend %.1f%% with %d locations", t, l))
-    result <- run_power_analysis(t, l, nsim = 10)
+    result <- run_power_analysis(t, l, nsim = 25)
     results[[paste0("trend", t, "_loc", l)]] <- result
   }
 }
@@ -209,7 +209,5 @@ n_ind_per_loc <- bestuivers_2024 |>
   group_by(location, month) |>
   summarise(n_ind = sum(no_ind, na.rm = TRUE))
 ```
-
-
 
 
