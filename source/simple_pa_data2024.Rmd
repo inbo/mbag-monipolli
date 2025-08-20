@@ -66,9 +66,9 @@ emmeans::emmeans(model1, ~month)
 
 ```{r}
 # Define design variables
-generate_data <- function(n_locations) {
+generate_data <- function(n_locations, n_years) {
   # Design variables
-  years <- as.numeric(1:6)
+  years <- as.numeric(1:n_years)
   months <- as.factor(4:9)
   locs <- paste0("loc_", 1:n_locations)
 
@@ -98,7 +98,7 @@ fixed_base <- c(1.674776, 0,
 
 # Random effect variance for location and year
 rand_loc <- attr(VarCorr(model1)$location, "stddev")
-rand_year <- 0.3
+rand_year <- 0.15
 
 varcorrmat1 <- list(
   location = c(rand_loc^2),
@@ -109,8 +109,11 @@ varcorrmat1 <- list(
 ## Power Analysis Function
 
 ```{r}
-run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
-  data <- generate_data(n_locations)
+run_power_analysis <- function(year_slope_percent,
+                               n_locations,
+                               n_years,
+                               nsim = 100) {
+  data <- generate_data(n_locations, n_years)
 
   # Convert percent trend to log scale
   year_slope <- log(1 + year_slope_percent / 100)
@@ -140,16 +143,19 @@ run_power_analysis <- function(year_slope_percent, n_locations, nsim = 100) {
 ```{r}
 # Define trends and locations
 trends <- c(0.5, 1, 2)
-locations <- c(seq(10, 100, 10), 125, 150, 175, 200)
+locations <- c(50, 100, 150, 200)
+n_years_v  <- c(6, 8, 10, 12)
 
 # Run all combinations
 results <- list()
 
-for (t in trends) {
-  for (l in locations) {
-    message(sprintf("Running trend %.1f%% with %d locations", t, l))
-    result <- run_power_analysis(t, l, nsim = 25)
-    results[[paste0("trend", t, "_loc", l)]] <- result
+for (ny in n_years_v) {
+  for (t in trends) {
+    for (l in locations) {
+      message(sprintf("n_years %d | trend %.1f%% | locations %d", ny, t, l))
+      result <- run_power_analysis(t, l, n_years = ny, nsim = 100)
+      results[[paste0("ny", ny, "_trend", t, "_loc", l)]] <- result
+    }
   }
 }
 ```
@@ -162,10 +168,11 @@ power_df <- bind_rows(
   lapply(names(results), function(name) {
     summary(results[[name]]) |>
       mutate(
-        trend = str_extract(name, "([0-9]|\\.)+(?=_)"),
-        points = as.numeric(str_extract(name, "[0-9]+$"))
+        year  = as.numeric(str_extract(name, "(?<=ny)\\d+")),
+        trend = str_extract(name, "(?<=trend)\\d+(?:\\.\\d+)?"),
+        points = as.numeric(str_extract(name, "(?<=loc)\\d+"))
       ) |>
-      select(trend, points, everything())
+      select(year, trend, points, everything())
   })
 )
 
@@ -194,7 +201,8 @@ ggplot(power_df, aes(x = points, y = mean, color = trend)) +
     x = "Number of Locations",
     y = "Power"
   ) +
-  theme_minimal()
+  theme_minimal() +
+  facet_grid(~year)
 ```
 
 # Wild bees
