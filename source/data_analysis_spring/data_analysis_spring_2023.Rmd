@@ -2039,13 +2039,13 @@ Per locatie: twee pan traps s.s. (uv - vegetatie) en twee pantraps SSL (uv - bod
 -   Kilometervergoeding: `r round(verpl * 6)` euro
 -   Loonkost: `r round(verpl_tijd * loon_verpl * 6)` euro
 
--   Aankopen, plaatsen, inzamelen en uitsorteren van 2 pan traps s.s. en 2 pan traps SSL op drie momenten: 545 euro per locatie
+-   Aankopen, plaatsen, inzamelen en uitsorteren van 2 pan traps s.s. en 2 pan traps SSL op drie momenten: 437 euro per locatie
 
--   Transect lopen en uitsorteren op drie momenten: 115 euro per locatie
+-   Transect lopen en uitsorteren op drie momenten: 96 euro per locatie
 
 -   Identificeren van soorten: `r round(iden_cost * 9 * 3)` euro
 
--   Totale kost: 1877 euro per jaar per locatie
+-   Totale kost: 1690 euro per jaar per locatie
 
 2: dit gebeurt door vrijwilligers met metabarcoding (geen aantallen individuen, alle samples worden samengevoegd per locatie)
 
