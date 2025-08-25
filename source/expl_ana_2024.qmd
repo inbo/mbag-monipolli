@@ -173,7 +173,7 @@ dat_2024 |>
 #| label: maand-venn
 #| fig-cap: "Venn diagrammen van het aantal gevonden soorten per maand,
 #|  voor A) alle soorten, B) wilde bijen en C) vlinders."
-p1 <- venn(dat_2024, "maand")
+p1 <- venn(dat_2024, "maand", order_list = c("Apoidea", "Lepidoptera"))
 
 p2 <- venn(dat_2024, "maand", order_list = "Apoidea")
 
@@ -216,7 +216,7 @@ dat_2024 |>
 #| fig-cap: "Venn diagrammen van het aantal gevonden soorten in transecten (TS)
 #|  versus in kleurvallen (PT), voor A) alle soorten, B) wilde bijen en
 #|   C) vlinders."
-p1 <- venn(dat_2024, "method_cd")
+p1 <- venn(dat_2024, "method_cd", order_list = c("Apoidea", "Lepidoptera"))
 
 p2 <- venn(dat_2024, "method_cd", order_list = "Apoidea")
 
@@ -269,7 +269,7 @@ write_csv(beheer_data,
 #| fig-cap: "Venn diagrammen van het aantal gevonden soorten in locaties binnen
 #|  versus buiten beheerplannen, voor A) alle soorten, B) wilde bijen,
 #|   en C) vlinders. "
-p1 <- venn(beheer_data, "beheer")
+p1 <- venn(beheer_data, "beheer", order_list = c("Apoidea", "Lepidoptera"))
 
 p2 <- venn(beheer_data, "beheer", order_list = "Apoidea")
 
@@ -316,7 +316,7 @@ beheer_data |>
 #| fig-cap: "Venn diagrammen van het aantal gevonden soorten in open (OL) versus
 #|  halfopen landschap (HOL), voor A) alle soorten, B) wilde bijen,
 #|   en C) vlinders. "
-p1 <- venn(beheer_data, "openheid")
+p1 <- venn(beheer_data, "openheid", order_list = c("Apoidea", "Lepidoptera"))
 
 p2 <- venn(beheer_data, "openheid", order_list = "Apoidea")
 
