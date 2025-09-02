@@ -714,13 +714,23 @@ pred_spec |>
     x = NULL
   ) +
   scale_x_discrete(
-    guide = guide_axis(n.dodge = 2),
     labels = c(
-      "Pan trap: Non-UV, soil surface",
-      "Pan trap: UV, soil surface",
-      "Pan trap: UV, vegetation",
-      "Transect: visual detection",
-      "Transect: vegetation sweeping"
+      "Pan trap :     
+      Non-UV, soil surface",
+      "Pan trap :     
+      UV, soil surface",
+      "   Pan trap :     
+      UV, vegetation",
+      "Transect :     
+      visual detection",
+      "Transect :     
+      vegetation sweeping"
+    )
+  ) + theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 0.85,
+      size = 10
     )
   ) +
   geom_signif(
@@ -764,13 +774,23 @@ pred_spec |>
     x = NULL
   ) +
   scale_x_discrete(
-    guide = guide_axis(n.dodge = 2),
     labels = c(
-      "Pan trap: Non-UV, soil surface",
-      "Pan trap: UV, soil surface",
-      "Pan trap: UV, vegetation",
-      "Transect: visual detection",
-      "Transect: vegetation sweeping"
+      "Pan trap :     
+      Non-UV, soil surface",
+      "Pan trap :     
+      UV, soil surface",
+      "   Pan trap :     
+      UV, vegetation",
+      "Transect :     
+      visual detection",
+      "Transect :     
+      vegetation sweeping"
+    )
+  ) + theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 0.85,
+      size = 10
     )
   ) +
   geom_signif(
@@ -828,6 +848,7 @@ p |>
     x = "Month",
     y = "Number of species"
   ) +
+  theme(axis.text.x = element_text(size = 10)) +
   geom_signif(
     comparisons = list(
       c(1, 3),
@@ -864,6 +885,7 @@ p |>
     x = "Month",
     y = "Number of species"
   ) +
+  theme(axis.text.x = element_text(size = 10)) +
   geom_signif(
     comparisons = list(
       c(1, 3),
@@ -940,13 +962,23 @@ pred_ind |>
     x = NULL
   ) +
   scale_x_discrete(
-    guide = guide_axis(n.dodge = 2),
     labels = c(
-      "Pan trap: Non-UV, soil surface",
-      "Pan trap: UV, soil surface",
-      "Pan trap: UV, vegetation",
-      "Transect: visual detection",
-      "Transect: vegetation sweeping"
+      "Pan trap :     
+      Non-UV, soil surface",
+      "Pan trap :     
+      UV, soil surface",
+      "   Pan trap :     
+      UV, vegetation",
+      "Transect :     
+      visual detection",
+      "Transect :     
+      vegetation sweeping"
+    )
+  ) + theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 0.85,
+      size = 10
     )
   ) +
   geom_signif(
@@ -987,13 +1019,23 @@ pred_ind |>
     x = NULL
   ) +
   scale_x_discrete(
-    guide = guide_axis(n.dodge = 2),
     labels = c(
-      "Pan trap: Non-UV, soil surface",
-      "Pan trap: UV, soil surface",
-      "Pan trap: UV, vegetation",
-      "Transect: visual detection",
-      "Transect: vegetation sweeping"
+      "Pan trap :     
+      Non-UV, soil surface",
+      "Pan trap :     
+      UV, soil surface",
+      "   Pan trap :     
+      UV, vegetation",
+      "Transect :     
+      visual detection",
+      "Transect :     
+      vegetation sweeping"
+    )
+  ) + theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 0.85,
+      size = 10
     )
   ) +
   geom_signif(
@@ -1052,6 +1094,7 @@ p |>
     x = "Month",
     y = "Number of species"
   ) +
+  theme(axis.text.x = element_text(size = 10)) +
   geom_signif(
     comparisons = list(
       c(1, 3),
@@ -1088,6 +1131,7 @@ p |>
     x = "Month",
     y = "Number of species"
   ) +
+  theme(axis.text.x = element_text(size = 10)) +
   geom_signif(
     comparisons = list(
       c(1, 2),
