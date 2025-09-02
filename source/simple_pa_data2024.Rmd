@@ -93,7 +93,8 @@ generate_data <- function(n_locations, n_years) {
 #' Month 4 and 5 based on SPRING data
 fixed_base <- c(1.674776, 0,
                 unname(coef(summary(model1))[1, 1]) - 1.674776,
-                unname(coef(summary(model1))[2:4, 1]),
+                unname(coef(summary(model1))[2:4, 1]) +
+                  unname(coef(summary(model1))[1, 1]) - 1.674776,
                 NA)
 
 # Random effect variance for location and year
@@ -143,7 +144,7 @@ run_power_analysis <- function(year_slope_percent,
 ```{r}
 # Define trends and locations
 trends <- c(0.5, 1, 2)
-locations <- c(50, 100, 150, 200)
+locations <- c(250, 500)
 n_years_v  <- c(6, 8, 10, 12)
 
 # Run all combinations
@@ -153,7 +154,7 @@ for (ny in n_years_v) {
   for (t in trends) {
     for (l in locations) {
       message(sprintf("n_years %d | trend %.1f%% | locations %d", ny, t, l))
-      result <- run_power_analysis(t, l, n_years = ny, nsim = 100)
+      result <- run_power_analysis(t, l, n_years = ny, nsim = 500)
       results[[paste0("ny", ny, "_trend", t, "_loc", l)]] <- result
     }
   }
