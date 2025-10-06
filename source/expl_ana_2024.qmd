@@ -8,7 +8,7 @@ format:
     toc_float: true
     embed-resources: true
     page-layout: full
-editor: visual
+editor: source
 editor_options: 
   chunk_output_type: console
 ---
@@ -466,6 +466,7 @@ performance::check_overdispersion(model1)
 #| label: model1-method
 #| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en
 #|  methode van inzamelen."
+#| fig-width: 12
 
 marginaleffects::plot_predictions(
   model1,
@@ -480,6 +481,7 @@ marginaleffects::plot_predictions(
 #| label: model1-openheid
 #| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en
 #|  openheid landschap."
+#| fig-width: 12
 
 marginaleffects::plot_predictions(
   model1,
@@ -494,6 +496,7 @@ marginaleffects::plot_predictions(
 #| label: model1-beheer
 #| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en of
 #|  de locatie al dan niet binnen een beheerplan valt."
+#| fig-width: 12
 
 marginaleffects::plot_predictions(
   model1,
@@ -536,6 +539,7 @@ performance::check_overdispersion(model2)
 #| label: model2-method
 #| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
 #|  methode van inzamelen."
+#| fig-width: 12
 
 marginaleffects::plot_predictions(
   model2,
@@ -550,6 +554,7 @@ marginaleffects::plot_predictions(
 #| label: model2-openheid
 #| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
 #|  openheid landschap."
+#| fig-width: 12
 
 marginaleffects::plot_predictions(
   model2,
@@ -564,6 +569,7 @@ marginaleffects::plot_predictions(
 #| label: model2-beheer
 #| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
 #|  of de locatie al dan niet binnen een beheerplan valt."
+#| fig-width: 12
 
 marginaleffects::plot_predictions(
   model2,
@@ -573,3 +579,54 @@ marginaleffects::plot_predictions(
 ) +
   labs(y = "Aantal individuen")
 ```
+
+```{r}
+#| label: model2-methode-openheid
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep, 
+#| methode van inzamelen en openheid landschap."
+#| fig-width: 12
+
+predictions <- marginaleffects::avg_predictions(model2,
+                                                by = c("maand",
+                                                       "openheid",
+                                                       "method_cd",
+                                                       "order"))
+
+ggplot(predictions,
+       aes(x = maand,
+           y = estimate,
+           color = interaction(method_cd, openheid))) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.5)) +
+  facet_wrap(~order, scales = "free") +
+  labs(y = "Aantal individuen",
+       color = "Interactie methode-openheid")
+```
+
+```{r}
+#| label: model2-methode-beheer
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep, 
+#| methode van inzamelen en of de locatie al dan niet binnen een beheerplan 
+#| valt."
+#| fig-width: 12
+
+predictions <- marginaleffects::avg_predictions(model2,
+                                                by = c("maand",
+                                                       "beheer",
+                                                       "method_cd",
+                                                       "order"))
+
+ggplot(predictions,
+       aes(x = maand,
+           y = estimate,
+           color = interaction(method_cd, beheer))) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.5)) +
+  facet_wrap(~order, scales = "free") +
+  labs(y = "Aantal individuen",
+       color = "Interactie methode-beheer")
+```
+
+
