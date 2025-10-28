@@ -1,0 +1,781 @@
+---
+title: "Exploratieve analyses 2024 data"
+author: "Emma Cartuyvels"
+format: 
+  html:
+    code-fold: true
+    toc: true
+    toc_float: true
+    embed-resources: true
+    page-layout: full
+editor: source
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+```
+
+```{r set-up}
+library(readxl)
+library(here)
+library(sf)
+library(ggvenn)
+library(ggsignif)
+library(cowplot)
+library(glmmTMB)
+library(tidyverse)
+library(INBOtheme)
+
+conflicted::conflicts_prefer(dplyr::filter)
+```
+
+```{r read data}
+identifications <- read_excel(here("data", "zandstreek_2024.xlsx"),
+  sheet = "identifications"
+)
+
+samples <- read_excel(here("data", "zandstreek_2024.xlsx"),
+  sheet = "samples"
+)
+
+locations <- read_excel(here("data", "zandstreek_2024.xlsx"),
+  sheet = "locations-localities"
+)
+```
+
+```{r read point data}
+locations <- locations |>
+  mutate(pointid = str_extract(location_nm, "Zn_.*")) |>
+  select(location_id, location_code, Crops, pointid)
+
+punten <- read_sf(here("data", "steekproef_zandstreek_avimap.gpkg")) |>
+  right_join(locations, by = "pointid") |>
+  separate_wider_delim(openheid_sbp,
+                       names = c("openheid", "beheer"),
+                       delim = " ",
+                       too_many = "merge",
+                       cols_remove = FALSE)
+```
+
+We filteren de data om enkel wilde bijen over te houden, dus geen honingbijen.
+
+```{r clean data}
+identifications <- identifications |>
+  janitor::clean_names() |>
+  select(sample_id, sample_code, method,
+         order, species_nm, n_ind = mm_ff) |>
+  mutate(n_ind = ifelse(is.na(n_ind),
+                        0,
+                        n_ind)
+  ) |>
+  filter(species_nm != "Apis mellifera",
+         str_detect(sample_code, "2024"))
+
+samples <- samples |>
+  filter(str_detect(sample_code, "2024"),
+         !str_detect(sample_code, "2024-10")) |>
+  select(-c(monitored_by, `Number of flowers (2m diameter)`, remarks))
+
+# Do a full join to include samples without individuals (for all orders)
+# Locations without butterfly monitoring:
+but_1 <- c("BE_A01", "BE_A02", "BE_A03", "BE_B01", "BE_B02", "BE_B03", "BE_B04",
+           "BE_B05", "BE_B06", "BE_C06", "BE_C07", "BE_C09", "BE_C10", "BE_D05",
+           "BE_D06", "BE_D07", "BE_D08", "BE_D09", "BE_D10")
+# Locations with no butterfly monitoring in August and September:
+but_2 <- c("BE_A04", "BE_A05", "BE_C08")
+
+samples_order <- samples |>
+  mutate(order = "Apoidea") |>
+  add_row(samples |>
+            mutate(order = "Syrphidae")) |>
+  add_row(samples |>
+            mutate(order = "Lepidoptera")) |>
+  filter(!(method_cd == "TS" & order ==  "Lepidoptera" &
+             location_code %in% but_1)) |>
+  filter(!(method_cd == "TS" & order ==  "Lepidoptera" &
+             location_code %in% but_2 & month(date_b) %in% c(8,9)))
+
+dat_2024 <- identifications |>
+  full_join(samples_order, by = c("sample_id", "order")) |>
+  mutate(n_ind = ifelse(is.na(n_ind),
+                        0,
+                        n_ind)) |>
+  filter(!(is.na(method_cd))) |>
+  mutate(maand = as.character(month(date_b))) |>
+  mutate(maand = ifelse(maand == 10, 9, maand))
+```
+
+# Proefopzet
+
+Er werden 40 punten gemonitord, allen gelegen in landbouwgebied in de zandstreek. De punten werden gestratificeerd op open versus halfopen landschap en punten met beheermaatregelen en zonder beheermaatregelen.
+
+Op elke locatie werden 4 sets kleurvallen opgesteld, twee op vegetatie niveau en twee op grond niveau. Deze kleurvallen werden elke maand voor drie dagen in het veld gelaten. Bij de start en einde van die drie dagen werden steeds 2 transecten van 160 m gelopen: één voor wilde bijen en zweefvliegen en één voor vlinders. Dit levert een totaal van 4 transecten per maand.
+
+Vlinders werden op 17 van de 40 locaties niet gemonitord via transecten en op drie andere locaties werden ze niet gemonitord via een transect in de maanden augustus en september.
+
+```{r}
+mapview::mapview(st_as_sf(punten),
+                 zcol = "openheid_sbp",
+                 layer.name = "Stratificatie")
+```
+
+# Data verkenning
+
+```{r}
+venn <- function(data, group,
+                 count_id = "species_nm",
+                 order_list = c("Apoidea", "Syrphidae", "Lepidoptera")) {
+  groups <- data |>
+    filter(!is.na(!!sym(group))) |>
+    distinct(!!sym(group)) |>
+    pull(!!sym(group))
+
+  x <- vector(mode = "list", length = length(groups))
+  x <- setNames(x, groups)
+
+  for (i in groups) {
+    int <- data |>
+      filter(
+        order %in% order_list,
+        !!sym(group) == i
+      ) |>
+      distinct(!!sym(count_id)) |>
+      filter(!is.na(!!sym(count_id))) |>
+      pull(!!sym(count_id))
+    x[[i]] <- int
+  }
+
+  ggvenn(x,
+         fill_color = inbo_palette(),
+         set_name_size = 3,
+         stroke_size = NULL,
+         auto_scale = FALSE)
+}
+```
+
+## Per orde
+
+```{r}
+#| label: fig-order-ind
+#| fig-cap: "Aantal gevonden individuen per orde."
+dat_2024 |>
+  ggplot(aes(x = order, y = n_ind)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Aantal individuen",
+       x = "Orde")
+```
+
+## Per maand
+
+```{r}
+#| label: maand-venn
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten per maand,
+#|  voor A) alle soorten, B) wilde bijen en C) vlinders."
+p1 <- venn(dat_2024, "maand", order_list = c("Apoidea", "Lepidoptera"))
+
+p2 <- venn(dat_2024, "maand", order_list = "Apoidea")
+
+p3 <- venn(dat_2024, "maand", order_list = "Syrphidae")
+
+p4 <- venn(dat_2024, "maand", order_list = "Lepidoptera")
+
+plot_grid(p1, plot_grid(p2, p4,
+          labels = c("B", "C")),
+          nrow = 2,
+          labels = c("A"))
+```
+
+::: {layout-ncol="2"}
+```{r}
+#| label: fig-maand-ind
+#| fig-cap: "Aantal gevonden individuen per maand."
+dat_2024 |>
+  ggplot(aes(x = maand, y = n_ind)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Aantal individuen",
+       x = "Maand")
+```
+
+```{r}
+#| label: maand-ind-order
+#| fig-cap: "Aantal gevonden individuen per maand en per orde."
+dat_2024 |>
+  ggplot(aes(x = maand, y = n_ind, fill = order)) +
+  geom_bar(position = "dodge", stat = "summary", fun = "sum") +
+  labs(y = "Aantal individuen",
+       x = "Maand")
+```
+:::
+
+## Transecten versus pan traps
+
+```{r}
+#| label: pt-ts-venn
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in transecten (TS)
+#|  versus in kleurvallen (PT), voor A) alle soorten, B) wilde bijen en
+#|   C) vlinders."
+p1 <- venn(dat_2024, "method_cd", order_list = c("Apoidea", "Lepidoptera"))
+
+p2 <- venn(dat_2024, "method_cd", order_list = "Apoidea")
+
+p3 <- venn(dat_2024, "method_cd", order_list = "Syrphidae")
+
+p4 <- venn(dat_2024, "method_cd", order_list = "Lepidoptera")
+
+plot_grid(p1, plot_grid(p2, p4,
+          labels = c("B", "C")),
+          nrow = 2,
+          labels = c("A"))
+```
+
+::: {layout-ncol="2"}
+```{r}
+#| label: fig-pt-ts-ind
+#| fig-cap: "Aantal gevonden individuen in kleurvallen(PT) versus in transecten
+#|  (TS)."
+dat_2024 |>
+  ggplot(aes(x = method_cd, y = n_ind)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Aantal individuen",
+       x = "Methode")
+```
+
+```{r}
+#| label: pt-ts-ind-order
+#| fig-cap: "Aantal gevonden individuen in kleurvallen(PT) versus in transecten
+#|  (TS) per orde."
+dat_2024 |>
+  ggplot(aes(x = method_cd, y = n_ind, fill = order)) +
+  geom_bar(position = "dodge", stat = "summary", fun = "sum") +
+  labs(y = "Aantal individuen",
+       x = "Methode")
+```
+:::
+
+## Binnen beheerplan versus buiten beheerplan
+
+```{r}
+beheer_data <- dat_2024 |>
+  left_join(punten, by = "location_code")
+
+write_csv(beheer_data,
+          here("data", "processed", "bestuivers_2024"))
+```
+
+```{r}
+#| label: beheer-venn
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in locaties binnen
+#|  versus buiten beheerplannen, voor A) alle soorten, B) wilde bijen,
+#|   en C) vlinders. "
+p1 <- venn(beheer_data, "beheer", order_list = c("Apoidea", "Lepidoptera"))
+
+p2 <- venn(beheer_data, "beheer", order_list = "Apoidea")
+
+p3 <- venn(beheer_data, "beheer", order_list = "Syrphidae")
+
+p4 <- venn(beheer_data, "beheer", order_list = "Lepidoptera")
+
+plot_grid(p1, plot_grid(p2, p4,
+          labels = c("B", "C")),
+          nrow = 2,
+          labels = c("A"))
+```
+
+::: {layout-ncol="2"}
+```{r}
+#| label: beheer-ind
+#| fig-cap: "Aantal gevonden individuen in locaties binnen versus
+#|  buiten beheerplannen."
+
+beheer_data |>
+  ggplot(aes(x = beheer, y = n_ind)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Aantal individuen",
+       x = NULL)
+```
+
+```{r}
+#| label: beheer-ind-order
+#| fig-cap: "Aantal gevonden individuen in locaties binnen versus
+#|  buiten beheerplannen per orde."
+
+beheer_data |>
+  ggplot(aes(x = beheer, y = n_ind, fill = order)) +
+  geom_bar(position = "dodge", stat = "summary", fun = "sum") +
+  labs(y = "Aantal individuen",
+       x = NULL)
+```
+:::
+
+## Open versus halfopen landschap
+
+```{r}
+#| label: openheid-venn
+#| fig-cap: "Venn diagrammen van het aantal gevonden soorten in open (OL) versus
+#|  halfopen landschap (HOL), voor A) alle soorten, B) wilde bijen,
+#|   en C) vlinders. "
+p1 <- venn(beheer_data, "openheid", order_list = c("Apoidea", "Lepidoptera"))
+
+p2 <- venn(beheer_data, "openheid", order_list = "Apoidea")
+
+p3 <- venn(beheer_data, "openheid", order_list = "Syrphidae")
+
+p4 <- venn(beheer_data, "openheid", order_list = "Lepidoptera")
+
+plot_grid(p1, plot_grid(p2, p4,
+          labels = c("B", "C")),
+          nrow = 2,
+          labels = c("A"))
+```
+
+::: {layout-ncol="2"}
+```{r}
+#| label: openheid-ind
+#| fig-cap: "Aantal gevonden individuen in open (OL) versus halfopen landschap
+#|  (HOL)."
+
+beheer_data |>
+  ggplot(aes(x = openheid, y = n_ind)) +
+  geom_bar(stat = "identity") +
+  labs(y = "Aantal individuen",
+       x = NULL)
+```
+
+```{r}
+#| label: openheid-ind-order
+#| fig-cap: "Aantal gevonden individuen in open (OL) versus halfopen landschap
+#|  (HOL) per orde."
+
+beheer_data |>
+  ggplot(aes(x = openheid, y = n_ind, fill = order)) +
+  geom_bar(position = "dodge", stat = "summary", fun = "sum") +
+  labs(y = "Aantal individuen",
+       x = NULL)
+```
+:::
+
+# Nulwaarnemingen
+
+```{r}
+#| label: order-ind_zero
+#| fig-cap: "Aantal punten met nul waarnemingen per orde."
+dat_2024 |>
+  filter(n_ind == 0) |>
+  ggplot(aes(x = order)) +
+  geom_bar(stat = "count") +
+  labs(y = "Aantal punten met nul waarnemingen",
+       x = "Orde")
+```
+
+```{r}
+#| label: pt-ts-ind_zero
+#| fig-cap: "Aantal punten met nul waarnemingen in transecten (TS) versus in
+#|  kleurvallen (PT)."
+dat_2024 |>
+  filter(n_ind == 0) |>
+  ggplot(aes(x = method_cd)) +
+  geom_bar(stat = "count") +
+  labs(y = "Aantal punten met nul waarnemingen",
+       x = "Methode")
+```
+
+```{r}
+#| label: beheer-ind_zero
+#| fig-cap: "Aantal punten met nul waarnemingen in gebieden met beheersplannen
+#|  versus gebieden zonder."
+beheer_data |>
+  filter(n_ind == 0) |>
+  ggplot(aes(x = beheer)) +
+  geom_bar(stat = "count") +
+  labs(y = "Aantal punten met nul waarnemingen",
+       x = NULL)
+```
+
+```{r}
+#| label: openheid-ind_zero
+#| fig-cap: "Aantal punten met nul waarnemingen in open (OL) versus halfopen
+#|  (HOL) landschap."
+beheer_data |>
+  filter(n_ind == 0) |>
+  ggplot(aes(x = openheid)) +
+  geom_bar(stat = "count") +
+  labs(y = "Aantal punten met nul waarnemingen",
+       x = "Openheid landschap")
+```
+
+Er is een effect op het aantal nulwaarnemingen voor orde en methode, we bekijken ook de interactie:
+
+```{r}
+#| label: order-method-ind_zero
+#| fig-cap: "Aantal punten met nul waarnemingen per orde en methode."
+beheer_data |>
+  filter(n_ind == 0) |>
+  ggplot(aes(x = order, fill = method_cd)) +
+  geom_bar(stat = "count", position = "dodge") +
+  labs(y = "Aantal punten met nul waarnemingen",
+       x = "Orde")
+```
+
+Er lijkt interactie op te treden.
+
+# Modellering
+
+```{r}
+sum_dat <- beheer_data |>
+  mutate(maand = as.factor(month(date_b))) |>
+  group_by(maand, order, location_code, openheid, beheer, method_cd, Crops) |>
+  summarise(n_ind = sum(n_ind),
+            n_spec = n_distinct(species_nm, na.rm = TRUE)) |>
+  ungroup()
+
+aanvul <- sum_dat |>
+  expand(maand, order, location_code, method_cd)
+
+mod_dat <- sum_dat |>
+  right_join(aanvul)
+```
+
+## Aantal soorten
+
+```{r}
+model1 <- glmmTMB(
+  n_spec ~
+    (maand
+     + openheid
+     + beheer) * method_cd * order + (1 | location_code),
+  family = "poisson",
+  ziformula = ~method_cd * order,
+  na.action = na.omit,
+  data = mod_dat |> filter(order != "Syrphidae")
+)
+```
+
+```{r}
+summary(model1)
+```
+
+```{r}
+performance::check_model(model1)
+
+performance::check_overdispersion(model1)
+```
+
+```{r}
+#| label: model1-method
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en
+#|  methode van inzamelen."
+#| fig-width: 12
+
+marginaleffects::plot_predictions(
+  model1,
+  condition = c("maand", "method_cd", "order"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(y = "Aantal soorten")
+```
+
+```{r}
+#| label: model1-openheid
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en
+#|  openheid landschap."
+#| fig-width: 12
+
+marginaleffects::plot_predictions(
+  model1,
+  condition = c("maand", "openheid", "order"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(y = "Aantal soorten")
+```
+
+```{r}
+#| label: model1-beheer
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en of
+#|  de locatie al dan niet binnen een beheerplan valt."
+#| fig-width: 12
+
+marginaleffects::plot_predictions(
+  model1,
+  condition = c("maand", "beheer", "order"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(y = "Aantal soorten")
+```
+
+## Aantal individuen
+
+```{r}
+model2 <- glmmTMB(
+  n_ind ~ (maand +
+             openheid +
+             beheer) * method_cd * order  +
+    (1 | location_code),
+  family = "nbinom2",
+  ziformula = ~ order * method_cd,
+  na.action = na.omit,
+  data = mod_dat
+)
+```
+
+```{r}
+summary(model2)
+```
+
+```{r}
+#| error: true
+performance::check_model(model2)
+
+performance::check_homogeneity(model2)
+
+performance::check_overdispersion(model2)
+```
+
+### Contrast methode
+```{r}
+em <- emmeans::emmeans(model2, pairwise ~ (method_cd | order))
+em$contrasts
+```
+
+### Contrast openheid landschap
+```{r}
+em <- emmeans::emmeans(model2, pairwise ~ (openheid | order))
+em$contrasts
+```
+
+### Contrast beheer
+```{r}
+em <- emmeans::emmeans(model2, pairwise ~ (beheer | order))
+em$contrasts
+```
+
+### Contrast maand en figuren
+```{r}
+em <- emmeans::emmeans(model2, pairwise ~ (maand | order))
+em$contrasts
+```
+
+```{r}
+#| label: model2-maand_signif_ap
+#| fig-cap: "Gemodelleerd aantal individuen wilde bijen afhankelijk van maand."
+
+pred_ind <- marginaleffects::plot_predictions(
+  model2,
+  condition = c("maand", "order"),
+  type = "response",
+  vcov = TRUE,
+  draw = FALSE
+)
+
+pred_ind |>
+  filter(order == "Apoidea") |>
+  ggplot(aes(
+    x = maand,
+    y = estimate
+  )) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue",
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(
+    y = "Number of individuals",
+    x = "Maand"
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 4),
+      c(2, 3),
+      c(2, 4),
+      c(3, 4)
+    ),
+    annotations = c(
+      "***", "***",
+      "***", "***"
+    ),
+    y_position = c(10.2, 9.4, 9.8, 9.4),
+    tip_length = 0.01,
+    vjust = 0.5
+  )
+```
+
+```{r}
+#| label: model2-maand_signif_syr
+#| fig-cap: "Gemodelleerd aantal individuen zweefvliegen afhankelijk van maand."
+
+pred_ind |>
+  filter(order == "Syrphidae") |>
+  ggplot(aes(
+    x = maand,
+    y = estimate
+  )) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue",
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(
+    y = "Number of individuals",
+    x = "Maand"
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 2),
+      c(1, 4),
+      c(2, 3),
+      c(2, 4)
+    ),
+    annotations = c(
+      "*", "*",
+      "***", "***"
+    ),
+    y_position = c(33, 35, 33, 34),
+    tip_length = 0.01,
+    vjust = 0.5
+  )
+```
+
+```{r}
+#| label: model2-maand_signif_lep
+#| fig-cap: "Gemodelleerd aantal individuen vlinders afhankelijk van maand."
+
+pred_ind |>
+  filter(order == "Lepidoptera") |>
+  ggplot(aes(
+    x = maand,
+    y = estimate
+  )) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue",
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(
+    y = "Number of individuals",
+    x = "Maand"
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 2),
+      c(1, 3),
+      c(2, 4),
+      c(3, 4)
+    ),
+    annotations = c(
+      "*", "***",
+      "*", "**"
+    ),
+    y_position = c(4.8,5,5.25,4.8),
+    tip_length = 0.01,
+    vjust = 0.5
+  )
+```
+
+### Verdere figuren
+```{r}
+#| label: model2-method
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
+#|  methode van inzamelen."
+#| fig-width: 12
+
+marginaleffects::plot_predictions(
+  model2,
+  condition = c("maand", "method_cd", "order"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(y = "Aantal individuen")
+```
+
+```{r}
+#| label: model2-openheid
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
+#|  openheid landschap."
+#| fig-width: 12
+
+marginaleffects::plot_predictions(
+  model2,
+  condition = c("maand", "openheid", "order"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(y = "Aantal individuen")
+```
+
+```{r}
+#| label: model2-beheer
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
+#|  of de locatie al dan niet binnen een beheerplan valt."
+#| fig-width: 12
+
+marginaleffects::plot_predictions(
+  model2,
+  condition = c("maand", "beheer", "order"),
+  type = "response",
+  vcov = TRUE
+) +
+  labs(y = "Aantal individuen")
+```
+
+```{r}
+#| label: model2-methode-openheid
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep, 
+#| methode van inzamelen en openheid landschap."
+#| fig-width: 12
+
+predictions <- marginaleffects::avg_predictions(model2,
+                                                by = c("maand",
+                                                       "openheid",
+                                                       "method_cd",
+                                                       "order"))
+
+ggplot(predictions,
+       aes(x = maand,
+           y = estimate,
+           color = interaction(method_cd, openheid))) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.5)) +
+  facet_wrap(~order, scales = "free") +
+  labs(y = "Aantal individuen",
+       color = "Interactie methode-openheid")
+```
+
+```{r}
+#| label: model2-methode-beheer
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep, 
+#| methode van inzamelen en of de locatie al dan niet binnen een beheerplan 
+#| valt."
+#| fig-width: 12
+
+predictions <- marginaleffects::avg_predictions(model2,
+                                                by = c("maand",
+                                                       "beheer",
+                                                       "method_cd",
+                                                       "order"))
+
+ggplot(predictions,
+       aes(x = maand,
+           y = estimate,
+           color = interaction(method_cd, beheer))) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.5)) +
+  facet_wrap(~order, scales = "free") +
+  labs(y = "Aantal individuen",
+       color = "Interactie methode-beheer")
+```

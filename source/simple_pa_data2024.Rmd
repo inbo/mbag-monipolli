@@ -1,0 +1,222 @@
+---
+title: "Super simple power analysis for 2024 data"
+author: "Emma Cartuyvels"
+date: "2025-05-05"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+# Intro
+
+In this document I attempt to make a simple simulation and power analysis using the simr package.
+
+We use the following model:
+$$
+n = m + y + (1|l)
+$$
+With $n$ being the number of individuals (modeled using a Poisson distribution), $m$ the month, $y$ the year and $l$ the location. Since we are using a random effect for location we will be using the `simr` package which allows us to create an artificial mixed model object.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(here)
+library(tidyverse)
+library(simr)
+```
+
+# Information from SPRING experiment
+
+At this moment we only have a limited data set to determine our coefficients from.
+
+```{r gegevens 2024}
+bestuivers_2024 <- read_csv(here("data", "processed", "bestuivers_2024"))
+
+bestuivers_2024 <- bestuivers_2024 |>
+  rename(location = location_code,
+         month = maand) |>
+  filter(
+    species_nm != "Apis mellifera",
+    method_cd == "TS"
+  ) |>
+  group_by(location, month) |>
+  summarise(n_ind = sum(n_ind, na.rm = TRUE)) |>
+  # correct for shorter transects compared to proposed protocol
+  # length new transects / length old transects = (1000 * 3) / (160 * 4) ~= 5
+  mutate(n_ind = n_ind * 5,
+         month = as.factor(month))
+```
+
+```{r}
+model1 <- glmer(n_ind ~ month + (1 | location),
+  family = "poisson",
+  data = bestuivers_2024
+)
+summary(model1)
+
+attr(VarCorr(model1)$location, "stddev")
+```
+```{r}
+emmeans::emmeans(model1, ~month)
+```
+
+## Design Setup
+
+```{r}
+# Define design variables
+generate_data <- function(n_locations, n_years) {
+  # Design variables
+  years <- as.numeric(1:n_years)
+  months <- as.factor(4:9)
+  locs <- paste0("loc_", 1:n_locations)
+
+  # Base: 1 visit per month per year per location
+  data <- expand.grid(
+    location = locs,
+    year = years,
+    month = months,
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  )
+
+  data$month <- factor(data$month, levels = levels(months))
+  return(data)
+}
+```
+
+## Model Specification
+
+```{r}
+#' Fixed effects: Intercept (month 4), month 5-9, year (placeholder at index 7)
+#' Month 4 and 5 based on SPRING data
+fixed_base <- c(1.674776, 0,
+                unname(coef(summary(model1))[1, 1]) - 1.674776,
+                unname(coef(summary(model1))[2:4, 1]) +
+                  unname(coef(summary(model1))[1, 1]) - 1.674776,
+                NA)
+
+# Random effect variance for location and year
+rand_loc <- attr(VarCorr(model1)$location, "stddev")
+rand_year <- 0.15
+
+varcorrmat1 <- list(
+  location = c(rand_loc^2),
+  year = c(rand_year^2)
+)
+```
+
+## Power Analysis Function
+
+```{r}
+run_power_analysis <- function(year_slope_percent,
+                               n_locations,
+                               n_years,
+                               nsim = 100) {
+  data <- generate_data(n_locations, n_years)
+
+  # Convert percent trend to log scale
+  year_slope <- log(1 + year_slope_percent / 100)
+  fixed <- fixed_base
+  fixed[7] <- year_slope
+
+  # Simulated model with defined structure
+  model <- makeGlmer(
+    formula = n_ind ~ month + year + (1 | location) + (1 | year),
+    family = poisson,
+    fixef = fixed,
+    VarCorr = varcorrmat1,
+    data = data
+  )
+
+  test <- powerSim(model,
+    nsim = nsim, test = fixed("year", "z"),
+    progress = FALSE
+  )
+
+  return(test)
+}
+```
+
+## Run Power Simulations
+
+```{r}
+# Define trends and locations
+trends <- c(0.5, 1, 2)
+locations <- c(250, 500)
+n_years_v  <- c(6, 8, 10, 12)
+
+# Run all combinations
+results <- list()
+
+for (ny in n_years_v) {
+  for (t in trends) {
+    for (l in locations) {
+      message(sprintf("n_years %d | trend %.1f%% | locations %d", ny, t, l))
+      result <- run_power_analysis(t, l, n_years = ny, nsim = 500)
+      results[[paste0("ny", ny, "_trend", t, "_loc", l)]] <- result
+    }
+  }
+}
+```
+
+## Summarize Results
+
+```{r}
+# Print summaries
+power_df <- bind_rows(
+  lapply(names(results), function(name) {
+    summary(results[[name]]) |>
+      mutate(
+        year  = as.numeric(str_extract(name, "(?<=ny)\\d+")),
+        trend = str_extract(name, "(?<=trend)\\d+(?:\\.\\d+)?"),
+        points = as.numeric(str_extract(name, "(?<=loc)\\d+"))
+      ) |>
+      select(year, trend, points, everything())
+  })
+)
+
+power_df
+```
+
+## Extract and Plot Power Results
+
+```{r}
+# Plot power curve
+library(ggplot2)
+ggplot(power_df, aes(x = points, y = mean, color = trend)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill = trend, colour = NULL),
+    alpha = 0.1
+  ) +
+  geom_point() +
+  geom_hline(
+    yintercept = 0.8,
+    linetype = 2,
+    color = "darkgrey"
+  ) +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(
+    title = "Power to Detect Yearly Trends",
+    x = "Number of Locations",
+    y = "Power"
+  ) +
+  theme_minimal() +
+  facet_grid(~year)
+```
+
+# Wild bees
+
+```{r, eval=FALSE}
+n_ind_per_loc <- bestuivers_2024 |>
+  filter(
+    order == "Apoidea",
+    species_nm != "Apis mellifera",
+    str_detect(sample_code, ".+_TS.+")
+  ) |>
+  group_by(location, month) |>
+  summarise(n_ind = sum(no_ind, na.rm = TRUE))
+```
+
+

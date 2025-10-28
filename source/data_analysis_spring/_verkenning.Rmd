@@ -3,6 +3,8 @@
 We zorgen ervoor dat de data volledig is (toevoegen nulwaarnemingen) en dat de 11de pantrap op de site van ILVO niet wordt meegenomen in verdere analyses.
 
 ```{r}
+# nolint start
+
 tot_n_species <- identifications_basic %>%
   filter(family %in% {{familyvec}}) %>%
   pull(species_nm) %>%
@@ -15,12 +17,12 @@ In totaal werden `r tot_n_species` soorten `{{group}}` gevonden.
 {{group}} <- identifications_basic %>%
   filter(family %in% {{familyvec}}) %>%
   full_join(samples_basic, by = c("sample_code")) %>%
-  mutate(
-    no_ind = ifelse(
-      is.na(no_ind),
-      0,
-      no_ind
-    )) %>%
+  mutate(no_ind = ifelse(
+    is.na(no_ind),
+    0,
+    no_ind
+  )
+  ) %>%
   mutate(month = as.factor(month)) %>%
   filter(!(stringr::str_detect(sampling_site_cd, "PT11")))
 ```
@@ -77,7 +79,7 @@ venn({{group}}, "month")
 ### Alpha diversiteit
 
 ```{r {{group}}-richness}
-{{group}}_richness <- {{group}} %>% # nolint
+{{group}}_richness <- {{group}} %>%
   group_by(
     location_code,
     sampling_site_cd,
@@ -161,7 +163,7 @@ rarefaction_result %>%
   ggplot(
     aes(
       x = sites, y = richness)
-    ) +
+  ) +
   geom_line(
     aes(
       colour = location_code)) +
@@ -227,7 +229,7 @@ referentie_extra_soorten_per_dag <- 0.5
         xend = cumulative_days + 0.5,
         y = referentie_extra_soorten_per_dag * round(cumulative_days)),
     alpha = 0.05) +
- geom_line(aes(group = pt), alpha = 0.3) +
+  geom_line(aes(group = pt), alpha = 0.3) +
   geom_text(
     data = {{group}}_cumulative %>%
       group_by(cumulative_days, location_code, method_combi) %>%
@@ -239,7 +241,7 @@ referentie_extra_soorten_per_dag <- 0.5
       label = extra_n_days),
     nudge_x = 0.5,
     alpha = 0.4
-    ) +
+  ) +
   stat_summary(fun.data = mean_cl_boot, colour = "blue") +
   facet_grid(location_code ~ method_combi, scales = "free_y") +
   labs(y = "Aantal soorten extra t.o.v. één 'dag' minder laten staan")
@@ -280,7 +282,7 @@ rarefaction_result_2 %>%
   ggplot(
     aes(
       x = sites, y = richness)
-    ) +
+  ) +
   geom_line(
     aes(
       colour = location_code)) +
@@ -297,7 +299,7 @@ rarefaction_result_2 %>%
   ggplot(
     aes(
       x = individuals, y = richness)
-    ) +
+  ) +
   geom_line(
     aes(
       colour = location_code)) +
@@ -340,7 +342,7 @@ rarefaction_result_3 %>%
   ggplot(
     aes(
       x = sites, y = richness)
-    ) +
+  ) +
   geom_line(
     aes(
       colour = location_code)) +
@@ -357,7 +359,7 @@ rarefaction_result_3 %>%
   ggplot(
     aes(
       x = individuals, y = richness)
-    ) +
+  ) +
   geom_line(
     aes(
       colour = location_code)) +
@@ -422,4 +424,6 @@ venn(nat_ap, "method_combi", "optional_functional_group")
 
 ```{r, fig.cap = "Unieke functionele groepen apoidea per maand.", eval="{{group}}"=="apoidea"}
 venn(nat_ap, "month", "optional_functional_group")
+
+# nolint end
 ```
