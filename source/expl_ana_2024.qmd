@@ -23,6 +23,7 @@ library(readxl)
 library(here)
 library(sf)
 library(ggvenn)
+library(ggsignif)
 library(cowplot)
 library(glmmTMB)
 library(tidyverse)
@@ -535,6 +536,156 @@ performance::check_homogeneity(model2)
 performance::check_overdispersion(model2)
 ```
 
+### Contrast methode
+```{r}
+em <- emmeans::emmeans(model2, pairwise ~ (method_cd | order))
+em$contrasts
+```
+
+### Contrast openheid landschap
+```{r}
+em <- emmeans::emmeans(model2, pairwise ~ (openheid | order))
+em$contrasts
+```
+
+### Contrast beheer
+```{r}
+em <- emmeans::emmeans(model2, pairwise ~ (beheer | order))
+em$contrasts
+```
+
+### Contrast maand en figuren
+```{r}
+em <- emmeans::emmeans(model2, pairwise ~ (maand | order))
+em$contrasts
+```
+
+```{r}
+#| label: model2-maand_signif_ap
+#| fig-cap: "Gemodelleerd aantal individuen wilde bijen afhankelijk van maand."
+
+pred_ind <- marginaleffects::plot_predictions(
+  model2,
+  condition = c("maand", "order"),
+  type = "response",
+  vcov = TRUE,
+  draw = FALSE
+)
+
+pred_ind |>
+  filter(order == "Apoidea") |>
+  ggplot(aes(
+    x = maand,
+    y = estimate
+  )) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue",
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(
+    y = "Number of individuals",
+    x = "Maand"
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 4),
+      c(2, 3),
+      c(2, 4),
+      c(3, 4)
+    ),
+    annotations = c(
+      "***", "***",
+      "***", "***"
+    ),
+    y_position = c(10.2, 9.4, 9.8, 9.4),
+    tip_length = 0.01,
+    vjust = 0.5
+  )
+```
+
+```{r}
+#| label: model2-maand_signif_syr
+#| fig-cap: "Gemodelleerd aantal individuen zweefvliegen afhankelijk van maand."
+
+pred_ind |>
+  filter(order == "Syrphidae") |>
+  ggplot(aes(
+    x = maand,
+    y = estimate
+  )) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue",
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(
+    y = "Number of individuals",
+    x = "Maand"
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 2),
+      c(1, 4),
+      c(2, 3),
+      c(2, 4)
+    ),
+    annotations = c(
+      "*", "*",
+      "***", "***"
+    ),
+    y_position = c(33, 35, 33, 34),
+    tip_length = 0.01,
+    vjust = 0.5
+  )
+```
+
+```{r}
+#| label: model2-maand_signif_lep
+#| fig-cap: "Gemodelleerd aantal individuen vlinders afhankelijk van maand."
+
+pred_ind |>
+  filter(order == "Lepidoptera") |>
+  ggplot(aes(
+    x = maand,
+    y = estimate
+  )) +
+  geom_pointrange(
+    aes(
+      ymin = conf.low,
+      ymax = conf.high
+    ),
+    color = "cornflowerblue",
+    position = position_dodge(width = 0.5)
+  ) +
+  labs(
+    y = "Number of individuals",
+    x = "Maand"
+  ) +
+  geom_signif(
+    comparisons = list(
+      c(1, 2),
+      c(1, 3),
+      c(2, 4),
+      c(3, 4)
+    ),
+    annotations = c(
+      "*", "***",
+      "*", "**"
+    ),
+    y_position = c(4.8,5,5.25,4.8),
+    tip_length = 0.01,
+    vjust = 0.5
+  )
+```
+
+### Verdere figuren
 ```{r}
 #| label: model2-method
 #| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
@@ -628,5 +779,3 @@ ggplot(predictions,
   labs(y = "Aantal individuen",
        color = "Interactie methode-beheer")
 ```
-
-
