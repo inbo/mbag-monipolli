@@ -207,6 +207,38 @@ venn <- function(data, group,
 ## Per orde
 
 ```{r}
+dat_2024 |>
+  count(order, species_nm, name = "frequentie") |>
+  arrange(order, -frequentie) |>
+  knitr::kable()
+```
+
+
+```{r}
+dat_2024 |>
+  left_join(
+    gbif_df, by = join_by(species_nm),
+    suffix = c("_orig", "_gbif")
+  ) |> 
+  count(order_orig, order_gbif, family, name = "frequentie") |>
+  arrange(order_orig, -frequentie) |>
+  knitr::kable()
+```
+
+
+```{r}
+dat_2024 |>
+  left_join(
+    gbif_df, by = join_by(species_nm),
+    suffix = c("_orig", "_gbif")
+  ) |> 
+  count(order_orig, order_gbif, family, genus, name = "frequentie") |>
+  arrange(order_orig, -frequentie) |>
+  knitr::kable()
+```
+
+
+```{r}
 #| label: fig-order-ind
 #| fig-cap: "Aantal gevonden individuen per orde."
 dat_2024 |>
@@ -507,6 +539,9 @@ Voor meer informatie zie:
 
 ## Aantal soorten
 
+Analyse zonder Syrphidae want meeste waarnemingen zijn niet op soortnaam gebracht.
+
+
 ```{r}
 mod_dat_zonder_syr <- mod_dat |> filter(order != "Syrphidae")
 
@@ -521,6 +556,8 @@ model1 <- glmmTMB(
   data = mod_dat_zonder_syr
 )
 ```
+
+
 
 ```{r}
 summary(model1)
