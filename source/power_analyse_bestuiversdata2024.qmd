@@ -1,0 +1,322 @@
+---
+title: "Poweranalyse op basis van pilootdata bestuivers zandleemstreek 2024"
+author: "Hans Van Calster, Emma Cartuyvels"
+format: 
+  html:
+    code-fold: true
+    toc: true
+    toc_float: true
+    embed-resources: true
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+library(knitr)
+opts_chunk$set(
+  message = FALSE,
+  warning = FALSE
+)
+library(here)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(INBOtheme)
+library(glmmTMB)
+library(lubridate)
+conflicted::conflicts_prefer(dplyr::filter)
+```
+
+## Pilootdata bestuivers Zandleemstreek 2024
+
+```{r inlezen}
+bestuivers_2024 <- read_csv(
+  here("data", "processed", "bestuivers_2024.csv")
+) |>
+  rename(
+    location = location_code,
+    month = maand
+  )
+```
+
+Er is één locatie waarvoor gegevens van het MAS meetnet ontbreken (deze verwijderen we):
+
+```{r}
+bestuivers_2024 |>
+  select(location, beheer, openheid, WKT) |>
+  filter(is.na(beheer)) |>
+  distinct()
+```
+
+
+
+```{r design}
+locs <- bestuivers_2024 |>
+  distinct(location, beheer, openheid) |>
+  filter(!is.na(beheer))
+
+visits <- bestuivers_2024 |>
+  mutate(year = year(date_b)) |>
+  group_by(
+    year, month
+  ) |>
+  summarise(
+    n_locs = n_distinct(location),
+    .groups = "drop"
+  )
+
+orders <- bestuivers_2024 |> distinct(order)  
+
+design <- expand_grid(
+  visits |> select(year, month),
+  locs,
+  orders
+)
+
+design |>
+  count(year, order, month, beheer, openheid, name = "n_locs") |>
+  kable()
+```
+
+```{r}
+bestuivers_2024 |>
+  select(
+    sample_id,
+    method_cd,
+    order,
+    n_ind,
+    location,
+    beheer,
+    openheid,
+    month
+  ) |>
+  naniar::vis_miss()
+```
+
+We verwijderen honingbijen en houden enkel de transecttellingen.
+We werken enkel verder op soortengroepniveau.
+
+```{r}
+bestuivers_2024_ts <- bestuivers_2024 |>
+  filter(
+    species_nm != "Apis mellifera",
+    method_cd == "TS"
+  ) |>
+  select(
+    method_cd,
+    order,
+    n_ind,
+    location,
+    beheer,
+    openheid,
+    month
+  )
+
+bestuivers_2024_by_order <- bestuivers_2024_ts  |>
+  group_by(order, location, month, beheer, openheid) |>
+  summarise(
+    n_ind = sum(n_ind),
+    .groups = "drop"
+  ) |>
+  # keep only combination from design
+  right_join(
+    design,
+    by = join_by(location, order, month, beheer, openheid)
+  ) |>
+  # correct for shorter transects compared to proposed protocol
+  # length new transects / length old transects 
+  mutate(
+    totale_transectlengte = 160 * 4,
+    n_ind = ifelse(is.na(n_ind), 0, n_ind),
+    n_ind = n_ind,
+    month = as.factor(month)
+  ) 
+
+```
+
+
+```{r}
+glimpse(bestuivers_2024_by_order)
+sum(is.na(bestuivers_2024_by_order))
+```
+
+
+We maken nog een dataset waar we de data verder aggregeren zodat we per locatie en per soortengroep één waarde per jaar bekomen.
+Het een aggregatie over de verschillende maanden en we nemen hiervoor het maximum.
+
+
+```{r aggregatie-jaar}
+bestuivers_2024_by_order_jaar <- bestuivers_2024_by_order |>
+  group_by(order, location, beheer, openheid, year, totale_transectlengte) |>
+  summarise(
+    max_n_ind = max(n_ind),
+    .groups = "drop"
+  )
+```
+
+
+## Modellering aantal individuen per soortengroep, openheid en beheer
+
+### Aantallen per maand
+
+```{r}
+bestuivers_2024_by_order |>
+  ggplot() +
+  stat_sum(
+    aes(x = order, y = n_ind), alpha = 0.5
+  )
+```
+
+
+```{r tmb-maand-fit}
+tmb_maand <- glmmTMB(
+  formula = 
+    n_ind ~
+    offset(log(totale_transectlengte))
+  + order 
+  + month
+  + beheer * openheid
+  + (0 + order | location),
+  family = poisson(link = "log"),
+  data = bestuivers_2024_by_order
+)
+```
+
+
+```{r tmb-maand-checks}
+summary(tmb_maand)
+performance::check_predictions(tmb_maand)
+performance::check_overdispersion(tmb_maand)
+```
+
+### Maximum aantallen per jaar
+
+```{r}
+bestuivers_2024_by_order_jaar |>
+  ggplot() +
+  stat_sum(
+    aes(x = order, y = max_n_ind), alpha = 0.5
+  )
+```
+
+
+```{r tmb-jaar-fit}
+tmb_jaar <- glmmTMB(
+  formula =
+    max_n_ind ~
+    offset(log(totale_transectlengte))
+  + order
+  + beheer * openheid
+  + (0 + order | location)
+  , family = poisson(link = "log")
+  , data = bestuivers_2024_by_order_jaar
+)
+```
+
+```{r tmb-jaar-checks}
+summary(tmb_jaar)
+performance::check_predictions(tmb_jaar)
+performance::check_overdispersion(tmb_jaar)
+```
+
+## Power analyse
+
+
+
+```{r power-analyse}
+all_pollinators_year <- bestuivers_2024_by_order_jaar |>
+  select(-year) |>
+  expand_grid(year = 1:6)
+
+
+# Extract original fixed effects (intercept, beheer, openheid, interaction)
+beta_original <- fixef(tmb_jaar)$cond
+
+# Define effect size for year (e.g., log(1.01) for a 1% increase)
+beta_year <- log(1.01)
+
+# Combine them
+# need new order!! intercept, beheer, openheid, jaar, interaction
+beta_new <- c(beta_original[1:5], beta_year, beta_original[6]) |> unname()
+
+# Extract original theta (for the "order | pointid" term)
+theta_original <- getME(tmb_jaar, "theta")
+
+# Define the standard deviation for the year random effect
+sd_year <- 0.05  # Example: Choose a sensible SD for your simulation
+theta_year <- log(sd_year)
+
+# Combine them (Order matches formula: pointid first, then year)
+theta_new <- c(theta_original, theta_year)
+
+sim1 <- glmmTMB::simulate_new(
+  ~
+    offset(log(totale_transectlengte))
+  + order
+  + beheer * openheid
+  + year
+  + (0 + order | location)
+  + (1 | year),
+  family = poisson(link = "log"),
+  newdata = all_pollinators_year,
+  newparams = list(
+    beta = beta_new,
+    theta = theta_new
+  )
+)
+
+# Quick check
+all_pollinators_year$sim_1 <- sim1[[1]] 
+
+check_mod <- glmmTMB(
+  sim_1 ~
+    offset(log(totale_transectlengte))
+  + order
+  + beheer * openheid
+  + year
+  + (0 + order | location)
+  + (1 | year),
+  family = poisson(link = "log"),
+  data = all_pollinators_year
+)
+summary(check_mod) # Check if 'year' SD and beta_year near log(1.01)
+
+
+n_sims <- 100
+power_results <- numeric(n_sims)
+
+# Pre-simulate all response vectors at once
+sim_matrix <- glmmTMB::simulate_new(
+  ~ offset(log(totale_transectlengte))
+  + order
+  + beheer * openheid
+  + year
+  + (0 + order | location)
+  + (1 | year),
+  nsim = n_sims,
+  family = poisson(link = "log"),
+  newdata = all_pollinators_year,
+  newparams = list(beta = beta_new, theta = theta_new)
+)
+
+for (i in 1:n_sims) {
+  # Update the response variable in the dataframe
+  all_pollinators_year$y_sim <- sim_matrix[[i]]
+  
+  # Fit model
+  fit <- update(check_mod, y_sim ~ ., data = all_pollinators_year)
+  
+  # Extract p-value for the 'year' effect
+  p_val <- summary(fit)$coefficients$cond["year", "Pr(>|z|)"]
+  power_results[i] <- p_val < 0.05
+}
+
+pow <- mean(power_results)
+pow
+
+all_pollinators_year |> count(beheer, openheid, order, year)
+
+```
+
