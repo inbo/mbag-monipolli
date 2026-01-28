@@ -7,7 +7,6 @@ format:
     toc: true
     toc_float: true
     embed-resources: true
-editor: visual
 editor_options: 
   chunk_output_type: console
 ---
@@ -233,7 +232,6 @@ performance::check_model(model1)
 summary(model1)
 ```
 
-
 ### Aantal individuen akkervogels versus aantal individuen bestuivers
 
 ```{r}
@@ -302,17 +300,11 @@ ggplot(mod_dat, aes(x = n_ind_pol, y = n_ind_bird)) +
 
 ### Aantal soorten per soortengroep, openheid en beheer
 
+Kunnen we met de data van de zandstreek 2024 aantonen dat als het landschap goed is voor de ene soortengroep het misschien ook goed is voor een andere soortengroep. We vragen ons hier dus niet af of er een ecologische relatie is tussen vogels en pollinatoren, bv door de trofische relatie tussen insectenetende vogels en bestuivers als mogelijke prooi (meest plausibel voor rupsen van vlinders).
 
-Kunnen we met de data van de zandstreek 2024 aantonen dat 
-als het landschap goed is voor de ene soortengroep het misschien ook goed is voor een andere soortengroep.
-We vragen ons hier dus niet af of er een ecologische relatie is tussen vogels en pollinatoren, bv door de trofische relatie tussen insectenetende vogels en bestuivers als mogelijke prooi (meest plausibel voor rupsen van vlinders).
+De vraag is gewoon of de maximaal geobserveerde soortenrijkdom of aantal individuen op een locatie in een bepaald jaar voor die soortengroepen verschillen tussen de strata en of de soortengroepen onderling gelijkaardige patronen vertonen.
 
-De vraag is gewoon of de maximaal geobserveerde soortenrijkdom of aantal individuen op een locatie in een bepaald jaar voor die soortengroepen verschillen tussen de strata en of de soortengroepen onderling gelijkaardige patronen vertonen. 
-
-Hiervoor gaan we de data verder aggregeren zodat we per locatie en per soortengroep één waarde per jaar bekomen.
-Voor de vogels betekent dit een aggregatie over de telperiodes.
-Hiervoor nemen we het maximum.
-Voor de bestuivers is het een aggregatie over de verschillende maanden en we nemen hiervoor ook het maximum.
+Hiervoor gaan we de data verder aggregeren zodat we per locatie en per soortengroep één waarde per jaar bekomen. Voor de vogels betekent dit een aggregatie over de telperiodes. Hiervoor nemen we het maximum. Voor de bestuivers is het een aggregatie over de verschillende maanden en we nemen hiervoor ook het maximum.
 
 De data waarmee we verder werken zijn dus de maximaal aantal geobserveerde individuen of soorten van een soortengroep in een jaar (enkel 2024).
 
@@ -449,7 +441,6 @@ The Poisson distribution appears to be appropriate for the number of species.
 summary(m)
 ```
 
-
 ```{r}
 marginaleffects::plot_predictions(
   m,
@@ -458,7 +449,6 @@ marginaleffects::plot_predictions(
 ) +
   labs(y = "Aantal soorten")
 ```
-
 
 ```{r}
 emm <- emmeans(m, ~ beheer | openheid + order)
@@ -505,7 +495,6 @@ m <- brm(
 # convergeert niet
 ```
 
-
 ```{r}
 pp_check(m, type = "bars")
 ```
@@ -515,7 +504,6 @@ ms <- summary(m)
 ms
 ```
 
-
 ```{r}
 ms$random$pointid |>
   as_tibble(rownames = "component") |> 
@@ -523,7 +511,6 @@ ms$random$pointid |>
   select(component, Estimate, `l-95% CI`, `u-95% CI`) |> 
   knitr::kable(digits = 2)
 ```
-
 
 ```{r}
 marginaleffects::plot_predictions(
@@ -533,7 +520,6 @@ marginaleffects::plot_predictions(
 ) +
   labs(y = "Aantal soorten (globaal over soortengroepen)")
 ```
-
 
 ```{r}
 nd <- all_by_group_zonder_syr |>
@@ -591,18 +577,15 @@ m <- glmmTMB(
 )
 ```
 
-
 ```{r}
 performance::check_model(m)
 performance::check_overdispersion(m)
 ```
 
-
 ```{r}
 ms <- summary(m)
 ms
 ```
-
 
 ```{r}
 marginaleffects::plot_predictions(
@@ -632,7 +615,6 @@ plot(cm, comparison = TRUE) +
 
 We kunnen tot slot ook een gelijkaardig model fitten waar we rekening houden met correlaties tussen de soortengroepen doordat elke locatie zowel metingen heeft van vlinders, zweefvliegen, wilde bijen en vogels.
 
-
 ```{r}
 library(brms)
 m <- brm(
@@ -653,7 +635,6 @@ m <- brm(
 # convergeert niet
 ```
 
-
 ```{r}
 pp_check(m, type = "bars")
 ```
@@ -662,7 +643,6 @@ pp_check(m, type = "bars")
 ms <- summary(m)
 ms
 ```
-
 
 ```{r}
 ms$random$pointid |>
@@ -675,7 +655,6 @@ ms$random$pointid |>
   knitr::kable(digits = 2)
 ```
 
-
 ```{r}
 marginaleffects::plot_predictions(
   m,
@@ -684,7 +663,6 @@ marginaleffects::plot_predictions(
 ) +
   labs(y = "Aantal individuen (globaal over soortengroepen)")
 ```
-
 
 ```{r}
 nd <- all_by_group |>
@@ -724,7 +702,6 @@ nd |>
   labs(colour = "Soortengroep") +
   scale_x_log10("Geschat aantal individuen (fixed + random effect)")
 ```
-
 
 ```{r eval=FALSE}
 m <- glmmTMB(
