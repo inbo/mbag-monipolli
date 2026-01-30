@@ -75,4 +75,63 @@ references:
   title: Refined proposal for an EU pollinator monitoring scheme
   type: webpage
   URL: "https://publications.jrc.ec.europa.eu/repository/handle/JRC138660"
+- id: dennis2016
+  accessed: "15:33:13"
+  author:
+  - family: Dennis
+    given: Emily B.
+  - family: Morgan
+    given: Byron J. T.
+  - family: Freeman
+    given: Stephen N.
+  - family: Brereton
+    given: Tom M.
+  - family: Roy
+    given: David B.
+  container-title: Biometrics
+  container-title-short: Biometrics
+  DOI: 10.1111/biom.12506
+  ISSN: 0006-341X
+  issue: 4
+  issued: 2016-12-01
+  key: 3MSK7GQQ
+  libraryID: 1
+  page: 1305-1314
+  providerKey: 2509FBBE-5BB0-44C4-B119-6083A81ED673
+  source: Silverchair
+  title: A Generalized Abundance Index for Seasonal Invertebrates
+  type: article-journal
+  URL: "https://doi.org/10.1111/biom.12506"
+  volume: 72
+- id: dennis2022
+  _eprint: "https://onlinelibrary.wiley.com/doi/pdf/10.1002/ece3.9200"
+  accessed: "14:25:35"
+  author:
+  - family: Dennis
+    given: Emily B.
+  - family: Fagard-Jenkin
+    given: Calliste
+  - family: Morgan
+    given: Byron J. T.
+  container-title: Ecology and Evolution
+  DOI: 10.1002/ece3.9200
+  ISSN: 2045-7758
+  issue: 8
+  issued: 2022
+  key: 8XU7NFST
+  language: en
+  libraryID: 1
+  note: "\\_eprint:
+    https://onlinelibrary.wiley.com/doi/pdf/10.1002/ece3.9200"
+  page: e9200
+  providerKey: 2509FBBE-5BB0-44C4-B119-6083A81ED673
+  rights: © 2022 The Authors. Ecology and Evolution published by John
+    Wiley & Sons Ltd.
+  source: Wiley Online Library
+  title: "rGAI: An R package for fitting the generalized abundance index
+    to seasonal count data"
+  title-short: rGAI
+  type: article-journal
+  URL: "https://onlinelibrary.wiley.com/doi/abs/10.1002/ece3.9200"
+  volume: 12
 ...
