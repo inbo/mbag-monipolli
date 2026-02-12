@@ -7,6 +7,7 @@ format:
     toc: true
     toc_float: true
     embed-resources: true
+lang: nl
 editor_options: 
   chunk_output_type: console
 editor:
@@ -103,12 +104,56 @@ coefs <- coef(fit_nls)
 
 mm <- \(x) (coefs["Vm"] * x) / (coefs["K"] + x)
 
-fig_2_4 |> 
+
+p1 <- fig_2_4 |> 
   ggplot() +
   geom_point(
     aes(y = power, x = species_modelled)
   ) +
   geom_function(fun = mm)
+
+mb <- glmmTMB(
+  power ~ sqrt(species_modelled),
+  data = fig_2_4,
+  family = "beta_family"
+)
+
+nd <- data.frame(
+  species_modelled = 40:550
+) %>%
+  mutate(
+    link_est = predict(mb, newdata = .),
+    link_se = predict(mb, newdata = ., se = TRUE)$se,
+    link_lwr = link_est - 2 * link_se,
+    link_upr = link_est + 2 * link_se,
+    power_est = plogis(link_est),
+    power_lwr = plogis(link_lwr),
+    power_upr = plogis(link_upr)
+  )
+
+p2 <- fig_2_4 |> 
+  ggplot() +
+  geom_line(
+    data = nd,
+    aes(
+      x = sqrt(species_modelled),
+      y = power_est
+    )
+  ) +
+  geom_ribbon(
+    data = nd,
+    aes(
+      x = sqrt(species_modelled),
+      ymin = power_lwr,
+      ymax = power_upr
+    ),
+    alpha = 0.3
+  ) +
+  geom_point(aes(y = power, x = sqrt(species_modelled)))
+
+p1 + p2 +
+  plot_layout(guides = "collect", axes = "collect")
+
 
 # voeg schatting toe aan reconstructie
 reconstructie <- reconstructie |>
@@ -346,7 +391,7 @@ Dus in totaal werden per locatie 4 transecten gelopen 'per maand'.
 We werken enkel verder op soortengroepniveau (dagvlinders, zweefvliegen en wilde bijen) en sommeren de aantallen op een locatie per maand.
 Dit betekent dat deze gesommeerde aantallen gelden voor een transectlengte gelijk aan $160*2 = 320$ meter voor elke soortengroep @tbl-design.
 
-```{r design-transecten}
+```{r}
 #| label: tbl-design
 #| tbl-cap: Overzicht van de ontwerpvariabelen.
 locs <- bestuivers_2024_ts |>
@@ -1023,13 +1068,154 @@ simulate_new_month_data <- function(
 ```
 
 
--   eerst het model gebruiken dat gefit is op maandgegevens om nieuwe gegevens per maand te genereren.
--   nsim per scenario van deze data genereren
--   voor elk gesimuleerde dataset GAI berekening gebruiken om bootstrap samples te bekomen voor de GAI - dit zijn per jaar en per soortengroep bootstrap samples
--   methode powerberekeningen zoals bij graslandvlinderindex op toepassen, maar dan op niveau van soortengroepen in plaats van soorten
+```{r fun-calc-rbms-gai}
+calc_rbms_gai <- function(
+    dn,
+    sm,
+    sim_nr
+) {
+  m_visit <- dn |>
+    distinct(
+      SITE_ID = locatie,
+      DATE
+    ) |>
+    as.data.frame()
+  
+  m_count <- dn |>
+    mutate(
+      SPECIES = soortengroep,
+      SITE_ID = locatie,
+      DATE,
+      COUNT = sm[[sim_nr]],
+      transectlengte = totale_transectlengte,
+      .keep = "none"
+    ) |>
+    as.data.frame()
+  
+  ts_date <- ts_dwmy_table(
+    InitYear = min(year(m_visit$DATE)),
+    LastYear = max(year(m_visit$DATE)),
+    WeekDay1 = 'monday'
+    )
+  
+  ts_season <- ts_monit_season(
+    ts_date,
+    StartMonth = 6, EndMonth = 9,
+    StartDay = 1,
+    EndDay = NULL,
+    CompltSeason = TRUE,
+    Anchor = TRUE,
+    AnchorLength = 2,
+    AnchorLag = 2,
+    TimeUnit = 'w'
+  )
+  
+  ts_season_visit <- ts_monit_site(ts_season, m_visit)
+  
+  sc <- vector("list", length = length(unique(m_count$SPECIES)))
+  sc <- setNames(sc, unique(m_count$SPECIES))
+  fc <- ic <- si <- ci <- bs <- ci_bs <- ci_bs_log <- sc
+  
+  for (i in unique(m_count$SPECIES)) {
+    set.seed(132545)
+    sc[[i]] <- ts_monit_count_site(ts_season_visit, m_count, sp = i)
+    fc[[i]] <- flight_curve(
+      sc[[i]],
+      #mod_form = ~ offset(log(transectlengte)) + beheer*openheid,
+      MinVisit = 3,
+      MinOccur = 2,
+      MinNbrSite = 1,
+      MaxTrial = 4,
+      GamFamily = 'poisson',
+      SpeedGam = FALSE,
+      CompltSeason = TRUE,
+      SelectYear = NULL,
+      TimeUnit = 'w'
+    )
+    ic[[i]] <-  impute_count(
+      ts_season_count = sc[[i]],
+      ts_flight_curve = fc[[i]],
+      YearLimit = NULL,
+      TimeUnit = 'w'
+    )
+    si[[i]] <- site_index(butterfly_count = ic[[i]], MinFC = 0.10)
+    ci[[i]] <- collated_index(
+      data = si[[i]],
+      s_sp = i,
+      sindex_value = "SINDEX",
+      glm_weights = TRUE,
+      rm_zero = TRUE
+    )
+    bs[[i]] <- boot_sample(si[[i]], boot_n = 200)
+    
+    
+    co_index <- list()
+    for (j in c(0, seq_len(dim(bs[[i]]$boot_ind)[1]))) {
+      co_index[[j + 1]] <- collated_index(
+        data = si[[i]],
+        s_sp = i,
+        sindex_value = "SINDEX",
+        bootID = j,
+        boot_ind = bs[[i]],
+        glm_weights = TRUE,
+        rm_zero = TRUE
+      )
+    }
+    
+    # collate and append the results
+    co_index <- data.table::rbindlist(lapply(co_index, FUN = "[[","col_index"))
+    ci_bs[[i]] <- co_index
+    
+    # annual log10 indices
+    co_index_b <- co_index[COL_INDEX > 0.0001 & COL_INDEX < 100000, ]
+    co_index_logInd <- co_index_b[
+      BOOTi == 0, .(M_YEAR, COL_INDEX)][, log10(COL_INDEX), by = M_YEAR][
+        , mean_logInd := mean(V1)]
+    
+    ## merge the mean log index with the full bootstrap dataset
+    data.table::setnames(co_index_logInd, "V1", "logInd")
+    data.table::setkey(co_index_logInd, M_YEAR)
+    data.table::setkey(co_index_b, M_YEAR)
+    co_index_b <- merge(co_index_b, co_index_logInd, all.x = TRUE)
+    
+    data.table::setkey(co_index_b, BOOTi, M_YEAR)
+    co_index_b[ , boot_logInd := log10(COL_INDEX)]
+    ci_bs_log[[i]] <- co_index_b
+  }
+  
+  ci_bs_log_df <- ci_bs_log |>
+    purrr::list_rbind(names_to = "SPECIES") |>
+    as_tibble() |>
+    mutate(
+      SPECIES,
+      M_YEAR,
+      BOOTi,
+      LCI = 2 + boot_logInd - mean_logInd,
+      .keep = "none"
+    ) |>
+    mutate(
+      C_YEAR  = M_YEAR - min(M_YEAR)
+    )
+  
+  return(ci_bs_log_df)
+}
+
+```
+
 
 ```{r}
-dn <- generate_design(4,6) |>
+#| label: fun-run-scenario
+run_scenario <- function(
+    n_herhalingen,
+    n_jaren,
+    maand = c(6:9),
+    trend_percent,
+    sd_jaar,
+    nsim = 100
+    ) {
+  dn <- generate_design(
+    n_herhalingen = n_herhalingen,
+    n_jaren = n_jaren) |>
   expand_grid(maand) |> 
   mutate(maand = factor(maand)) |>
   mutate(
@@ -1040,11 +1226,189 @@ dn <- generate_design(4,6) |>
       sep = "-"
     )
   )
+  
+  sm <- simulate_new_month_data(
+    design = dn,
+    trend_percent = trend_percent,
+    sd_jaar = sd_jaar,
+    nsim = nsim)
+  
+  boot_results_mat <- matrix(nrow = nsim, ncol = 6)
+  for (i in seq_along(sm)) {
+    gai <- calc_rbms_gai(
+      dn = dn, sm = sm, sim_nr = i
+    )
 
+    # Fit the model for every bootstrap iteration (BOOTi > 0)
+    # BOOTi == 0 is the observed data
+    boot_results <- gai |> 
+      dplyr::filter(BOOTi > 0) |>
+      nest(.by = BOOTi) |>
+      # fit model to each BOOTi
+      mutate(
+        model = purrr::map(data, \(x) lm(LCI ~ 0 + SPECIES + C_YEAR, data = x)),
+        boot_coefs = purrr::map(model, \(x) summary(x)$coef["C_YEAR",] |>
+                           t() |>
+                           as_tibble())
+      ) |>
+      unnest(boot_coefs) |>
+      # propagate uncertainty associated with Bootstrap samples
+      summarise(
+        year_est = mean(Estimate),
+        year_lower = quantile(Estimate, 0.025),
+        year_upper = quantile(Estimate, 0.975),
+        year_se = sd(Estimate),
+        year_t_val = year_est / year_se,
+        # two-sided p-value
+        year_p_val = 2 * min(sum(Estimate >= 0), sum(Estimate <= 0)) / n()
+      )
+    boot_results_mat[i, ] <- as.matrix(boot_results[1, ])
+  }
+  colnames(boot_results_mat) <- colnames(boot_results)
+  boot_results <- as_tibble(boot_results_mat)
+  sig_results <- boot_results$year_p_val <= 0.05
+  ci_test <- binom.test(
+    x = sum(sig_results, na.rm = TRUE),
+    n = sum(!is.na(sig_results))
+  )
 
-sm <- simulate_new_month_data(dn, trend_percent = 5, sd_jaar = 0.01)
+  boot_results <- boot_results |>
+    summarize(
+      year_est_mean = mean(year_est),
+      year_est_positive = mean(year_est > 0),
+      power_mean = mean(year_p_val <= 0.05),
+      power_lower = ci_test$conf.int[1],
+      power_upper = ci_test$conf.int[2]
+    )
+  
+  return(boot_results)
+}
+```
+
+```{r}
+#| eval: false
+profvis::profvis({
+ out <- run_scenario(
+   n_herhalingen = 2, n_jaren = 6, trend_percent = 1, sd_jaar = 0.01, nsim = 1
+ )
+ out
+})
 
 ```
+
+
+
+-   eerst het model gebruiken dat gefit is op maandgegevens om nieuwe gegevens per maand te genereren.
+-   nsim per scenario van deze data genereren
+-   voor elk gesimuleerde dataset GAI berekening gebruiken om bootstrap samples te bekomen voor de GAI - dit zijn per jaar en per soortengroep bootstrap samples
+-   methode powerberekeningen zoals bij graslandvlinderindex op toepassen, maar dan op niveau van soortengroepen in plaats van soorten
+
+```{r}
+#| label: run-gai-simulation
+# 1. Setup Daemons
+n_cores <- parallel::detectCores(logical = FALSE)
+daemons(ceiling(n_cores / 2), dispatcher = FALSE)
+
+# 2. Define Parameter Grid (Flatten the loops)
+trends <- c(1, 2, 5)
+reps <- c(2, 5, 15, 30, 60)
+n_jaren  <- c(6, 12, 24)
+sd_jaar <- c(0.01, 0.05, 0.15, 0.4)
+
+param_grid <- tidyr::expand_grid(
+  sd_jaar = sd_jaar,
+  n_jaren = n_jaren,
+  trend = trends,
+  n_herhalingen = reps,
+  nsims = 100
+)
+
+# # restriction to vary only one parameter (reps)
+# param_grid <- param_grid |>
+#   filter(
+#     trend == 1,
+#     n_jaren == 12,
+#     sd_jaar == 0.01
+#   )
+
+
+pr <- fs::dir_create(
+  here::here("source", "powercalc_results", "gai")
+)
+
+# delete saved results?
+delete <- FALSE
+if (delete) fs::file_delete(pr)
+
+# Store promises here
+tasks <- list()
+
+for (i in seq_len(nrow(param_grid))) {
+  
+  # Extract parameters for this specific row
+  p <- param_grid[i, ]
+  
+  # Construct filename
+  fname <- file.path(
+    pr, 
+    paste0(
+      "gai_sdy", p$sd_jaar ,
+      "_ny", p$n_jaren,
+      "_trend", p$trend,
+      "_reps", p$n_herhalingen,
+      "_nsims", p$nsims,
+      ".rds"
+    )
+  )
+  
+  # Submit to mirai
+  tasks[[i]] <- mirai({
+    library(here)
+    library(rbms)
+    library(dplyr)
+    library(tidyr)
+    library(glmmTMB)
+    library(lubridate)
+    library(purrr)
+    # Check cache
+    if (file.exists(fname)) {
+      res <- readRDS(fname)
+      return(res)
+    }
+    
+    # Run Analysis
+    result <- run_scenario(
+      n_herhalingen = p$n_herhalingen,
+      n_jaren = p$n_jaren,
+      maand = 6:9,
+      trend_percent = p$trend,
+      sd_jaar = p$sd_jaar,
+      nsim = p$nsims
+    )
+    result <- bind_cols(p, result)
+    
+    # Save and return result
+    saveRDS(result, file = fname)
+    return(result) 
+  }, 
+  # Pass parameters and functions
+  environment()
+  )
+}
+```
+
+```{r}
+#| label: mirai-collect-gai
+# call_mirai blocks until all tasks are done
+results_collected_gai <- lapply(tasks, call_mirai)
+power_df <- purrr::map_dfr(results_collected_gai, \(x) x$data) |>
+  mutate(trend = factor(trend))
+results_collected_gai[[1]]$data
+
+daemons(0)
+```
+
+
 
 ```{r}
 dn |>
@@ -1077,114 +1441,6 @@ dn |>
 ```{r rbms-gai-calculation}
 # https://retoschmucki.github.io/rbms/articles/vignette.html
 
-m_visit <- dn |>
-  distinct(
-    SITE_ID = locatie,
-    DATE
-  ) |>
-  as.data.frame()
-  
-m_count <- dn |>
-  mutate(
-    SPECIES = soortengroep,
-    SITE_ID = locatie,
-    DATE,
-    COUNT = sm[[1]],
-    transectlengte = totale_transectlengte,
-    .keep = "none"
-  ) |>
-  as.data.frame()
-
-ts_date <- ts_dwmy_table(
-  InitYear = min(year(m_visit$DATE)),
-  LastYear = max(year(m_visit$DATE)),
-  WeekDay1 = 'monday'
-  )
-
-ts_season <- ts_monit_season(
-  ts_date,
-  StartMonth = 6, EndMonth = 9,
-  StartDay = 1,
-  EndDay = NULL,
-  CompltSeason = TRUE,
-  Anchor = TRUE,
-  AnchorLength = 2,
-  AnchorLag = 2,
-  TimeUnit = 'w'
-)
-
-ts_season_visit <- ts_monit_site(ts_season, m_visit)
-
-sc <- vector("list", length = length(unique(m_count$SPECIES)))
-sc <- setNames(sc, unique(m_count$SPECIES))
-fc <- ic <- si <- ci <- bs <- ci_bs <- ci_bs_log <- sc
-
-for (i in unique(m_count$SPECIES)) {
-  set.seed(132545)
-  sc[[i]] <- ts_monit_count_site(ts_season_visit, m_count, sp = i)
-  fc[[i]] <- flight_curve(
-    sc[[i]],
-    #mod_form = ~ offset(log(transectlengte)) + beheer*openheid,
-    MinVisit = 3,
-    MinOccur = 2,
-    MinNbrSite = 1,
-    MaxTrial = 4,
-    GamFamily = 'poisson',
-    SpeedGam = FALSE,
-    CompltSeason = TRUE,
-    SelectYear = NULL,
-    TimeUnit = 'w'
-  )
-  ic[[i]] <-  impute_count(
-    ts_season_count = sc[[i]],
-    ts_flight_curve = fc[[i]],
-    YearLimit = NULL,
-    TimeUnit = 'w'
-  )
-  si[[i]] <- site_index(butterfly_count = ic[[i]], MinFC = 0.10)
-  ci[[i]] <- collated_index(
-    data = si[[i]],
-    s_sp = i,
-    sindex_value = "SINDEX",
-    glm_weights = TRUE,
-    rm_zero = TRUE
-  )
-  bs[[i]] <- boot_sample(si[[i]], boot_n = 200)
-  
-  
-  co_index <- list()
-  for (j in c(0, seq_len(dim(bs[[i]]$boot_ind)[1]))) {
-    co_index[[j + 1]] <- collated_index(
-      data = si[[i]],
-      s_sp = i,
-      sindex_value = "SINDEX",
-      bootID = j,
-      boot_ind = bs[[i]],
-      glm_weights = TRUE,
-      rm_zero = TRUE
-    )
-  }
-  
-  # collate and append the results
-  co_index <- data.table::rbindlist(lapply(co_index, FUN = "[[","col_index"))
-  ci_bs[[i]] <- co_index
-  
-  # annual log10 indices
-  co_index_b <- co_index[COL_INDEX > 0.0001 & COL_INDEX < 100000, ]
-  co_index_logInd <- co_index_b[
-    BOOTi == 0, .(M_YEAR, COL_INDEX)][, log10(COL_INDEX), by = M_YEAR][
-      , mean_logInd := mean(V1)]
-  
-  ## merge the mean log index with the full bootstrap dataset
-  data.table::setnames(co_index_logInd, "V1", "logInd")
-  data.table::setkey(co_index_logInd, M_YEAR)
-  data.table::setkey(co_index_b, M_YEAR)
-  co_index_b <- merge(co_index_b, co_index_logInd, all.x = TRUE)
-  
-  data.table::setkey(co_index_b, BOOTi, M_YEAR)
-  co_index_b[ , boot_logInd := log10(COL_INDEX)]
-  ci_bs_log[[i]] <- co_index_b
-}
 
 ## Extract the phenology output
 pheno <- purrr::map(fc, \(x) x$pheno)
@@ -1216,6 +1472,42 @@ ci_bs_df <- ci_bs |>
 ci_bs_log_df <- ci_bs_log |>
   purrr::list_rbind(names_to = "SPECIES") |>
   as_tibble()
+
+replicate(1000, {
+      ds_index$index <- rnorm(
+        nrow(ds_index),
+        mean = ds_index$y.x,
+        sd = ds_index$y.y / sqrt(design$n_sample)
+      )
+      lm(index ~ 0 + species + year, data = ds_index) |>
+        coef()
+    }) -> coefs_matrix
+    pnorm(
+      0,
+      mean = mean(coefs_matrix["year", ]),
+      sd = sd(coefs_matrix["year", ]),
+      lower.tail = design$trend > 0
+    )
+
+pval_matrix <- matrix(
+  nrow = max(ci_bs_log_df$BOOTi) + 1,
+  ncol = 1
+)
+
+ci_bs_log_df$C_YEAR <- ci_bs_log_df$M_YEAR - min(ci_bs_log_df$M_YEAR)
+
+for (i in min(ci_bs_log_df$BOOTi):max(ci_bs_log_df$BOOTi)) {
+  pvals <- lm(
+    formula = boot_logInd ~ 0 + SPECIES + C_YEAR,
+    data = ci_bs_log_df[ci_bs_log_df$BOOTi == i, ]
+  ) |> summary()
+  pval <- pvals$coefficients["C_YEAR", "Pr(>|t|)"]
+
+  pval_matrix[i + 1, ] <- pval
+}
+
+power <- sum(pval_matrix <= 0.05) / nrow(pval_matrix)
+
 
 # confidence intervals
 # LCI = log collated index centered around 100 (log10(100) = 2)
