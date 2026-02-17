@@ -668,7 +668,14 @@ We kunnen er zowel voor opteren om de variabelen te behouden (want deel van het 
 ## Steekproefgrootteberekeningen
 
 
-### Berekeningen op basis van pilootdata
+### Berekeningen op basis van maximum aantallen per jaar
+
+Werkwijze:
+
+-   Genereer een steekproefontwerp op basis van de vier strata (binnen vs buiten SBP x HOL vs OL) met een in te stellen aantal herhalingen binnen een stratum en in te stellen aantal jaren.
+-   Simuleer voor een steekproefontwerp nieuwe data op basis van het model dat we gefit hebben op de pilootdata (maximum aantallen per jaar voor elke soortengroep). We voegen hiervoor een lineaire jaar-trend toe aan het model waarvan we de grootte van de trend zelf instellen evenals een random jaar-effect waarvan we de grootte instellen (via een standaardafwijking). Het random jaar effect geeft aan hoe fel jaren van elkaar kunnen verschillen onafhankelijk van de lineaire trend. De veronderstelde lineaire trend is dezelfde voor elke soortengroep.
+-   We fitten aan deze gesimuleerde data het overeenkomstige model, éénmaal met de lineaire trend en éénmaal zonder de lineaire trend. Uit de vergelijking van de likelihood's van deze modellen berekenen we een likelihood-ratio en bijhorende p-waarde op basis van een Chi-kwadraat verdeling. We herhalen dit proces voor 100 gesimuleerde datasets en bepalen het onderscheidend vermogen door de proportie van simulaties te bepalen waarvan de lineaire trend significant is op significantieniveau 5%. Op deze proportie berekenen we 95% betrouwbaarheidsintervallen aan de hand van een binomiale verdeling (x significante testen = successen op 100 trials).
+
 
 ```{r fun-generate-design}
 # Define design variables
@@ -1007,6 +1014,14 @@ ggplot(
 
 ### Berekening op basis van GAI bootstrap samples
 
+Werkwijze:
+
+-   Hier vertrekken we van de pilootdata op maandbasis. We gebruiken het model dat de data fit op maandbasis om nieuwe data te generenen voor bepaalde ontwerpinstellingen (zoals voorheen: aantal herhalingen per stratum, aantal jaren, lineaire jaar-trend, random jaar-tot-jaar variatie die verdeeld wordt tussen strikte jaar variatie en jaar variatie die afhangt van de soortengroep). De zero-inflation component van dit model op maandbasis hebben we zeer klein gemaakt omdat anders het jaar effect niet doorwerkt en omdat je bij 1000 m transectlengte veel minder nultellingen verwacht vergeleken met de 320 m transectlengte die gelopen werd tijdens de pilootfase. De gesimuleerde data zijn dus aantallen getelde individuen voor elk jaar voor de drie soortengroepen op elk van de locaties in de vier maanden (juni-september). Aan elke locatie wordt ook een willekeurige dag in de maand toegekend waarop de telling plaatsvond in een bepaald jaar.
+-   Bovenstaande gesimuleerde data worden vervolgens samengevat tot een _Generalised Abundance Index_ (GAI). Dit is een doorgedreven aggregatie van de data naar één waarde per jaar en per soortengroep (dus aggregatie over maanden én over locaties). Voor een bepaald jaar en een bepaalde soortengroep wordt eerst een activiteitscurve (vliegcurve) opgesteld die weergeeft hoe de relatieve abundantie over het jaar verdeeld is op weekbasis (kan ook op dagbasis ingesteld worden). Deze curve wordt geleerd van alle locaties tegelijk (behalve locaties die niet voldoen aan bepaalde minimumvereisten). Deze curve wordt gebruikt om abundanties te imputeren voor weken zonder tellingen voor een bepaalde locatie. Vervolgens, wordt hieruit de populatiegrootte geschat door de som van aantal getelde individuen op een locatie in een bepaald jaar te delen door de som van de curve-kansen. Onzekerheid op deze schattingen wordt berekend aan de hand van bootstrapping.
+-   We fitten aan elk van de (200) bootstrap samples (elke bootstrap sample is een dataset met voor elk jaar en voor elke soortengroep een geschatte populatiegrootte) een lineair model `y ~ 0 + soortengroep + jaar`, waarbij `y` een indexwaarde ($y = log(N_{it}/N_{1, t = 1})$) is in de log-schaal. Dit geeft 200 schattingen voor de trend (helling van jaar in log-schaal) en we berekenen hiermee een tweezijdige p-waarde. Stel bijvoorbeeld dat 10 schattingen negatief zijn, dan is de p-waarde 5 / 200 * 2 = 0.05.
+-   Voorgaande p-waarde berekenen we voor elke gesimuleerde dataset en vergelijken we met het significantienivau van 5%. Het onderscheidend vermogen is dan de proportie van simulaties waarvoor de p-waarde kleiner of gelijk aan het significantieniveau is. We gebruiken de binomiale verdeling om hiervoor 95% betrouwbaarheidslimieten te berekenen.
+
+
 ```{r fun-simulate-new-month-data}
 # zero inflation component van maand model zeer klein gemaakt
 # omdat anders het jaar effect niet doorwerkt (0 blijft 0)
@@ -1016,7 +1031,8 @@ simulate_new_month_data <- function(
     design,
     tmb_model = tmb_maand,
     trend_percent = 1,
-    sd_jaar = 0.05,
+    sd_jaar_tot = 0.05,
+    varpart_jaar = 0.5, # 50% puur jaareffect
     nsim = 100
 ) {
   # Extract original fixed effects (intercept, beheer, openheid, interaction)
@@ -1037,10 +1053,14 @@ simulate_new_month_data <- function(
   theta_original <- getME(tmb_model, "theta")
   
   # Define the standard deviation for the year random effect
-  theta_jaar <- log(sd_jaar)
+  # and for the jaar:soortengroep random effect
+  var_jaar <- varpart_jaar * sd_jaar_tot ^ 2
+  var_jaar_sg <- (1 - varpart_jaar) *  sd_jaar_tot ^ 2
+  theta_jaar <- log(sqrt(var_jaar))
+  theta_jaar_sg <- log(sqrt(var_jaar_sg))
   
   # Combine them (soortengroep matches formula: pointid first, then year)
-  theta_new <- c(theta_original, theta_jaar)
+  theta_new <- c(theta_original, theta_jaar, theta_jaar_sg)
   
   sims <- glmmTMB::simulate_new(
     ~
@@ -1050,7 +1070,8 @@ simulate_new_month_data <- function(
     + beheer * openheid
     + jaar
     + (0 + soortengroep | locatie)
-    + (1 | jaar),
+    + (1 | jaar)
+    + (1 | jaar:soortengroep),
     ziformula = ~ soortengroep,
     family = poisson(link = "log"),
     newdata = design,
@@ -1075,10 +1096,7 @@ calc_rbms_gai <- function(
     sim_nr
 ) {
   m_visit <- dn |>
-    distinct(
-      SITE_ID = locatie,
-      DATE
-    ) |>
+    distinct(SITE_ID = locatie, DATE) |>
     as.data.frame()
   
   m_count <- dn |>
@@ -1096,83 +1114,135 @@ calc_rbms_gai <- function(
     InitYear = min(year(m_visit$DATE)),
     LastYear = max(year(m_visit$DATE)),
     WeekDay1 = 'monday'
-    )
+  )
   
   ts_season <- ts_monit_season(
     ts_date,
     StartMonth = 6, EndMonth = 9,
-    StartDay = 1,
-    EndDay = NULL,
-    CompltSeason = TRUE,
-    Anchor = TRUE,
-    AnchorLength = 2,
-    AnchorLag = 2,
-    TimeUnit = 'w'
+    StartDay = 1, EndDay = NULL,
+    CompltSeason = TRUE, Anchor = TRUE,
+    AnchorLength = 2, AnchorLag = 2, TimeUnit = 'w'
   )
   
   ts_season_visit <- ts_monit_site(ts_season, m_visit)
   
   sc <- vector("list", length = length(unique(m_count$SPECIES)))
   sc <- setNames(sc, unique(m_count$SPECIES))
-  fc <- ic <- si <- ci <- bs <- ci_bs <- ci_bs_log <- sc
+  fc <- ic <- si <- bs <- ci_bs <- ci_bs_log <- sc
   
   for (i in unique(m_count$SPECIES)) {
     set.seed(132545)
     sc[[i]] <- ts_monit_count_site(ts_season_visit, m_count, sp = i)
     fc[[i]] <- flight_curve(
       sc[[i]],
-      #mod_form = ~ offset(log(transectlengte)) + beheer*openheid,
-      MinVisit = 3,
-      MinOccur = 2,
-      MinNbrSite = 1,
-      MaxTrial = 4,
-      GamFamily = 'poisson',
-      SpeedGam = FALSE,
-      CompltSeason = TRUE,
-      SelectYear = NULL,
-      TimeUnit = 'w'
+      MinVisit = 3, MinOccur = 2, MinNbrSite = 1, MaxTrial = 4,
+      GamFamily = 'poisson', 
+      SpeedGam = TRUE,
+      CompltSeason = TRUE, SelectYear = NULL, TimeUnit = 'w'
     )
-    ic[[i]] <-  impute_count(
-      ts_season_count = sc[[i]],
-      ts_flight_curve = fc[[i]],
-      YearLimit = NULL,
-      TimeUnit = 'w'
+    ic[[i]] <- impute_count(
+      ts_season_count = sc[[i]], ts_flight_curve = fc[[i]],
+      YearLimit = NULL, TimeUnit = 'w'
     )
     si[[i]] <- site_index(butterfly_count = ic[[i]], MinFC = 0.10)
-    ci[[i]] <- collated_index(
-      data = si[[i]],
-      s_sp = i,
-      sindex_value = "SINDEX",
-      glm_weights = TRUE,
-      rm_zero = TRUE
+    
+    # --- SNELLE BOOTSTRAP LUS ---
+    si_data <- data.table::copy(si[[i]])
+    orig_n_sites <- data.table::uniqueN(si_data$SITE_ID) 
+    
+    # Filter & Preparatie
+    si_data <- si_data[!is.na(SINDEX)]
+    site_sums <- si_data[, .(sum_sindex = sum(SINDEX > 0)), by = SITE_ID]
+    valid_sites <- site_sums[sum_sindex > 0, SITE_ID]
+    si_data <- si_data[SITE_ID %in% valid_sites]
+    
+    all_years <- sort(unique(si_data$M_YEAR))
+    si_data[, SITE_ID := factor(SITE_ID)]
+    si_data[, M_YEAR := factor(M_YEAR, levels = all_years)]
+    
+    # precalculatie van de trage Matrix en Variabelen
+    X_mat <- model.matrix(~ SITE_ID + M_YEAR - 1, data = si_data)
+    Y_vec <- round(si_data$SINDEX)
+    base_w <- si_data$TOTAL_NM
+    
+    bs_obj <- boot_sample(si[[i]], boot_n = 200)
+    boot_site_ids <- bs_obj$site_id
+    
+    # Pre-mapping van locaties voor instant lookup
+    row_to_site_idx <- match(
+      as.character(si_data$SITE_ID),
+      as.character(boot_site_ids)
     )
-    bs[[i]] <- boot_sample(si[[i]], boot_n = 200)
+    is_site_coef <- grepl("^SITE_ID", colnames(X_mat))
+    site_coef_names <- sub("^SITE_ID", "", colnames(X_mat)[is_site_coef])
+    site_coef_to_boot_idx <- match(site_coef_names, as.character(boot_site_ids))
     
+    year_coef_idx <- grep("^M_YEAR", colnames(X_mat))
+    year_coef_names <- sub("^M_YEAR", "", colnames(X_mat)[year_coef_idx])
     
-    co_index <- list()
-    for (j in c(0, seq_len(dim(bs[[i]]$boot_ind)[1]))) {
-      co_index[[j + 1]] <- collated_index(
-        data = si[[i]],
-        s_sp = i,
-        sindex_value = "SINDEX",
-        bootID = j,
-        boot_ind = bs[[i]],
-        glm_weights = TRUE,
-        rm_zero = TRUE
+    boot_seq <- c(0, seq_len(nrow(bs_obj$boot_ind)))
+    
+    co_index_list <- lapply(boot_seq, function(j) {
+      if (j == 0) {
+        f_i <- rep(1, length(boot_site_ids))
+      } else {
+        # Tabulate telt direct hoe vaak een site_id in de bootstrap index valt
+        f_i <- tabulate(bs_obj$boot_ind[j, ], nbins = length(boot_site_ids))
+      }
+      
+      # Gewichten updaten a.d.h.v de resample frequentie
+      w_boot <- base_w * f_i[row_to_site_idx]
+      keep <- w_boot > 0
+      
+      if (sum(keep) == 0) {
+        return(data.table(BOOTi = j, M_YEAR = all_years, COL_INDEX = 0))
+      } 
+      # Base-R GLM engine
+      mod <- tryCatch({
+        glm.fit(
+          x = X_mat[keep, , drop = FALSE],
+          y = Y_vec[keep], weights = w_boot[keep], family = poisson()
+        )
+      }, error = function(e) NULL)
+      
+      if (is.null(mod)) {
+        return(data.table(BOOTi = j, M_YEAR = all_years, COL_INDEX = 0))
+      }
+      
+      coefs <- mod$coefficients
+      
+      # Site intercept onzekerheid
+      alpha_vals <- coefs[is_site_coef]
+      valid_alpha <- !is.na(alpha_vals)
+      site_freqs <- f_i[site_coef_to_boot_idx]
+      sum_site_exp <- sum(site_freqs[valid_alpha] *
+                            exp(alpha_vals[valid_alpha]))
+      
+      # Jaar effecten
+      year_effects <- numeric(length(all_years))
+      names(year_effects) <- as.character(all_years)
+      year_effects[1] <- 0 
+      
+      if (length(year_coef_idx) > 0) {
+        y_coef <- coefs[year_coef_idx]
+        y_coef[is.na(y_coef)] <- 0
+        year_effects[year_coef_names] <- y_coef
+      }
+      
+      gai_index <- (sum_site_exp / orig_n_sites) * exp(year_effects)
+      data.table::data.table(
+        BOOTi = j, M_YEAR = all_years, COL_INDEX = unname(gai_index)
       )
-    }
+    })
     
-    # collate and append the results
-    co_index <- data.table::rbindlist(lapply(co_index, FUN = "[[","col_index"))
+    co_index <- data.table::rbindlist(co_index_list)
     ci_bs[[i]] <- co_index
     
-    # annual log10 indices
     co_index_b <- co_index[COL_INDEX > 0.0001 & COL_INDEX < 100000, ]
     co_index_logInd <- co_index_b[
-      BOOTi == 0, .(M_YEAR, COL_INDEX)][, log10(COL_INDEX), by = M_YEAR][
-        , mean_logInd := mean(V1)]
+      BOOTi == 0, .(M_YEAR, COL_INDEX)][
+        , log10(COL_INDEX), by = M_YEAR][, mean_logInd := mean(V1)]
     
-    ## merge the mean log index with the full bootstrap dataset
     data.table::setnames(co_index_logInd, "V1", "logInd")
     data.table::setkey(co_index_logInd, M_YEAR)
     data.table::setkey(co_index_b, M_YEAR)
@@ -1187,15 +1257,10 @@ calc_rbms_gai <- function(
     purrr::list_rbind(names_to = "SPECIES") |>
     as_tibble() |>
     mutate(
-      SPECIES,
-      M_YEAR,
-      BOOTi,
-      LCI = 2 + boot_logInd - mean_logInd,
-      .keep = "none"
+      SPECIES, M_YEAR, BOOTi,
+      LCI = 2 + boot_logInd - mean_logInd, .keep = "none"
     ) |>
-    mutate(
-      C_YEAR  = M_YEAR - min(M_YEAR)
-    )
+    mutate(C_YEAR  = M_YEAR - min(M_YEAR))
   
   return(ci_bs_log_df)
 }
@@ -1208,91 +1273,157 @@ calc_rbms_gai <- function(
 run_scenario <- function(
     n_herhalingen,
     n_jaren,
-    maand = c(6:9),
     trend_percent,
-    sd_jaar,
+    sd_jaar_tot,
+    varpart_jaar = 0.5,
+    maand = c(6:9),
     nsim = 100
-    ) {
-  dn <- generate_design(
-    n_herhalingen = n_herhalingen,
-    n_jaren = n_jaren) |>
-  expand_grid(maand) |> 
-  mutate(maand = factor(maand)) |>
-  mutate(
-    DATE = paste(
-      2025 + jaar,
-      maand,
-      sample(1:30, size = n(), replace = TRUE),
-      sep = "-"
+) {
+  dn <- generate_design(n_herhalingen = n_herhalingen, n_jaren = n_jaren) |>
+    expand_grid(maand) |> 
+    mutate(maand = factor(maand)) |>
+    mutate(
+      DATE = paste(
+        2025 + jaar, maand,
+        sample(1:30, size = n(), replace = TRUE), sep = "-"
+      )
     )
-  )
   
   sm <- simulate_new_month_data(
-    design = dn,
-    trend_percent = trend_percent,
-    sd_jaar = sd_jaar,
-    nsim = nsim)
+    design = dn, trend_percent = trend_percent,
+    sd_jaar_tot = sd_jaar_tot, varpart_jaar = varpart_jaar, nsim = nsim)
   
   boot_results_mat <- matrix(nrow = nsim, ncol = 6)
+  
   for (i in seq_along(sm)) {
-    gai <- calc_rbms_gai(
-      dn = dn, sm = sm, sim_nr = i
+    gai <- calc_rbms_gai(dn = dn, sm = sm, sim_nr = i)
+    
+    # Haal observaties op > 0 en sorteer
+    gai_sub <- gai[gai$BOOTi > 0, ]
+    gai_sub <- gai_sub[order(gai_sub$BOOTi), ]
+    
+    # Bereid Model Matrix voor (We fitten nu LCI_avg ~ 1 + C_YEAR)
+    X_lm <- model.matrix(
+      ~ 1 + C_YEAR,
+      data = data.frame(C_YEAR = seq_len(n_jaren) - 1)
     )
-
-    # Fit the model for every bootstrap iteration (BOOTi > 0)
-    # BOOTi == 0 is the observed data
-    boot_results <- gai |> 
-      dplyr::filter(BOOTi > 0) |>
-      nest(.by = BOOTi) |>
-      # fit model to each BOOTi
-      mutate(
-        model = purrr::map(data, \(x) lm(LCI ~ 0 + SPECIES + C_YEAR, data = x)),
-        boot_coefs = purrr::map(model, \(x) summary(x)$coef["C_YEAR",] |>
-                           t() |>
-                           as_tibble())
-      ) |>
-      unnest(boot_coefs) |>
-      # propagate uncertainty associated with Bootstrap samples
-      summarise(
-        year_est = mean(Estimate),
-        year_lower = quantile(Estimate, 0.025),
-        year_upper = quantile(Estimate, 0.975),
-        year_se = sd(Estimate),
-        year_t_val = year_est / year_se,
-        # two-sided p-value
-        year_p_val = 2 * min(sum(Estimate >= 0), sum(Estimate <= 0)) / n()
-      )
-    boot_results_mat[i, ] <- as.matrix(boot_results[1, ])
+    idx_cyear <- 2 # C_YEAR is nu de 2e kolom
+    
+    # de variantie-covariantiematrix berekenen
+    XtX_inv <- chol2inv(chol(crossprod(X_lm)))
+    var_unscaled_cyear <- XtX_inv[idx_cyear, idx_cyear]
+    
+    boot_ids <- unique(gai_sub$BOOTi)
+    m <- length(boot_ids)
+    
+    # Opslag voor bootstrap regressieresultaten
+    year_coefs <- matrix(nrow = m, ncol = 2) # [1] = Estimate, [2] = Std. Error
+    
+    # snelle lm.fit per bootstrap op GEMIDDELDE LCI per jaar
+    for (b in seq_along(boot_ids)) {
+      # Haal LCI en C_YEAR op voor deze specifieke bootstrap
+      y_b <- gai_sub$LCI[gai_sub$BOOTi == boot_ids[b]]
+      c_year_b <- gai_sub$C_YEAR[gai_sub$BOOTi == boot_ids[b]]
+      
+      # Bereken het gemiddelde per C_YEAR over de soorten(groepen) heen
+      # (tapply sorteert automatisch op C_YEAR, wat perfect matcht met X_lm)
+      y_avg <- as.numeric(tapply(y_b, c_year_b, mean))
+      
+      fit <- lm.fit(x = X_lm, y = y_avg)
+      
+      # Bereken residuals & variance voor de Standard Error 
+      df <- length(y_avg) - fit$rank
+      sigma2 <- sum(fit$residuals^2) / df
+      
+      year_coefs[b, 1] <- fit$coefficients["C_YEAR"]
+      year_coefs[b, 2] <- sqrt(var_unscaled_cyear * sigma2)
+    }
+    
+    # Rubin's Rules (met variantie-pooling)
+    # elke bootstrap sample geeft een imputatie in weken zonder tellingen
+    # die verder geaggregeerd worden naar jaartotalen
+    # dus multiple imputaties
+    year_est <- mean(year_coefs[, 1])
+    # variance within bootstrap samples (gemiddelde variantie van het lm model)
+    W <- mean(year_coefs[, 2]^2)
+    # variance between bootstrap samples (meetfout/imputatie ruis)
+    B <- var(year_coefs[, 1])
+    # totale standaardfout
+    year_se <- sqrt(W + B * (1 + 1/m))
+    year_t_val <- year_est / year_se
+    df_rubin <- (m - 1) * (1 + W / (B * (1 + 1/m)))^2
+    # eenzijdige test voor stijgende trend
+    year_p_val = pt(year_t_val, df = df_rubin, lower.tail = FALSE)
+    
+    # Opslaan
+    boot_results_mat[i, ] <- c(
+      year_est,
+      year_est - qt(0.975, df_rubin) * year_se,  # Lower 95% CI
+      year_est + qt(0.975, df_rubin) * year_se,  # Upper 95% CI
+      year_se,
+      year_t_val,
+      year_p_val
+    )
   }
-  colnames(boot_results_mat) <- colnames(boot_results)
+  
+  colnames(boot_results_mat) <- c(
+    "year_est", "year_lower", "year_upper", "year_se", "year_t_val",
+    "year_p_val"
+  )
   boot_results <- as_tibble(boot_results_mat)
+  
   sig_results <- boot_results$year_p_val <= 0.05
   ci_test <- binom.test(
     x = sum(sig_results, na.rm = TRUE),
     n = sum(!is.na(sig_results))
   )
-
-  boot_results <- boot_results |>
+  
+  final_summary <- boot_results |>
     summarize(
       year_est_mean = mean(year_est),
+      # terugtransformatie naar procenten
+      trend_est_percent = (10 ^ mean(year_est) - 1) * 100,
+      # terugtransformatie naar procenten 
+      # voor de SIGNIFICANTE simulaties
+      # Type M fout (Winner's curse)
+      # te grote effectsizes als je een signif effect zou vinden bij lage power
+      trend_est_sig_percent =
+        (10 ^ mean(year_est[year_p_val <= 0.05]) - 1) * 100,
       year_est_positive = mean(year_est > 0),
+      year_est_sd = sd(year_est),
+      mean_se = mean(year_se),
       power_mean = mean(year_p_val <= 0.05),
       power_lower = ci_test$conf.int[1],
       power_upper = ci_test$conf.int[2]
     )
   
-  return(boot_results)
+  return(final_summary)
 }
 ```
+
+
 
 ```{r}
 #| eval: false
 profvis::profvis({
  out <- run_scenario(
-   n_herhalingen = 2, n_jaren = 6, trend_percent = 1, sd_jaar = 0.01, nsim = 1
+   n_herhalingen = 15,
+   n_jaren = 6,
+   trend_percent = 1,
+   sd_jaar_tot = 0.01,
+   nsim = 1
  )
  out
 })
+
+debugonce(run_scenario)
+out <- run_scenario(
+  n_herhalingen = 15,
+  n_jaren = 6,
+  trend_percent = 1,
+  sd_jaar = 0.01,
+  nsim = 1
+)
 
 ```
 
@@ -1310,27 +1441,30 @@ n_cores <- parallel::detectCores(logical = FALSE)
 daemons(ceiling(n_cores / 2), dispatcher = FALSE)
 
 # 2. Define Parameter Grid (Flatten the loops)
-trends <- c(1, 2, 5)
-reps <- c(2, 5, 15, 30, 60)
+trends <- c(1, 5)
+reps <- c(2, 5, 15, 30)
 n_jaren  <- c(6, 12, 24)
-sd_jaar <- c(0.01, 0.05, 0.15, 0.4)
+sd_jaar_tot <- c(0.05, 0.4)
+varpart_jaar <- c(0.1, 0.5)
 
 param_grid <- tidyr::expand_grid(
-  sd_jaar = sd_jaar,
+  sd_jaar_tot = sd_jaar_tot,
   n_jaren = n_jaren,
   trend = trends,
   n_herhalingen = reps,
+  varpart_jaar = varpart_jaar,
   nsims = 100
 )
 
-# # restriction to vary only one parameter (reps)
-# param_grid <- param_grid |>
-#   filter(
-#     trend == 1,
-#     n_jaren == 12,
-#     sd_jaar == 0.01
-#   )
-
+# Group by the parameters that define a "family"
+scenario_families <- param_grid |>
+  group_by(sd_jaar_tot, trend, varpart_jaar, nsims) |>
+  tidyr::nest() |>
+  # Sort the nested data by "effort" (lowest first)
+  mutate(
+    effort_grid = purrr::map(data, ~arrange(.x, n_jaren, n_herhalingen))
+  ) |>
+  select(-data)
 
 pr <- fs::dir_create(
   here::here("source", "powercalc_results", "gai")
@@ -1343,23 +1477,10 @@ if (delete) fs::file_delete(pr)
 # Store promises here
 tasks <- list()
 
-for (i in seq_len(nrow(param_grid))) {
+for (i in seq_len(nrow(scenario_families))) {
   
   # Extract parameters for this specific row
-  p <- param_grid[i, ]
-  
-  # Construct filename
-  fname <- file.path(
-    pr, 
-    paste0(
-      "gai_sdy", p$sd_jaar ,
-      "_ny", p$n_jaren,
-      "_trend", p$trend,
-      "_reps", p$n_herhalingen,
-      "_nsims", p$nsims,
-      ".rds"
-    )
-  )
+  family_params <- scenario_families[i, ]
   
   # Submit to mirai
   tasks[[i]] <- mirai({
@@ -1370,44 +1491,229 @@ for (i in seq_len(nrow(param_grid))) {
     library(glmmTMB)
     library(lubridate)
     library(purrr)
-    # Check cache
-    if (file.exists(fname)) {
-      res <- readRDS(fname)
-      return(res)
+
+    # Extract the base parameters and the effort grid
+    base_p <- family_params
+    effort_grid <- base_p$effort_grid[[1]]
+
+    results_list <- list()
+
+    # Sequentially step through effort levels inside the daemon
+    for (j in seq_len(nrow(effort_grid))) {
+      e <- effort_grid[j, ]
+      fname <- file.path(
+        pr,
+        paste0(
+          "gai_sdy", base_p$sd_jaar_tot,
+          "_varpartjaar", base_p$varpart_jaar, 
+          "_ny", e$n_jaren,
+          "_trend", base_p$trend,
+          "_reps", e$n_herhalingen,
+          "_nsims", base_p$nsims, ".rds"
+        )
+      )
+      
+      # Cache check
+      if (file.exists(fname)) {
+        result <- readRDS(fname)
+      } else {
+        result <- run_scenario(
+          n_herhalingen = e$n_herhalingen,
+          n_jaren = e$n_jaren,
+          maand = 6:9,
+          trend_percent = base_p$trend,
+          sd_jaar_tot = base_p$sd_jaar_tot,
+          varpart_jaar = base_p$varpart_jaar,
+          nsim = base_p$nsims
+        )
+        result <- bind_cols(base_p |> select(-effort_grid), e, result)
+        saveRDS(result, file = fname)
+      }
+      results_list[[j]] <- result
+      # --- EARLY STOPPING LOGIC ---
+      current_power <- result$power_mean 
+      
+      if (current_power > 0.8) {
+        # Skip the remaining, more powerful iterations in this family
+        break 
+      }
     }
-    
-    # Run Analysis
-    result <- run_scenario(
-      n_herhalingen = p$n_herhalingen,
-      n_jaren = p$n_jaren,
-      maand = 6:9,
-      trend_percent = p$trend,
-      sd_jaar = p$sd_jaar,
-      nsim = p$nsims
-    )
-    result <- bind_cols(p, result)
-    
-    # Save and return result
-    saveRDS(result, file = fname)
-    return(result) 
+    return(bind_rows(results_list))
   }, 
-  # Pass parameters and functions
   environment()
   )
 }
 ```
 
 ```{r}
+#| eval: false
+
+# inspection of interim results while running
+power_df_gai <- purrr::map_dfr(fs::dir_ls(pr), \(x) readRDS(x)) |>
+  mutate(
+    sd_jaar_tot = factor(sd_jaar_tot)
+  )
+
+ggplot(
+  power_df_gai,
+  aes(x = n_herhalingen * 4, y = power_mean,
+      color = interaction(sd_jaar_tot, varpart_jaar))
+) +
+  geom_line(linewidth = 1.2, alpha = 0.8) +
+  geom_ribbon(
+    aes(
+      ymin = power_lower,
+      ymax = power_upper,
+      fill = interaction(sd_jaar_tot, varpart_jaar),
+      colour = NULL
+    ),
+    alpha = 0.2
+  ) +
+  geom_point() +
+  geom_hline(
+    yintercept = 0.8,
+    linetype = 2,
+    color = "darkgrey"
+  ) +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_continuous() +
+  guides(x = guide_axis(check.overlap = TRUE)) +
+  labs(
+    x = "Aantal locaties",
+    y = "Onderscheidend vermogen"
+  ) +
+  facet_grid(
+    sprintf("Trend: %.d%%", trend) ~ sprintf("Aantal jaren: %02d", n_jaren)
+  )
+
+power_df_gai |>
+  ggplot() +
+  geom_point(
+    aes(
+      x = year_est_sd, y = mean_se,
+      colour = interaction(sd_jaar_tot, varpart_jaar, sep = " - ")
+    )
+  ) +
+  geom_abline() +
+  labs(
+    x = "Standaardafwijking van de jaar-effecten (hellingen)",
+    y = "Gemiddelde standaardfout o.b.v. gepoolde varianties"
+  ) +
+  facet_wrap(~ n_jaren, scales = "free")
+
+power_df_gai |>
+  ggplot() +
+  geom_point(
+    aes(
+      x = power_mean, y = trend_est_sig_percent,
+      colour = interaction(sd_jaar_tot, varpart_jaar, n_jaren, sep = " - ")
+    )
+  ) +
+  geom_hline(aes(yintercept = trend)) +
+  facet_wrap(~ sprintf("Werkelijke trend: %s", trend)) +
+  labs(
+    x = "Onderscheidend vermogen om trend te detecteren",
+    y = "Gemiddelde geschatte trend indien significant",
+    title = "Winner's curse (Type M fout)"
+  )
+
+
+```
+
+
+```{r}
 #| label: mirai-collect-gai
 # call_mirai blocks until all tasks are done
 results_collected_gai <- lapply(tasks, call_mirai)
-power_df <- purrr::map_dfr(results_collected_gai, \(x) x$data) |>
-  mutate(trend = factor(trend))
-results_collected_gai[[1]]$data
+power_df_gai <- purrr::map_dfr(results_collected_gai, \(x) x$data) |>
+  mutate(
+    sd_jaar_tot = factor(sd_jaar_tot)
+  )
 
 daemons(0)
 ```
 
+```{r}
+#| label: fig-gai-power-samplesize
+#| fig-cap: Steekproefgrootte in functie van onderscheidend vermogen. Wanneer de jaar tot jaar variatie te groot is ten opzichte van het signaal, helpt het niet om de steekproefgrootte te vergroten.
+ggplot(
+  power_df_gai,
+  aes(x = n_herhalingen * 4, y = power_mean,
+      color = interaction(sd_jaar_tot, varpart_jaar))
+) +
+  geom_line(linewidth = 1.2, alpha = 0.8) +
+  geom_ribbon(
+    aes(
+      ymin = power_lower,
+      ymax = power_upper,
+      fill = interaction(sd_jaar_tot, varpart_jaar),
+      colour = NULL
+    ),
+    alpha = 0.2
+  ) +
+  geom_point() +
+  geom_hline(
+    yintercept = 0.8,
+    linetype = 2,
+    color = "darkgrey"
+  ) +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_continuous() +
+  guides(x = guide_axis(check.overlap = TRUE)) +
+  labs(
+    x = "Aantal locaties",
+    y = "Onderscheidend vermogen"
+  ) +
+  facet_grid(
+    sprintf("Trend: %.d%%", trend) ~ sprintf("Aantal jaren: %02d", n_jaren)
+  )
+
+```
+
+
+```{r}
+#| label: fig-variantie-check
+#| fig-cap: Vergelijking van de standaardfout op basis van de berekende gepoolde
+#|  varianties met de standaardafwijking op de schattingen van de helling 
+power_df_gai |>
+  ggplot() +
+  geom_point(
+    aes(
+      x = year_est_sd, y = mean_se,
+      colour = interaction(sd_jaar_tot, n_jaren),
+      shape = factor(varpart_jaar)
+    )
+  ) +
+  geom_abline() +
+  labs(
+    x = "Standaardafwijking van de jaar-effecten (hellingen)",
+    y = "Gemiddelde standaardfout o.b.v. gepoolde varianties"
+  )
+
+```
+
+```{r}
+#| label: fig-type-m-fout
+#| fig-cap: Type M fout: wanneer een meetnet te weinig onderscheidend vermogen
+#|   heeft en er toch significante effecten worden gevonden, zijn dit
+#|   overschattingen van de werkelijke trend.
+power_df_gai |>
+  ggplot() +
+  geom_point(
+    aes(
+      x = power_mean, y = trend_est_sig_percent,
+      colour = interaction(sd_jaar_tot, n_jaren),
+      shape = factor(varpart_jaar)
+    )
+  ) +
+  geom_hline(aes(yintercept = trend)) +
+  facet_wrap(~ sprintf("Werkelijke trend: %s", trend)) +
+  labs(
+    x = "Onderscheidend vermogen om trend te detecteren",
+    y = "Gemiddelde geschatte trend indien significant",
+    title = "Winner's curse (Type M fout)"
+  )
+```
 
 
 ```{r}
@@ -1438,7 +1744,9 @@ dn |>
 
 
 
-```{r rbms-gai-calculation}
+```{r}
+#| label: rbms-gai-calculation
+#| eval: false
 # https://retoschmucki.github.io/rbms/articles/vignette.html
 
 
