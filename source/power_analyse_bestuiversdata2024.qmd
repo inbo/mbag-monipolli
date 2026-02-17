@@ -1635,23 +1635,25 @@ daemons(0)
 
 ```{r}
 #| label: fig-gai-power-samplesize
-#| fig-cap: Steekproefgrootte in functie van onderscheidend vermogen. Wanneer de jaar tot jaar variatie te groot is ten opzichte van het signaal, helpt het niet om de steekproefgrootte te vergroten.
+#| fig-cap: Steekproefgrootte in functie van onderscheidend vermogen.
+#|   Wanneer de jaar tot jaar variatie te groot is ten opzichte van het signaal,
+#|    helpt het niet om de steekproefgrootte te vergroten.
 ggplot(
   power_df_gai,
   aes(x = n_herhalingen * 4, y = power_mean,
+      ymin = power_lower,
+      ymax = power_upper,
       color = interaction(sd_jaar_tot, varpart_jaar))
 ) +
   geom_line(linewidth = 1.2, alpha = 0.8) +
   geom_ribbon(
     aes(
-      ymin = power_lower,
-      ymax = power_upper,
       fill = interaction(sd_jaar_tot, varpart_jaar),
       colour = NULL
     ),
     alpha = 0.2
   ) +
-  geom_point() +
+  geom_pointrange(alpha = 0.3) +
   geom_hline(
     yintercept = 0.8,
     linetype = 2,
@@ -1694,7 +1696,7 @@ power_df_gai |>
 
 ```{r}
 #| label: fig-type-m-fout
-#| fig-cap: Type M fout: wanneer een meetnet te weinig onderscheidend vermogen
+#| fig-cap: Type M fout. Wanneer een meetnet te weinig onderscheidend vermogen
 #|   heeft en er toch significante effecten worden gevonden, zijn dit
 #|   overschattingen van de werkelijke trend.
 power_df_gai |>
@@ -1717,6 +1719,29 @@ power_df_gai |>
 
 
 ```{r}
+#| label: one-simulation
+#| eval: true
+#| cache: true
+dn <- generate_design(
+  n_herhalingen = 15,
+  n_jaren = 12) |>
+  expand_grid(maand) |> 
+  mutate(maand = factor(maand)) |>
+  mutate(
+    DATE = paste(
+      2025 + jaar, maand,
+      sample(1:30, size = n(), replace = TRUE), sep = "-"
+    )
+  )
+
+nsims <- 10
+sm <- simulate_new_month_data(
+  design = dn,
+  trend_percent = 5,
+  sd_jaar_tot = 0.4,
+  varpart_jaar = 0.1,
+  nsim = nsims)
+
 dn |>
   mutate(count = sm[[1]]) |>
   ggplot() +
@@ -1735,9 +1760,109 @@ dn |>
     aes(
       x = as_date(DATE),
       y = count,
-      group = locatie)
+      group = locatie),
+    alpha = 0.1
   ) +
+  geom_smooth(    aes(
+      x = as_date(DATE),
+      y = count)
+) +
   facet_grid(rows = vars(soortengroep), scales = 'free')
+
+boot_results_mat <- matrix(nrow = nsims, ncol = 6)
+
+for (i in seq_along(sm)) {
+  gai <- calc_rbms_gai(dn = dn, sm = sm, sim_nr = i)
+  
+  # Haal observaties op > 0 en sorteer
+  gai_sub <- gai[gai$BOOTi > 0, ]
+  gai_sub <- gai_sub[order(gai_sub$BOOTi), ]
+  
+  # Bereid Model Matrix voor (We fitten nu LCI_avg ~ 1 + C_YEAR)
+  X_lm <- model.matrix(
+    ~ 1 + C_YEAR,
+    data = data.frame(C_YEAR = seq_len(12) - 1)
+  )
+  idx_cyear <- 2 # C_YEAR is nu de 2e kolom
+  
+  # de variantie-covariantiematrix berekenen
+  XtX_inv <- chol2inv(chol(crossprod(X_lm)))
+  var_unscaled_cyear <- XtX_inv[idx_cyear, idx_cyear]
+  
+  boot_ids <- unique(gai_sub$BOOTi)
+  m <- length(boot_ids)
+  
+  # Opslag voor bootstrap regressieresultaten
+  year_coefs <- matrix(nrow = m, ncol = 2) # [1] = Estimate, [2] = Std. Error
+  
+  # snelle lm.fit per bootstrap op GEMIDDELDE LCI per jaar
+  for (b in seq_along(boot_ids)) {
+    # Haal LCI en C_YEAR op voor deze specifieke bootstrap
+    y_b <- gai_sub$LCI[gai_sub$BOOTi == boot_ids[b]]
+    c_year_b <- gai_sub$C_YEAR[gai_sub$BOOTi == boot_ids[b]]
+    
+    # Bereken het gemiddelde per C_YEAR over de soorten(groepen) heen
+    # (tapply sorteert automatisch op C_YEAR, wat perfect matcht met X_lm)
+    y_avg <- as.numeric(tapply(y_b, c_year_b, mean))
+    
+    fit <- lm.fit(x = X_lm, y = y_avg)
+    
+    # Bereken residuals & variance voor de Standard Error 
+    df <- length(y_avg) - fit$rank
+    sigma2 <- sum(fit$residuals^2) / df
+    
+    year_coefs[b, 1] <- fit$coefficients["C_YEAR"]
+    year_coefs[b, 2] <- sqrt(var_unscaled_cyear * sigma2)
+  }
+  
+  # Rubin's Rules (met variantie-pooling)
+  # elke bootstrap sample geeft een imputatie in weken zonder tellingen
+  # die verder geaggregeerd worden naar jaartotalen
+  # dus multiple imputaties
+  year_est <- mean(year_coefs[, 1])
+  # variance within bootstrap samples (gemiddelde variantie van het lm model)
+  W <- mean(year_coefs[, 2]^2)
+  # variance between bootstrap samples (meetfout/imputatie ruis)
+  B <- var(year_coefs[, 1])
+  # totale standaardfout
+  year_se <- sqrt(W + B * (1 + 1/m))
+  year_t_val <- year_est / year_se
+  df_rubin <- (m - 1) * (1 + W / (B * (1 + 1/m)))^2
+  # eenzijdige test voor stijgende trend
+  year_p_val = pt(year_t_val, df = df_rubin, lower.tail = FALSE)
+  
+  # Opslaan
+  boot_results_mat[i, ] <- c(
+    year_est,
+    year_est - qt(0.975, df_rubin) * year_se,  # Lower 95% CI
+    year_est + qt(0.975, df_rubin) * year_se,  # Upper 95% CI
+    year_se,
+    year_t_val,
+    year_p_val
+  )
+}
+
+colnames(boot_results_mat) <- c(
+  "year_est", "year_lower", "year_upper", "year_se", "year_t_val",
+  "year_p_val"
+)
+boot_results <- as_tibble(boot_results_mat)
+
+boot_results |>
+  mutate(simnr = 1:n()) |>
+  ggplot() +
+  geom_pointrange(
+    aes(
+      x = simnr,
+      y = (10 ^ year_est - 1) * 100,
+      ymin = (10 ^ year_lower - 1) * 100,
+      ymax = (10 ^ year_upper - 1) * 100,
+      colour = year_p_val <= 0.05 
+    )
+  ) +
+  geom_hline(yintercept = 5)
+
+
 
 
 ```
@@ -1876,220 +2001,6 @@ bounds
 
 ```
 
-
-
-We gebruiken hiervoor de methode voor de berekening van een *generalized abundance index* (GAI) [@dennis2016; @dennis2022].
-Normaal wordt deze berekend voor elke soort binnen een soortengroep.
-Hier berekenen we deze voor elke soortengroep (voor de zweefvliegen beschikken we niet over de determinaties tot op soortniveau).
-Voor de schatting van de GAI veronderstellen we hier dat de activiteiscurve een normale verdeling volgt en dat de tellingen afkomstig zijn uit een Poisson distributie.
-Het maakt een groot verschil op welke resolutie we de data aan het model doorgeven.
-We berekenen zowel een versie die de tellingen beschouwt per maand als een versie die de tellingen beschouwt per week.
-In het laatste geval zijn er veel combinaties van locatie x week die leeg zijn (missing data), het model zal dan aan de hand van de geschatte activiteitscurve (over alle locaties) een imputatie doen voor die week.
-De aggregatie per week geeft aanleiding tot verschillende totale transectlengte (160 m vs 320 m).
-Het model in R package rGAI kan hier geen rekening mee houden.
-Wellicht kunnen we dus enkel de aggregatie per maand betrouwen.
-
-```{r}
-#| label: gai
-#| cache: true
-
-gai_model <- function(input, family = c("P", "NB", "ZIP")) {
-  family <- match.arg(family)
-  #TODO modelselectie toevoegen voor verschillende dist_choice
-  startvalues <- switch(
-    family,
-    "P" = rep(0, 2),
-    "NB" = rep(0, 3),
-    "ZIP" = c(0, 0, 0.5)
-  )
-  mixture <- rGAI::fit_GAI(
-    start = startvalues,
-    DF = as.data.frame(input),
-    a_choice = "mixture",
-    dist_choice = family,
-    hessian = TRUE,
-    options = list(B = 1)
-  )
-  return(mixture)
-}
-bootstrap_model <- function(gai_model) {
-  b <- rGAI::bootstrap(
-    gai_model,
-    R = 400,
-    refit = TRUE,
-    alpha = 0.05,
-    parallel = TRUE,
-    cores = 5
-  )
-  return(b)
-}
-
-extract_site_totals <- function(input, gai_model, bootstraps) {
-  out <- input |> distinct(site)
-  out$N <- gai_model$N
-  out$N_lwr <- bootstraps$N[1,]
-  out$N_upr <- bootstraps$N[2,]
-
-  return(out)
-}
-
-data_maandbasis <- bestuivers_2024_by_soortengroep_bezoek |>
-  select(
-    soortengroep,
-    site = locatie,
-    occasion = maand,
-    count = n_ind,
-    transectlengte
-  ) |>
-  summarise(
-    count = sum(count),
-    totale_transectlengte = sum(transectlengte),
-    .by = c(soortengroep, site, occasion)
-  ) |> 
-  complete(soortengroep, site, occasion) |>
-  mutate(
-    site = factor(site)
-  ) |>
-  nest(.by = c(soortengroep, totale_transectlengte)) |>
-  mutate(
-    resolutie = "maand"
-  )
-
-data_weekbasis <- bestuivers_2024_by_soortengroep_bezoek |>
-  mutate(week = factor(week)) |>
-  select(
-    soortengroep,
-    site = locatie,
-    occasion = week,
-    count = n_ind,
-    transectlengte
-  ) |>
-  summarise(
-    count = sum(count),
-    totale_transectlengte = sum(transectlengte),
-    .by = c(soortengroep, site, occasion)
-  ) |> 
-  complete(soortengroep, nesting(site, totale_transectlengte), occasion) |>
-  mutate(
-    site = factor(site)
-  ) |>
-  nest(.by = soortengroep) |> 
-  mutate(resolutie = "week")
-
-
-
-data_gai <- bind_rows(
-  data_maandbasis,
-  data_weekbasis
-)
-
-gai_model <- purrr::possibly(gai_model)
-bootstrap_model <- purrr::possibly(bootstrap_model)
-extract_site_totals <- purrr::possibly(extract_site_totals)
-
-gai <- data_gai |>
-  expand_grid(
-    family = c("P", "NB", "ZIP")
-  ) |>
-  mutate(
-    gai_model = purrr::map2(data, family, \(x, y) gai_model(x, y)),
-    bootstrap = purrr::map(gai_model, bootstrap_model),
-    site_totals = purrr::pmap(
-      .l = list(
-        x = data,
-        y = gai_model,
-        z = bootstrap
-      ),
-      .f = \(x,y,z) extract_site_totals(x, y, z))
-  )
-
-
-gai_site_totals <- gai |>
-  select(-data, -gai_model, -bootstrap) |> 
-  unnest(site_totals) |>
-  rename(locatie = site)
-
-```
-
-@fig-gai-poisson-week-maand
-
-```{r}
-#| label: fig-gai-poisson-week-maand
-#| fig-cap: Vergelijking van de geschatte locatie-jaartotalen voor GAI model 
-#|  gebaseerd op Poisson distributie op basis van maandgegevens of weekgegevens
-bestuivers_2024_by_soortengroep_jaar |>
-  inner_join(gai_site_totals, by = join_by(soortengroep, locatie)) |>
-  mutate(
-    locatie = reorder(locatie, N)
-  ) |>
-  filter(family == "P") |>
-  ggplot() +
-  geom_pointrange(
-    aes(
-      y = locatie,
-      x = N,
-      xmin = N_lwr,
-      xmax = N_upr,
-      colour = soortengroep
-      ),
-    position = position_dodge(width = 0.2)
-  ) +
-  facet_wrap(~ resolutie, scales = "free_x")
-```
-
-```{r}
-#| label: fig-gai-maand
-#| fig-cap: Vergelijking van de geschatte locatie-jaartotalen voor verschillende
-#|  GAI model distributies op basis van maandgegevens
-bestuivers_2024_by_soortengroep_jaar |>
-  inner_join(gai_site_totals, by = join_by(soortengroep, locatie)) |>
-  filter(resolutie == "maand") |>
-  mutate(
-    locatie = reorder(locatie, N)
-  ) |>
-  ggplot() +
-  geom_pointrange(
-    aes(
-      y = locatie,
-      x = N,
-      xmin = N_lwr,
-      xmax = N_upr,
-      colour = soortengroep
-      ),
-    position = position_dodge(width = 0.2)
-  ) +
-  facet_wrap(~ family, scales = "free_x")
-```
-
-
-
-De GAI wordt vervolgens voor een bepaald jaar berekend door uit te middelen over de locaties.
-We kunnen dit doen voor elk bootstrap sample.
-Hier hebben we geen opsplitsing gemaakt tussen locaties uit verschillende strata (binnen vs buiten SBP gebied en Open Landschap vs Halfopen Landschap).
-
-```{r}
-gai_calc <- function(b, alpha = 0.05) {
-  bs <- rowMeans(b$N_raw)
-  out <- data.frame(
-    gai_mean = mean(bs),
-    gai_se = sd(bs),
-    gai_q_lwr = quantile(bs, prob = alpha / 2),
-    gai_q_upr = quantile(bs, prob = 1 - alpha / 2)
-  )
-  return(out)
-}
-
-gai_calc <- purrr::possibly(gai_calc)
-
-gai <- gai |>
-  mutate(
-    gai_result = purrr::map(bootstrap, gai_calc)
-  )
-
-gai |>
-  select(soortengroep, resolutie, family, gai_result) |> 
-  unnest(gai_result)
-```
 
 
 
