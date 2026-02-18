@@ -670,6 +670,12 @@ We kunnen er zowel voor opteren om de variabelen te behouden (want deel van het 
 
 ### Berekeningen op basis van maximum aantallen per jaar
 
+::: {.callout-warning}
+Deze berkeneningen gaan nog uit van enkel (1|jaar).
+Een gezamenlijk jaar effect voor alle soortengroepen.
+Zie de sectie Berekening op basis van GAI waar ook (1|jaar:soortengroep) toegevoegd werd om meer realistische scenario's door te rekenen.
+:::
+
 Werkwijze:
 
 -   Genereer een steekproefontwerp op basis van de vier strata (binnen vs buiten SBP x HOL vs OL) met een in te stellen aantal herhalingen binnen een stratum en in te stellen aantal jaren.
