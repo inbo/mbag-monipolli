@@ -1,5 +1,5 @@
 ---
-title: "Poweranalyse op basis van pilootdata bestuivers zandleemstreek 2024"
+title: "Poweranalyse op basis van pilootdata bestuivers zandleemstreek"
 author: "Hans Van Calster, Emma Cartuyvels"
 format: 
   html:
@@ -32,7 +32,7 @@ library(glmmTMB)
 library(lubridate)
 library(patchwork)
 library(rbms)
-
+library(mirai)
 conflicted::conflicts_prefer(dplyr::filter)
 ```
 
@@ -41,7 +41,7 @@ conflicted::conflicts_prefer(dplyr::filter)
 In 2024 werden in de Zandleemstreek op 40 locaties maandelijks tussen juni en september bestuivers ingezameld via enerzijds transecttellingen en anderzijds pan-traps.
 De bestuiversgroepen die beschouwd werden zijn dagvlinders, wilde bijen en wespen en zweefvliegen.
 Deze data kunnen we gebruiken om steekproefgrootteberekeningen te informeren zodat een toekomstig meetnet voor bestuivers adequaat gedimensioneerd kan worden.
-Ook in 2025 werden dezelfde data ingezameld, maar deze zijn momenteel nog niet beschikbaar.
+Ook in 2025 werden dezelfde data ingezameld, maar deze zijn momenteel nog niet volledig beschikbaar.
 
 In het kader van de natuurherstelverordening (Art 10 lid 2 punt 2) wordt gevraagd om het herstel van bestuiverspopulaties te monitoren:
 
@@ -306,33 +306,97 @@ Dit is de letterlijke tekst uit [bijlage II van de gedelegeerde verordening](htt
 > (4) Massimino, D., Baillie, S.R., Balmer, D.E., Bashford, R.I., Gregory, R.D., Harris, S.J., Heywood, J.J.N., Kelly, L.A., Noble, D.G., Pearce-Higgins, J.W., Raven, M.J., Risely, K., Woodcock, P., Wotton, S.R., en Gillings, S. (2025), The Breeding Bird Survey of the United Kingdom, Global Ecology and Biogeography 34: e13943 (https://doi.org/10.1111/geb.13943).
 
 
-## Pilootdata bestuivers Zandleemstreek 2024
+## Pilootdata bestuivers Zandleemstreek
 
 ```{r inlezen}
 bestuivers_2024 <- read_csv(
   here("data", "processed", "bestuivers_2024.csv")
 ) |>
   rename(
-    locatie = location_code
+    locatie = location_code,
+    sample_code = sample_code.x
   ) |>
   mutate(
     jaar = year(date_b),
     dag = day(date_b),
     jdag = lubridate::yday(date_b)
+  ) |>
+  select(-sample_code.y)
+
+# met nulvangsten (geen enkele soort gevangen)
+# dit zijn dus nog geen nultellingen (waar per soort nullen toegevoegd)
+# igv nulvangsten werd species_nm op NA gezet
+zweefvliegen_aantallen <- readxl::read_excel(
+  here("data", "zandstreek_2024_2025_aantallen_zweefvliegen.xlsx"),
+  guess_max = 1e6
+)
+
+zweefvliegen_soortenlijst <- readxl::read_excel(
+  here("data", "zandstreek_2024_2025_soortenlijst_zweefvliegen.xlsx"),
+  guess_max = 1e6
+)
+
+zweefvliegen_locaties <- readxl::read_excel(
+  here("data", "zandstreek_2024_2025_locaties.xlsx"),
+  guess_max = 1e6
+)
+
+locatie_info <- bestuivers_2024 |>
+  distinct(
+    locatie,
+    pointid,
+    naam,
+    openheid,
+    beheer,
+    openheid_sbp,
+    sample_order,
+    batch,
+    zichtbaarheid,
+    wegtype,
+    beslissing,
+    vervanging_id,
+    pointid_from_targets,
+    location_id,
+    crops,
+    WKT
+  )
+
+# verwijder oude zweefvliegen data
+bestuivers <- bestuivers_2024 |>
+  filter(order != "Syrphidae") |>
+  # toevoegen nieuwe zweefvliegendata
+  bind_rows(
+    zweefvliegen_aantallen |>
+      rename(
+        n_ind = mmff,
+        locatie = location_code
+      ) |>
+      select(
+        -mm, -ff
+      ) |>
+      left_join(
+        locatie_info, by = join_by(locatie)
+      ) |>
+      mutate(
+        order = "Syrphidae",
+        jaar = year(date_b),
+        dag = day(date_b),
+        jdag = lubridate::yday(date_b)
+      )
   )
 ```
 
 Er is één locatie waarvoor gegevens van het MAS meetnet ontbreken (deze verwijderen we):
 
 ```{r}
-bestuivers_2024 |>
+bestuivers |>
   select(locatie, beheer, openheid, WKT) |>
   filter(is.na(beheer)) |>
   distinct()
 ```
 
 ```{r}
-bestuivers_2024 |>
+bestuivers |>
   select(
     sample_id,
     method_cd,
@@ -349,14 +413,24 @@ bestuivers_2024 |>
 We verwijderen honingbijen en houden enkel de transecttellingen.
 
 ```{r transectdata}
-bestuivers_2024_ts <- bestuivers_2024 |>
+all_dates <- bestuivers |>
+  distinct(locatie, jaar, maand, dag) |>
+  arrange(locatie, jaar, maand, dag) |>
+  mutate(
+    bezoek_in_maand = dense_rank(dag),
+    .by = c(locatie, jaar, maand)
+  )
+
+bestuivers_ts <- bestuivers |>
   filter(
+    # hier gaan de species_nm NA weg, dus de nulvangsten
     species_nm != "Apis mellifera",
     method_cd == "TS"
   ) |>
   select(
     methode = method_cd,
     soortengroep = order,
+    species_nm,
     n_ind,
     locatie,
     beheer,
@@ -367,16 +441,12 @@ bestuivers_2024_ts <- bestuivers_2024 |>
     jdag
   )
 
-all_dates <- bestuivers_2024 |>
-  distinct(locatie, jaar, maand, dag) |>
-  arrange(locatie, jaar, maand, dag) |>
-  mutate(
-    bezoek_in_maand = dense_rank(dag),
-    .by = c(locatie, jaar, maand)
-  )
 
-bestuivers_2024_ts <- bestuivers_2024_ts |>
+bestuivers_ts <- bestuivers_ts |>
   left_join(all_dates, by = join_by(locatie, jaar, maand, dag))
+
+bestuivers_2024_ts <- bestuivers_ts |>
+  filter(jaar == 2024)
 
 ```
 
@@ -394,6 +464,9 @@ Dit betekent dat deze gesommeerde aantallen gelden voor een transectlengte gelij
 ```{r}
 #| label: tbl-design
 #| tbl-cap: Overzicht van de ontwerpvariabelen.
+all_dates_2024 <- all_dates |>
+  filter(jaar == 2024)
+
 locs <- bestuivers_2024_ts |>
   distinct(locatie, beheer, openheid) |>
   filter(!is.na(beheer))
@@ -403,8 +476,6 @@ maand <- unique(bestuivers_2024_ts$maand)
 bezoek_in_maand <- 1:2
 soortengroep <- bestuivers_2024_ts |> distinct(soortengroep)
 transectlengte <- 160
-
-all_dates
 
 design <- expand_grid(
   jaar,
@@ -417,9 +488,10 @@ design <- expand_grid(
   mutate(
     methode = "TS"
   ) |>
-  left_join(
-    all_dates, by = join_by(jaar, maand, bezoek_in_maand, locatie)
-) |> 
+  inner_join(
+    all_dates_2024,
+    by = join_by(jaar, maand, bezoek_in_maand, locatie)
+  ) |> 
   mutate(
     datum = ymd(paste(jaar, maand, dag, sep = "-")),
     jdag = yday(datum),
@@ -436,8 +508,191 @@ design |>
   kable()
 ```
 
+In 2024 zijn er vier lokaties in oktober geïnventariseerd die eigenlijk tot de september "batch" behoren.
 
 
+We berekenen enkele datasets voor verdere analyse:
+
+-   op soortniveau, met restrictie tot enkel "veelvoorkomende soorten"
+-   op soortengroepniveau
+    -   voor elke lokatie een aggregatie per maand
+    -   voor elke lokatie een aggregatie per jaar
+
+De definitie van "veelvoorkomende soort" = 
+
+> 2)  Bij de in lid 1 bedoelde soortspecifieke abundantie-index wordt alleen rekening gehouden met soorten die tijdens de beoordelingsperiode gemiddeld ten minste 25 keer per jaar in een lidstaat zijn waargenomen.
+
+
+```{r}
+#| label: bestuivers-aggregation-soort
+soortenlijst_2024_ts <- bestuivers_2024_ts |>
+  distinct(soortengroep, species_nm)
+
+bestuivers_2024_per_soort_bezoek <- design |>
+  left_join(
+    soortenlijst_2024_ts,
+    by = "soortengroep",
+    relationship = "many-to-many"
+  ) |>
+  left_join(
+    bestuivers_2024_ts,
+    by = join_by(
+      jaar, maand, dag, jdag, bezoek_in_maand, locatie, beheer,
+      openheid, soortengroep, species_nm, methode
+    )
+  ) |>
+  # indien n_ind NA, werd tijdens bezoek de soort niet waargenomen
+  mutate(n_ind = ifelse(is.na(n_ind), 0, n_ind)) |>
+  group_by(
+    soortengroep, species_nm,
+    jaar, maand, dag, jdag, week, bezoek_in_maand,
+    locatie, beheer, openheid,
+    transectlengte
+  ) |>
+  summarise(
+    n_ind = sum(n_ind),
+    .groups = "drop"
+  ) |>
+  mutate(
+    maand = as.factor(maand)
+  )
+
+n_veelvoorkomend <- 25
+bestuivers_2024_veelvoorkomend <- bestuivers_2024_per_soort_bezoek |>
+  filter(n_ind > 0) |>
+  count(
+    soortengroep, species_nm,
+    name = "n_waarnemingen" 
+  ) |> 
+  filter(n_waarnemingen >= n_veelvoorkomend)
+
+# beperk tot enkel veelvoorkomende soorten
+bestuivers_2024_per_veelvoorkomend_bezoek <- bestuivers_2024_per_soort_bezoek |>
+  inner_join(
+    bestuivers_2024_veelvoorkomend,
+    by = join_by(soortengroep, species_nm)
+  )
+
+bestuivers_2024_per_soort_maand <- bestuivers_2024_per_soort_bezoek |>
+  # we doen even alsof de vier locaties in maand 10, tot maand 9 behoren
+  mutate(maand = forcats::fct_relabel(maand, \(x) ifelse(x == 10, 9, x))) |> 
+  group_by(
+    soortengroep,
+    species_nm,
+    jaar, maand,
+    locatie, beheer, openheid,
+    transectlengte
+  ) |>
+  summarise(
+    n_ind = sum(n_ind),
+    totale_transectlengte = sum(transectlengte),
+    .groups = "drop"
+  )
+
+bestuivers_2024_per_veelvoorkomend_maand <-
+  bestuivers_2024_per_veelvoorkomend_bezoek |>
+  # we doen even alsof de vier locaties in maand 10, tot maand 9 behoren
+  mutate(maand = forcats::fct_relabel(maand, \(x) ifelse(x == 10, 9, x))) |> 
+  group_by(
+    soortengroep,
+    species_nm,
+    jaar, maand,
+    locatie, beheer, openheid,
+    transectlengte
+  ) |>
+  summarise(
+    n_ind = sum(n_ind),
+    totale_transectlengte = sum(transectlengte),
+    .groups = "drop"
+  )
+
+
+bestuivers_2024_per_soort_week <- bestuivers_2024_per_soort_bezoek |>
+  group_by(
+    soortengroep,
+    species_nm,
+    jaar, maand, week,
+    locatie, beheer, openheid,
+    transectlengte
+  ) |>
+  summarise(
+    n_ind = sum(n_ind),
+    totale_transectlengte = sum(transectlengte),
+    .groups = "drop"
+  )
+
+```
+
+Toegepast op enkel de pilootdata uit de zandleemstreek, voldeden in 2024 slechts een handvol soorten aan de definitie van veelvoorkomend.
+
+```{r}
+#| label: tbl-veelvoorkomend
+#| tbl-cap: Overzicht van soorten die minstens 25 keer waargenomen werden in één van de bezoeken in 2024
+
+bestuivers_2024_veelvoorkomend |>
+  arrange(-n_waarnemingen) |>
+  kable()
+```
+
+
+```{r}
+#| label: tbl-zweefvliegen-factor
+#| tbl-cap: Aantal waarnemingen en aantal individuen van veelvoorkomende
+#|  zweefvliegen in 2024 en 2025.
+#|  Ook de vermenigvuldigingsfactor tussen beide jaren voor de ratio tussen het
+#|  aantal individuen is weergegeven. 
+bestuivers_ts |>
+  filter(
+    soortengroep == "Syrphidae"
+  ) |>
+  group_by(soortengroep, species_nm, jaar) |>
+  summarise(
+    n_waarnemingen = sum(n_ind > 0),
+    n_ind_tot = sum(n_ind)
+  ) |>
+  pivot_wider(
+    names_from = jaar,
+    values_from = c(n_waarnemingen, n_ind_tot),
+    names_sep = "_",
+    values_fill = list(n_waarnemingen = 0, n_ind_tot = 0)
+  ) |>
+  filter(
+    n_waarnemingen_2025 >= n_veelvoorkomend |
+      n_waarnemingen_2024 >= n_veelvoorkomend
+  ) |>
+  mutate(
+    ratio_n_ind_tot = n_ind_tot_2025 / n_ind_tot_2024,
+    factor = ifelse(ratio_n_ind_tot < 1, 1 / ratio_n_ind_tot, ratio_n_ind_tot)
+  ) |>
+  select(-ratio_n_ind_tot) |> 
+  kable(digits = 1)
+
+
+zweefvliegen_factor <- bestuivers_ts |>
+  filter(
+    soortengroep == "Syrphidae"
+  ) |>
+  group_by(soortengroep,jaar) |>
+  summarise(
+    n_waarnemingen = sum(n_ind > 0),
+    n_ind_tot = sum(n_ind)
+  ) |>
+  pivot_wider(
+    names_from = jaar,
+    values_from = c(n_waarnemingen, n_ind_tot),
+    names_sep = "_",
+    values_fill = list(n_waarnemingen = 0, n_ind_tot = 0)
+  ) |>
+  mutate(
+    ratio_n_ind_tot = n_ind_tot_2025 / n_ind_tot_2024,
+    factor = ifelse(ratio_n_ind_tot < 1, 1 / ratio_n_ind_tot, ratio_n_ind_tot)
+  ) |>
+  select(-ratio_n_ind_tot) |> pull(factor)
+```
+
+Voor de Zweefvliegen kunnen we dit zowel voor 2024 als 2025 bekijken (@tbl-zweefvliegen-factor).
+De aantallen per soort kunnen een factor 1 to 10 verschillen tussen de jaren voor de veelvoorkomende soorten (veelvoorkomend in minstens één van beide jaren).
+Gemiddeld voor alle zweefvliegen samen  (ongeacht of ze veelvoorkomend zijn of niet) vinden we een factor gelijk aan `r round(zweefvliegen_factor, 2)`.
 
 ```{r bestuivers-aggregation-soortengroep}
 bestuivers_2024_by_soortengroep_bezoek <- design |>
@@ -465,6 +720,8 @@ bestuivers_2024_by_soortengroep_bezoek <- design |>
   ) 
 
 bestuivers_2024_by_soortengroep <- bestuivers_2024_by_soortengroep_bezoek |>
+  # we doen even alsof de vier locaties in maand 10, tot maand 9 behoren
+  mutate(maand = forcats::fct_relabel(maand, \(x) ifelse(x == 10, 9, x))) |> 
   group_by(
     soortengroep,
     jaar, maand,
@@ -489,7 +746,6 @@ bestuivers_2024_per_soortengroep_week <- bestuivers_2024_by_soortengroep_bezoek 
     totale_transectlengte = sum(transectlengte),
     .groups = "drop"
   )
-
 ```
 
 ```{r}
@@ -554,6 +810,207 @@ bestuivers_2024_by_soortengroep_jaar |>
 ```
 
 
+## Modellering soortenrijkdom
+
+> 3.  Jaarlijkse indexen voor de diversiteit van soorten
+
+> 1)  Voor elke monitoringlocatie en elke taxonomische groep wordt jaarlijks een locatiespecifieke index voor de diversiteit van soorten berekend aan de hand van de methodiek van de diversiteitsindex van Shannon-Wiener (3).
+
+> 2)  Voor elke taxonomische groep wordt jaarlijks een index voor de diversiteit van soorten berekend aan de hand van de in lid 1 bedoelde locatiespecifieke indexen voor de diversiteit van soorten, op basis van de door Freeman et al. (2021) beschreven methodiek.
+
+Stap 1 hierboven suggereert dat deze berekening 1 waarde per locatie per taxonomische groep oplevert.
+Dat betekent dat we de verschillende bezoeken (maanden) in een bepaald jaar aggregeren.
+We beschouwen dus alle soorten die in een volledig seizoen gezien werden op een bepaalde lokatie.
+Dit gaat er ook vanuit dat we dezelfde monitoringinspanning geleverd hebben op elke locatie (wat inderdaad zo is als het protocol en de planning gevolgd kon worden en als er geen systematische weerinvloeden zijn).
+
+@fig-shannon-diversiteit toont dat de geobserveerde waarden van de Shannon-Wiener diversiteit.
+In de berekening ervan hebben we de Shannon-Wiener diversiteit voor gevallen met 0 soorten gelijk gesteld aan 0 (strikt genomen is de formule in dat geval niet gedefinieerd).
+
+$$H' = -\sum_{i=1}^{S} p_i \ln(p_i)$$
+$H'$: de Shannon-Wiener Diversiteitsindex Index.
+
+$S$: Totaal aantal soorten in de gemeenschap.
+
+$p_i$: De proportie van individuen die tot soort $i$ behoort  ($n_i / N$).
+
+
+De Shannon-Wiener diversiteit is echter ook 0 in geval er maar 1 soort is.
+Van zodra er meer dan 1 soort is, is de eerste niet nul waarde vaak relatief ver weg van de nul.
+
+
+```{r}
+#| label: fig-shannon-diversiteit
+#| fig-cap: Shannon-Wiener diversiteit per soortengroep voor 2024.
+
+bestuivers_2024_per_soort_diversiteit <-
+  bestuivers_2024_per_soort_maand |>
+  # eerst verder aggregeren over maanden
+  group_by(
+    soortengroep, species_nm, locatie, jaar, beheer, openheid,
+    totale_transectlengte
+  ) |>
+  summarise(
+    n_ind = sum(n_ind),
+    .groups = "drop"
+  ) |>
+  group_by(
+    soortengroep, locatie, jaar, beheer, openheid,
+    totale_transectlengte
+  ) |>
+  summarise(
+    sw_div = -sum(n_ind[n_ind > 0] / sum(n_ind[n_ind > 0]) *
+                    log(n_ind[n_ind > 0] / sum(n_ind[n_ind > 0]))),
+    richness = sum(n_ind > 0),
+    species_list = list(species_nm[n_ind > 0]),
+    .groups = "drop"
+  ) |>
+  mutate(
+    eveness_pj = sw_div / log(richness),
+    eveness_2 = exp(sw_div) / richness
+  )
+
+bestuivers_2024_per_soort_diversiteit |>
+  mutate(
+    richness_f = case_when(
+      richness == 0 ~ "0",
+      richness == 1 ~ "1",
+      richness > 1 ~ "> 1")
+  ) |>
+  ggplot() +
+  stat_sum(
+    aes(x = soortengroep, y = sw_div, colour = richness_f),
+    position = position_dodge(width = 0.5)
+  )
+```
+
+```{r}
+#| label: tmb-diversity
+
+eveness_data <- bestuivers_2024_per_soort_diversiteit |>
+    filter(richness > 1) |> 
+    mutate(
+      eveness = sw_div / log(richness),
+      eveness = ifelse(abs(eveness-1) < 1e-7, eveness - 0.01, eveness),
+      beheer = factor(beheer),
+      openheid = factor(openheid),
+      soortengroep = factor(soortengroep)
+    )
+
+summary(eveness_data$eveness)
+
+tmb_eveness <- glmmTMB(
+  formula = eveness ~ 
+    offset(log(totale_transectlengte)) +
+    soortengroep +
+    beheer*openheid +
+    (0 + soortengroep | locatie),
+  family = beta_family(link = "log"),
+  ziformula = ~ soortengroep,
+  data = bestuivers_2024_per_soort_diversiteit |>
+    filter(richness > 1) |> 
+    mutate(
+      eveness = sw_div / log(richness),
+      eveness = ifelse(abs(eveness-1) < 1e-7, eveness - 0.01, eveness),
+      beheer = factor(beheer),
+      openheid = factor(openheid),
+      soortengroep = factor(soortengroep)
+    )
+)
+
+diagnose(tmb_eveness)
+```
+
+
+## Modellering aantal individuen veelvoorkomende soorten, openheid en beheer
+
+```{r}
+bestuivers_2024_per_veelvoorkomend_bezoek |>
+  ggplot() +
+  stat_sum(
+    aes(x = species_nm, y = n_ind), alpha = 0.5
+  ) +
+  coord_flip() +
+  labs(
+    x = "Veelvoorkomende soorten",
+    y  = "Aantal individuen"
+  )
+```
+
+We modelleren de tellingen als een negatief Binomiale distributie met een log-link.
+
+De lineaire predictor omvat:
+
+-   een offset-term voor transectlengte (niet strikt nodig omdat overal constant, maar laat toe om predicties te maken voor andere lengtes)
+-   effecten voor de verschillende soorten
+-   effecten voor de verschillende maanden dat er geteld werd
+-   een effect voor de openheid van het landschap (HOL vs OL)
+-   een effect voor de ligging binnen of buiten SBP gebied
+-   een interactieterm tussen openheid en ligging SBP
+-   een interactieterm tussen maand en soort 
+-   Voor elke soorten een random effect voor locatie en correlaties tussen de random effecten van de soorten via een _reduced rank_ correlatiestructuur met twee latente variabelen.
+
+We hebben één soort "Eupeodes corollae" verwijderd omdat de schatting hiervoor onbetrouwbaar waren.
+
+```{r}
+tmb_soort <- glmmTMB(
+  formula = 
+    n_ind ~
+    offset(log(transectlengte))
+  + species_nm 
+  + maand
+  + maand:species_nm
+  + beheer * openheid
+  + rr(0 + species_nm | locatie, d = 2),
+  family = nbinom2(link = "log"),
+  data = bestuivers_2024_per_veelvoorkomend_maand |>
+    mutate(
+      species_nm = factor(species_nm),
+      beheer = factor(beheer),
+      openheid = factor(openheid)
+    ) |>
+    filter(
+      species_nm != "Eupeodes corollae"
+    )
+)
+```
+
+```{r}
+performance::check_predictions(tmb_soort)
+performance::check_overdispersion(tmb_soort)
+performance::check_zeroinflation(tmb_soort)
+```
+
+```{r}
+summary(tmb_soort)
+#diagnose(tmb_soort)
+```
+
+```{r}
+ggeffects::predict_response(
+  tmb_soort,
+  terms = c("maand", "species_nm [all]"),
+  condition = c(transectlengte = 1000)
+) |>
+  plot() +
+  labs(
+    y = "Aantal individuen per 1000 m transect"
+  )
+```
+
+```{r}
+ggeffects::predict_response(
+  tmb_soort,
+  terms = c("beheer", "openheid"),
+  condition = c(transectlengte = 1000)
+) |>
+  plot() +
+  labs(
+    y = "Aantal individuen per 1000 m transect"
+  )
+```
+
+
+
 ## Modellering aantal individuen per soortengroep, openheid en beheer
 
 ### Aantallen per maand
@@ -581,6 +1038,8 @@ De lineaire predictor voor de Poisson component omvat:
 
 Voor de zero-inflation component omvat de lineaire predictor enkel effecten voor de verschillende soortengroepen.
 
+Toevoeging van een interactie tussen maand en soortengroep maakt het model te complex (geen convergentie).
+
 ```{r tmb-maand-fit}
 tmb_maand <- glmmTMB(
   formula = 
@@ -592,7 +1051,12 @@ tmb_maand <- glmmTMB(
   + (0 + soortengroep | locatie),
   family = poisson(link = "log"),
   ziformula = ~ soortengroep,
-  data = bestuivers_2024_by_soortengroep
+  data = bestuivers_2024_by_soortengroep |>
+    mutate(
+      soortengroep = factor(soortengroep),
+      beheer = factor(beheer),
+      openheid = factor(openheid)
+    )
 )
 ```
 
@@ -606,8 +1070,33 @@ performance::check_zeroinflation(tmb_maand)
 summary(tmb_maand)
 ```
 
-Dit is een vrij complex model om powerberekeningen op te baseren.
-We kunnen dit verder vereenvoudigen door te aggregeren per locatie en per soortengroep naar één waarde per jaar (*in casu* enkel 2024).
+
+```{r}
+ggeffects::predict_response(
+  tmb_maand,
+  terms = c("maand", "soortengroep [all]"),
+  condition = c(totale_transectlengte = 1000)
+) |>
+  plot() +
+  labs(
+    y = "Aantal individuen per 1000 m transect"
+  )
+```
+
+```{r}
+ggeffects::predict_response(
+  tmb_maand,
+  terms = c("beheer", "openheid"),
+  condition = c(totale_transectlengte = 1000)
+) |>
+  plot() +
+  labs(
+    y = "Aantal individuen per 1000 m transect"
+  )
+```
+
+
+We kunnen dit model verder vereenvoudigen door te aggregeren per locatie en per soortengroep naar één waarde per jaar (*in casu* enkel 2024).
 
 ### Maximum aantallen per jaar
 
@@ -628,7 +1117,12 @@ tmb_jaar <- glmmTMB(
   + beheer * openheid
   + (0 + soortengroep | locatie)
   , family = poisson(link = "log")
-  , data = bestuivers_2024_by_soortengroep_jaar
+  , data = bestuivers_2024_by_soortengroep_jaar |>
+    mutate(
+      soortengroep = factor(soortengroep),
+      beheer = factor(beheer),
+      openheid = factor(openheid)
+    )
 )
 ```
 
@@ -664,6 +1158,32 @@ aic |>
 
 Op basis van AIC zijn er nauwelijks verschillen tussen deze modellen.
 We kunnen er zowel voor opteren om de variabelen te behouden (want deel van het MAS meetnetontwerp) als ze te verwijderen (ze hadden nauwelijks effect voor pollinatoren in de Zandstreek in 2024).
+
+
+```{r}
+ggeffects::predict_response(
+  tmb_jaar,
+  terms = c("soortengroep [all]"),
+  condition = c(totale_transectlengte = 1000)
+) |>
+  plot() +
+  labs(
+    y = "Maximaal aantal individuen per 1000 m transect"
+  )
+```
+
+```{r}
+ggeffects::predict_response(
+  tmb_jaar,
+  terms = c("beheer", "openheid"),
+  condition = c(totale_transectlengte = 1000)
+) |>
+  plot() +
+  labs(
+    y = "Maximaal aantal individuen per 1000 m transect"
+  )
+```
+
 
 ## Steekproefgrootteberekeningen
 
@@ -724,9 +1244,46 @@ De MSI heeft nu een SD van $\sqrt{0.053} \approx$ 0.23.
 
 Scenario A is het minst waarschijnlijk.
 In de doorgerekende scenario's hebben we scenario B beschouwd en een scenario tussen B en C (i.c. 10% gecorreleerd en 90% onafhankelijk).
-We hebben dit enerzijds gedaan voor een lage totale jaar-tot-jaar variatie (factor 1.22 verschil tussen een goed en een slecht jaar $e^{2 \times 0.05} - e^{-2 \times 0.05} = e^{4 \times 0.05} \approx 1.22$) en een hoge totale jaar-tot-jaar variatie (factor 5 verschil tussen een goed en een slecht jaar $e^{2 \times 0.4} - e^{-2 \times 0.4} = e^{4 \times 0.4} \approx 5$).
+We hebben dit enerzijds gedaan voor een lage totale jaar-tot-jaar variatie (factor 1.22 verschil tussen een goed en een slecht jaar $e^{2 \times 0.05 - (-2 \times 0.05)} = e^{4 \times 0.05} \approx 1.22$) en een hoge totale jaar-tot-jaar variatie (factor 5 verschil tussen een goed en een slecht jaar $e^{2 \times 0.4 - (-2 \times 0.4)} = e^{4 \times 0.4} \approx 5$).
 Merk op dat dit zonder de Poisson variantie is (de observatiefout, die we kunnen verkleinen door langere en/of meer transecten te lopen).
 Bij de simulatie van nieuwe data worden al deze bronnen van onzekerheid doorgerekend in de gesimuleerde tellingen.
+
+```{r}
+#| label: fun-generate-design
+
+# Define design variables
+generate_design <- function(
+    n_herhalingen,
+    n_jaren,
+    beheer = c("binnen plan", "buiten plan"),
+    openheid = c("HOL", "OL"),
+    soortengroep = c("Apoidea", "Lepidoptera", "Syrphidae")
+) {
+  require(tidyr)
+  require(dplyr)
+  # Design variables
+  jaren <- seq_len(n_jaren)
+  herhalingen <- seq_len(n_herhalingen)
+  design <- expand_grid(
+    soortengroep = soortengroep,
+    jaar = jaren,
+    beheer = beheer,
+    openheid = openheid,
+    herhaling = herhalingen
+  ) |>
+    mutate(
+      locatie = paste(
+        "loc",
+        gsub(" ", "", beheer),
+        openheid,
+        herhaling,
+        sep = "_"
+      ),
+      totale_transectlengte = 1000 # voor elke soortengroep wordt 1000 m gelopen
+    )
+  return(design)
+}
+```
 
 
 ```{r fun-simulate-new-month-data}
@@ -769,16 +1326,21 @@ simulate_new_month_data <- function(
   # Combine them (soortengroep matches formula: pointid first, then year)
   theta_new <- c(theta_original, theta_jaar, theta_jaar_sg)
   
+  form <- ~ offset(log(totale_transectlengte)) +
+    soortengroep +
+    maand +
+    beheer * openheid +
+    jaar +
+    (0 + soortengroep | locatie) +
+    (1 | jaar) +
+    (1 | jaar:soortengroep)
+  
+  # check order of variables
+  mm <- colnames(model.matrix(lme4::nobars(form), data = design))
+
+  
   sims <- glmmTMB::simulate_new(
-    ~
-      offset(log(totale_transectlengte))
-    + soortengroep
-    + maand
-    + beheer * openheid
-    + jaar
-    + (0 + soortengroep | locatie)
-    + (1 | jaar)
-    + (1 | jaar:soortengroep),
+    object = form,
     ziformula = ~ soortengroep,
     family = poisson(link = "log"),
     newdata = design,
@@ -974,7 +1536,6 @@ calc_rbms_gai <- function(
 
 ```
 
-
 ```{r}
 #| label: fun-run-scenario
 run_scenario <- function(
@@ -1134,207 +1695,6 @@ out <- run_scenario(
 
 ```
 
-
-
-```{r}
-#| label: run-gai-simulation
-# 1. Setup Daemons
-n_cores <- parallel::detectCores(logical = FALSE)
-daemons(ceiling(n_cores / 2), dispatcher = FALSE)
-
-# 2. Define Parameter Grid (Flatten the loops)
-trends <- c(1, 5)
-reps <- c(2, 5, 15, 30)
-n_jaren  <- c(6, 12, 24)
-sd_jaar_tot <- c(0.05, 0.4)
-varpart_jaar <- c(0.1, 0.5)
-
-param_grid <- tidyr::expand_grid(
-  sd_jaar_tot = sd_jaar_tot,
-  n_jaren = n_jaren,
-  trend = trends,
-  n_herhalingen = reps,
-  varpart_jaar = varpart_jaar,
-  nsims = 100
-)
-
-# Group by the parameters that define a "family"
-scenario_families <- param_grid |>
-  group_by(sd_jaar_tot, trend, varpart_jaar, nsims) |>
-  tidyr::nest() |>
-  # Sort the nested data by "effort" (lowest first)
-  mutate(
-    effort_grid = purrr::map(data, ~arrange(.x, n_jaren, n_herhalingen))
-  ) |>
-  select(-data)
-
-pr <- fs::dir_create(
-  here::here("source", "powercalc_results", "gai")
-)
-
-# delete saved results?
-delete <- FALSE
-if (delete) fs::file_delete(pr)
-
-# Store promises here
-tasks <- list()
-
-for (i in seq_len(nrow(scenario_families))) {
-  
-  # Extract parameters for this specific row
-  family_params <- scenario_families[i, ]
-  
-  # Submit to mirai
-  tasks[[i]] <- mirai({
-    library(here)
-    library(rbms)
-    library(dplyr)
-    library(tidyr)
-    library(glmmTMB)
-    library(lubridate)
-    library(purrr)
-
-    # Extract the base parameters and the effort grid
-    base_p <- family_params
-    effort_grid <- base_p$effort_grid[[1]]
-
-    results_list <- list()
-
-    # Sequentially step through effort levels inside the daemon
-    for (j in seq_len(nrow(effort_grid))) {
-      e <- effort_grid[j, ]
-      fname <- file.path(
-        pr,
-        paste0(
-          "gai_sdy", base_p$sd_jaar_tot,
-          "_varpartjaar", base_p$varpart_jaar, 
-          "_ny", e$n_jaren,
-          "_trend", base_p$trend,
-          "_reps", e$n_herhalingen,
-          "_nsims", base_p$nsims, ".rds"
-        )
-      )
-      
-      # Cache check
-      if (file.exists(fname)) {
-        result <- readRDS(fname)
-      } else {
-        result <- run_scenario(
-          n_herhalingen = e$n_herhalingen,
-          n_jaren = e$n_jaren,
-          maand = 6:9,
-          trend_percent = base_p$trend,
-          sd_jaar_tot = base_p$sd_jaar_tot,
-          varpart_jaar = base_p$varpart_jaar,
-          nsim = base_p$nsims
-        )
-        result <- bind_cols(base_p |> select(-effort_grid), e, result)
-        saveRDS(result, file = fname)
-      }
-      results_list[[j]] <- result
-      # --- EARLY STOPPING LOGIC ---
-      current_power <- result$power_mean 
-      
-      if (current_power > 0.8) {
-        # Skip the remaining, more powerful iterations in this family
-        break 
-      }
-    }
-    return(bind_rows(results_list))
-  }, 
-  environment()
-  )
-}
-```
-
-```{r}
-#| eval: false
-
-# inspection of interim results while running
-power_df_gai <- purrr::map_dfr(fs::dir_ls(pr), \(x) readRDS(x)) |>
-  mutate(
-    sd_jaar_tot = factor(sd_jaar_tot)
-  )
-
-ggplot(
-  power_df_gai,
-  aes(x = n_herhalingen * 4, y = power_mean,
-      color = interaction(sd_jaar_tot, varpart_jaar))
-) +
-  geom_line(linewidth = 1.2, alpha = 0.8) +
-  geom_ribbon(
-    aes(
-      ymin = power_lower,
-      ymax = power_upper,
-      fill = interaction(sd_jaar_tot, varpart_jaar),
-      colour = NULL
-    ),
-    alpha = 0.2
-  ) +
-  geom_point() +
-  geom_hline(
-    yintercept = 0.8,
-    linetype = 2,
-    color = "darkgrey"
-  ) +
-  scale_y_continuous(limits = c(0, 1)) +
-  scale_x_continuous() +
-  guides(x = guide_axis(check.overlap = TRUE)) +
-  labs(
-    x = "Aantal locaties",
-    y = "Onderscheidend vermogen"
-  ) +
-  facet_grid(
-    sprintf("Trend: %.d%%", trend) ~ sprintf("Aantal jaren: %02d", n_jaren)
-  )
-
-power_df_gai |>
-  ggplot() +
-  geom_point(
-    aes(
-      x = year_est_sd, y = mean_se,
-      colour = interaction(sd_jaar_tot, varpart_jaar, sep = " - ")
-    )
-  ) +
-  geom_abline() +
-  labs(
-    x = "Standaardafwijking van de jaar-effecten (hellingen)",
-    y = "Gemiddelde standaardfout o.b.v. gepoolde varianties"
-  ) +
-  facet_wrap(~ n_jaren, scales = "free")
-
-power_df_gai |>
-  ggplot() +
-  geom_point(
-    aes(
-      x = power_mean, y = trend_est_sig_percent,
-      colour = interaction(sd_jaar_tot, varpart_jaar, n_jaren, sep = " - ")
-    )
-  ) +
-  geom_hline(aes(yintercept = trend)) +
-  facet_wrap(~ sprintf("Werkelijke trend: %s", trend)) +
-  labs(
-    x = "Onderscheidend vermogen om trend te detecteren",
-    y = "Gemiddelde geschatte trend indien significant",
-    title = "Winner's curse (Type M fout)"
-  )
-
-
-```
-
-```{r}
-#| label: mirai-collect-gai
-# call_mirai blocks until all tasks are done
-results_collected_gai <- lapply(tasks, call_mirai)
-power_df_gai <- purrr::map_dfr(results_collected_gai, \(x) x$data) |>
-  mutate(
-    sd_jaar_tot = factor(sd_jaar_tot)
-  )
-
-daemons(0)
-```
-
-
 ```{r}
 #| label: one-simulation
 #| eval: true
@@ -1342,8 +1702,10 @@ daemons(0)
 dn <- generate_design(
   n_herhalingen = 15,
   n_jaren = 12) |>
-  expand_grid(maand) |> 
-  mutate(maand = factor(maand)) |>
+  expand_grid(maand = 6:9) |> 
+  mutate(
+    maand = factor(maand)
+  ) |>
   mutate(
     DATE = paste(
       2025 + jaar, maand,
@@ -1450,7 +1812,7 @@ boot_results <- as_tibble(boot_results_mat)
 #|   (variantie = 0.144) wat overeenkomt met een totale jaar tot jaar variatie
 #|   van 0.16 of een standaardafwijking van 0.4 (factor 5 verschil tussen een
 #|   goed en een slecht jaar
-#|   ($e^{2 \times 0.4} - e^{-2 \times 0.4} = e^{4 \times 0.4} \approx 5$)).
+#|   ($e^{2 \times 0.4 - (-2 \times 0.4)} = e^{4 \times 0.4} \approx 5$)).
 dn |>
   mutate(count = sm[[1]]) |>
   ggplot() +
@@ -1487,6 +1849,7 @@ boot_results |>
   scale_y_continuous(labels = scales::percent) +
   scale_x_continuous(breaks = 1:10) +
   geom_hline(yintercept = 0.05) +
+  geom_hline(yintercept = 0, linetype = "dashed") +  
   labs(
     y = "Trend",
     x = "Simulatienummer"
@@ -1495,11 +1858,214 @@ boot_results |>
 ```
 
 
+```{r}
+#| label: run-gai-simulation
+# 1. Setup Daemons
+n_cores <- parallel::detectCores(logical = FALSE)
+daemons(ceiling(n_cores / 2), dispatcher = FALSE)
+
+# 2. Define Parameter Grid (Flatten the loops)
+trends <- c(1, 5)
+reps <- c(2, 5, 15, 30)
+n_jaren  <- c(6, 12, 24)
+sd_jaar_tot <- c(0.15, 0.4)
+varpart_jaar <- c(0.1, 0.5)
+
+param_grid <- tidyr::expand_grid(
+  sd_jaar_tot = sd_jaar_tot,
+  n_jaren = n_jaren,
+  trend = trends,
+  n_herhalingen = reps,
+  varpart_jaar = varpart_jaar,
+  nsims = 100
+)
+
+# Group by the parameters that define a "family"
+scenario_families <- param_grid |>
+  group_by(sd_jaar_tot, trend, varpart_jaar, nsims) |>
+  tidyr::nest() |>
+  # Sort the nested data by "effort" (lowest first)
+  mutate(
+    effort_grid = purrr::map(data, ~arrange(.x, n_jaren, n_herhalingen))
+  ) |>
+  select(-data)
+
+pr <- fs::dir_create(
+  here::here("source", "powercalc_results")
+)
+
+# delete saved results?
+delete <- FALSE
+if (delete) fs::file_delete(pr)
+
+# Store promises here
+tasks <- list()
+
+for (i in seq_len(nrow(scenario_families))) {
+  
+  # Extract parameters for this specific row
+  family_params <- scenario_families[i, ]
+  
+  # Submit to mirai
+  tasks[[i]] <- mirai({
+    library(here)
+    library(rbms)
+    library(dplyr)
+    library(tidyr)
+    library(glmmTMB)
+    library(lubridate)
+    library(purrr)
+
+    # Extract the base parameters and the effort grid
+    base_p <- family_params
+    effort_grid <- base_p$effort_grid[[1]]
+
+    results_list <- list()
+
+    # Sequentially step through effort levels inside the daemon
+    for (j in seq_len(nrow(effort_grid))) {
+      e <- effort_grid[j, ]
+      fname <- file.path(
+        pr,
+        paste0(
+          "gai_sdy", base_p$sd_jaar_tot,
+          "_varpartjaar", base_p$varpart_jaar, 
+          "_ny", e$n_jaren,
+          "_trend", base_p$trend,
+          "_reps", e$n_herhalingen,
+          "_nsims", base_p$nsims, ".rds"
+        )
+      )
+      
+      # Cache check
+      if (file.exists(fname)) {
+        result <- readRDS(fname)
+      } else {
+        result <- run_scenario(
+          n_herhalingen = e$n_herhalingen,
+          n_jaren = e$n_jaren,
+          maand = 6:9,
+          trend_percent = base_p$trend,
+          sd_jaar_tot = base_p$sd_jaar_tot,
+          varpart_jaar = base_p$varpart_jaar,
+          nsim = base_p$nsims
+        )
+        result <- bind_cols(base_p |> select(-effort_grid), e, result)
+        saveRDS(result, file = fname)
+      }
+      results_list[[j]] <- result
+      # --- EARLY STOPPING LOGIC ---
+      current_power <- result$power_mean 
+      
+      if (current_power > 0.8) {
+        # Skip the remaining, more powerful iterations in this family
+        break 
+      }
+    }
+    return(bind_rows(results_list))
+  }, 
+  environment()
+  )
+}
+```
+
+```{r}
+#| eval: false
+
+# inspection of interim results while running
+power_df_gai <- purrr::map_dfr(
+  fs::dir_ls(pr, recurse = FALSE, type = "file"),
+  \(x) readRDS(x)
+  ) |>
+  mutate(
+    sd_jaar_tot = factor(sd_jaar_tot)
+  )
+
+ggplot(
+  power_df_gai,
+  aes(x = n_herhalingen * 4, y = power_mean,
+      color = interaction(sd_jaar_tot, varpart_jaar))
+) +
+  geom_line(linewidth = 1.2, alpha = 0.8) +
+  geom_ribbon(
+    aes(
+      ymin = power_lower,
+      ymax = power_upper,
+      fill = interaction(sd_jaar_tot, varpart_jaar),
+      colour = NULL
+    ),
+    alpha = 0.2
+  ) +
+  geom_point() +
+  geom_hline(
+    yintercept = 0.8,
+    linetype = 2,
+    color = "darkgrey"
+  ) +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_continuous() +
+  guides(x = guide_axis(check.overlap = TRUE)) +
+  labs(
+    x = "Aantal locaties",
+    y = "Onderscheidend vermogen"
+  ) +
+  facet_grid(
+    sprintf("Trend: %.d%%", trend) ~ sprintf("Aantal jaren: %02d", n_jaren)
+  )
+
+power_df_gai |>
+  ggplot() +
+  geom_point(
+    aes(
+      x = year_est_sd, y = mean_se,
+      colour = interaction(sd_jaar_tot, varpart_jaar, sep = " - ")
+    )
+  ) +
+  geom_abline() +
+  labs(
+    x = "Standaardafwijking van de jaar-effecten (hellingen)",
+    y = "Gemiddelde standaardfout o.b.v. gepoolde varianties"
+  ) +
+  facet_wrap(~ n_jaren, scales = "free")
+
+power_df_gai |>
+  ggplot() +
+  geom_point(
+    aes(
+      x = power_mean, y = trend_est_sig_percent,
+      colour = interaction(sd_jaar_tot,  n_jaren, sep = " - ")
+    )
+  ) +
+  geom_hline(aes(yintercept = trend)) +
+  facet_wrap(~ sprintf("Werkelijke trend: %s", trend)) +
+  labs(
+    x = "Onderscheidend vermogen om trend te detecteren",
+    y = "Gemiddelde geschatte trend indien significant",
+    title = "Winner's curse (Type M fout)"
+  )
+
+
+```
+
+```{r}
+#| label: mirai-collect-gai
+# call_mirai blocks until all tasks are done
+results_collected_gai <- lapply(tasks, call_mirai)
+power_df_gai <- purrr::map_dfr(results_collected_gai, \(x) x$data) |>
+  mutate(
+    sd_jaar_tot = factor(sd_jaar_tot)
+  )
+
+daemons(0)
+```
+
+
+
+
 @fig-gai-power-samplesize geeft de resultaten van de berekeningen van het onderscheidend vermogen voor de verschillende scenario's.
-Ze tonen aan dat voor een instelwaarde van een kleine jaarlijkse trend gelijk aan 1%, we kunnen verwachten dat deze enkel detecteerbaar zal zijn indien de jaar-tot-jaar variatie klein is (scenario `sd_jaar_tot = 0.05`) en dan nog enkel voor een looptijd van 12 jaar (vanaf 60 locaties) of 24 jaar (dan zijn 4 locaties al voldoende).
-Dit is een eerder onwaarschijnlijk rooskleurig kleine jaar-tot-jaar variatie.
-Wanneer we kijken naar de scenario's met grote jaar-tot-jaar variatie (`sd_jaar_tot = 0.4`), dan is een 1% trend niet haalbaar.
-We kunnen wel een 5% trend met 80% onderscheidend vermogen detecteren vanaf een looptijd van 12 jaar met minstens 60 locaties.
+Ze tonen aan dat voor een instelwaarde van een kleine jaarlijkse trend gelijk aan 1%, we kunnen verwachten dat deze enkel detecteerbaar zal zijn indien de jaar-tot-jaar variatie niet groter is dan een factor 2 (scenario `sd_jaar_tot = 0.15`) en dan nog enkel voor een looptijd van 24 jaar (vanaf 24 locaties).
+Wanneer we kijken naar de scenario's met grote jaar-tot-jaar variatie (factor 5, `sd_jaar_tot = 0.4`), dan is een 1% trend niet haalbaar.
+We kunnen wel een 5% trend met 80% onderscheidend vermogen detecteren vanaf een looptijd van 12 jaar met minstens 4 locaties.
 
 @fig-type-m-fout geeft aan dat bij meetnetten met een lage power, de "succesvolle" detecties (significante trenddetectie) stelselmatig de biologische werkelijkheid zwaar overdrijven (de gevonden trends zitten ver boven de ingestelde gesimuleerde trend).
 Dit is een voorbeeld van een type M fout [@gelman] of de zogenaamde "Winner's curse" en is - samen met _p-hacking_ -  één van de door statistici aangehaalde redenen van de huidige "replication crisis" (wetenschappelijke tijdschriften publiceren sneller significante resultaten dan niet significante zelfs al zijn deze afkomstig van studies met lage power).
@@ -1507,6 +2073,9 @@ Dit is een voorbeeld van een type M fout [@gelman] of de zogenaamde "Winner's cu
 __kanttekening__ We hebben in deze berekeningen enkel kunnen werken op niveau van de soortengroepen.
 We verwachten dat onze berekeningen een minder goed beeld geven in vergelijking met de berekeningen zoals ze werden gedaan door het STING consortium waar wel modellen per soort werden opgesteld.
 In dat geval zal de daling van de variantie op de MSI zich sterker kunnen doorzetten door de uitmiddeling waardoor de foutenmarge afneemt met $\propto 1/\sqrt{S}$.
+Er zijn echter in onze pilootdata met 39 locaties slechts `r nrow(bestuivers_2024_veelvoorkomend)` soorten die voldeden aan de definitie van veelvoorkomend.
+Als het aantal locaties daalt zal ook het aantal "veelvoorkomende" soorten dalen, dus hier kunnen we niet op besparen.
+
 
 
 
