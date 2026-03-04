@@ -617,7 +617,7 @@ bestuivers_2024_per_soort_week <- bestuivers_2024_per_soort_bezoek |>
 
 ```
 
-Toegepast op enkel de pilootdata uit de zandleemstreek, voldeden in 2024 slechts een handvol soorten aan de definitie van veelvoorkomend.
+Toegepast op enkel de pilootdata uit de zandleemstreek, voldeden in 2024 slechts een handvol soorten aan de definitie van veelvoorkomend, waarbij geen enkele van de dagvlinders en slechts één soort uit de groep van wilde bijen en wespen.
 
 ```{r}
 #| label: tbl-veelvoorkomend
@@ -1992,10 +1992,14 @@ Er zijn echter in onze pilootdata met 39 locaties slechts `r nrow(bestuivers_202
 Ook zal deze daling van de variantie door uitmiddeling van de foutenmarge deels worden tegengewerkt door een stijging van de verwachte jaar-tot-jaar variatie.
 Voor de veelvoorkomende soorten vonden we eerder een factor 1 tot 10 verschil tussen de jaren 2024 en 2025.
 Het scenario waarbij we een jaar-tot-jaar variatie overeenkomstig een factor 5 verschil tussen jaren, is dus wellicht meer realistisch wanneer we de berekeningen hadden gebaseerd op de veelvoorkomende soorten in plaats van de soortengroepen.
-We kunnen het effect van $\propto 1/\sqrt{S}$ echter niet aflezen uit de resultaten die we nu hebben op soortengroep niveau ($S = 3$ stijgt naar $S = 9$) zonder nieuwe analyses uit te voeren.
-In elk geval zal dit gunstiger zijn dan de scenario's voor factor 5 jaar-tot-jaar verschillen die we nu in de figuur aflezen en wellicht gelijkaardig zijn aan het scenario voor factor 2 jaar-tot-jaar voor de soortengroepen (een aggregatie van soortniveau naar soortengroepniveau zorgt immers ook voor een uitmiddeling van jaar-tot-jaar variatie).
+We kunnen het effect van $\propto 1/\sqrt{S}$ echter niet direct aflezen uit de resultaten die we nu hebben op soortengroep niveau ($S = 3$ stijgt naar $S = 9$).
+We kunnen deze effecten wel bij benadering inschatten door de trend die we zouden detecteren wanneer we overstappen van een multi-soortengroepindex (MSGI) naar een multi-soortenindex (MSI) als volgt te benaderen:
 
-Als het aantal locaties daalt zal ook het aantal "veelvoorkomende" soorten dalen, dus hier kunnen we niet op besparen.
+$$T_{MSI} \approx T_{MSGI}\frac{\sigma_{S}}{\sigma_{SG}}\frac{\sqrt{n_{SG}}{\sqrt{n_{S}}} = T_{MSGI}\frac{0.4}{0.15}\frac{\sqrt{3}}{\sqrt{9}} = T_{MSGI}1.54$$
+
+Dus verwachten we dat we ongeveer `r round((0.4/0.15 * sqrt(3) / sqrt(9))^2, 1)` keer meer lokaties nodig zouden hebben voor een MSI gebaseerd op de veelvoorkomende soorten.
+Dit is echter een conclusie getrokken op basis van de kleine set van 9 veelvoorkomende soorten in onze pilootdata.
+Als we het aantal locaties vergroten zal ook het aantal "veelvoorkomende" soorten stijgen en kan deze balans tussen toegenomen ruis versus het uitmiddelingseffect anders uitvallen.
 
 ```{r}
 #| label: fig-gai-power-samplesize
