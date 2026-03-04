@@ -618,6 +618,8 @@ bestuivers_2024_per_soort_week <- bestuivers_2024_per_soort_bezoek |>
 ```
 
 Toegepast op enkel de pilootdata uit de zandleemstreek, voldeden in 2024 slechts een handvol soorten aan de definitie van veelvoorkomend, waarbij geen enkele van de dagvlinders en slechts één soort uit de groep van wilde bijen en wespen.
+Dit is echter een onderschatting ten opzichte van wat de NHV voorschrijft omdat in 2024 slechts in de maanden juni tot en met september transecttellingen werden uitgevoerd.
+De aanbeveling is om te streven naar 6 à 8 transecttellingen in een seizoen en het seizoen te laten starten in april.
 
 ```{r}
 #| label: tbl-veelvoorkomend
@@ -632,11 +634,16 @@ bestuivers_2024_veelvoorkomend |>
 #| label: tbl-zweefvliegen-factor
 #| tbl-cap: Aantal waarnemingen en aantal individuen van veelvoorkomende
 #|  zweefvliegen in 2024 en 2025.
+#|  De tellingen van april en mei in 2025 werden verwijderd zodat 2024 en 2025
+#|  vergelijkbaar zijn.
 #|  Ook de vermenigvuldigingsfactor tussen beide jaren voor de ratio tussen het
 #|  aantal individuen is weergegeven. 
-bestuivers_ts |>
+zweefvliegen_2024_2025 <- bestuivers_ts |>
   filter(
-    soortengroep == "Syrphidae"
+    soortengroep == "Syrphidae",
+    # in 2025 werden ook maanden 4 en 5 geteld,
+    # voor de vergelijkbaarheid met 2024 verwijderen we deze
+    !maand %in% c(4, 5)
   ) |>
   group_by(soortengroep, species_nm, jaar) |>
   summarise(
@@ -657,15 +664,19 @@ bestuivers_ts |>
     ratio_n_ind_tot = n_ind_tot_2025 / n_ind_tot_2024,
     factor = ifelse(ratio_n_ind_tot < 1, 1 / ratio_n_ind_tot, ratio_n_ind_tot)
   ) |>
-  select(-ratio_n_ind_tot) |> 
-  kable(digits = 1)
+  select(-ratio_n_ind_tot)
 
+zweefvliegen_2024_2025 |> 
+  kable(digits = 1)
 
 zweefvliegen_factor <- bestuivers_ts |>
   filter(
-    soortengroep == "Syrphidae"
+    soortengroep == "Syrphidae",
+    # in 2025 werden ook maanden 4 en 5 geteld,
+    # voor de vergelijkbaarheid met 2024 verwijderen we deze
+    !maand %in% c(4, 5)
   ) |>
-  group_by(soortengroep,jaar) |>
+  group_by(soortengroep, jaar) |>
   summarise(
     n_waarnemingen = sum(n_ind > 0),
     n_ind_tot = sum(n_ind)
@@ -1222,7 +1233,7 @@ De MSI heeft nu een SD van $\sqrt{0.053} \approx$ 0.23.
 Scenario A is het minst waarschijnlijk.
 In de doorgerekende scenario's hebben we scenario B beschouwd en een scenario tussen B en C (i.c. 10% gecorreleerd en 90% onafhankelijk).
 We hebben dit enerzijds gedaan voor een lage totale jaar-tot-jaar variatie (factor 1.82 verschil tussen een goed en een slecht jaar $e^{2 \times 0.15 - (-2 \times 0.15)} = e^{4 \times 0.15} \approx 1.82$) en een hoge totale jaar-tot-jaar variatie (factor 5 verschil tussen een goed en een slecht jaar $e^{2 \times 0.4 - (-2 \times 0.4)} = e^{4 \times 0.4} \approx 5$).
-De factor 1.82 (sd = 0.15) komt ongeveer overeen met de factor 1.75 die we vonden op basis van onze pilootdata wanneer de data werden geaggregeerd tot soortengroepniveau.
+De factor 1.82 (sd = 0.15) komt ongeveer overeen met de factor `r round(zweefvliegen_factor, 2)` die we vonden op basis van onze pilootdata wanneer de data werden geaggregeerd tot soortengroepniveau.
 De factor 5 (sd = 0.4) is iets hoger dan het gemiddelde dat we vonden op basis van de pilootdata voor veelvoorkomende zweefvliegen (gemiddelde is factor 4).
 
 Merk op dat aan deze variantietermen ook nog de Poisson variantie toegevoegd moet worden (de observatiefout, die we kunnen verkleinen door langere en/of meer transecten te lopen).
@@ -1985,21 +1996,56 @@ We kunnen wel een 5% trend met 80% onderscheidend vermogen detecteren vanaf een 
 @fig-type-m-fout geeft aan dat bij meetnetten met een lage power, de "succesvolle" detecties (significante trenddetectie) stelselmatig de biologische werkelijkheid zwaar overdrijven (de gevonden trends zitten ver boven de ingestelde gesimuleerde trend).
 Dit is een voorbeeld van een type M fout [@gelman2014] of de zogenaamde "Winner's curse" en is - samen met *p-hacking* - één van de door statistici aangehaalde redenen van de huidige "replication crisis" (wetenschappelijke tijdschriften publiceren sneller significante resultaten dan niet significante zelfs al zijn deze afkomstig van studies met lage power).
 
-**kanttekening** We hebben in deze berekeningen enkel kunnen werken op niveau van de soortengroepen.
-We verwachten dat onze berekeningen een minder goed beeld geven in vergelijking met de berekeningen zoals ze werden gedaan door het STING consortium waar wel modellen per soort werden opgesteld.
+We verwachten dat onze berekeningen een minder goed beeld geven in vergelijking met de berekeningen zoals ze werden gedaan door het STING consortium waar modellen voor veelvoorkomende soorten (>< soortengroep) werden opgesteld.
 In dat geval zal de daling van de variantie op de MSI zich sterker kunnen doorzetten door de uitmiddeling waardoor de foutenmarge afneemt met $\propto 1/\sqrt{S}$.
 Er zijn echter in onze pilootdata met 39 locaties slechts `r nrow(bestuivers_2024_veelvoorkomend)` soorten die voldeden aan de definitie van veelvoorkomend.
-Ook zal deze daling van de variantie door uitmiddeling van de foutenmarge deels worden tegengewerkt door een stijging van de verwachte jaar-tot-jaar variatie.
+Ook zal deze daling van de variantie door uitmiddeling van de foutenmarge deels worden tegengewerkt door een stijging van de verwachte jaar-tot-jaar variatie wanneer je het soortniveau beschouwt.
 Voor de veelvoorkomende soorten vonden we eerder een factor 1 tot 10 verschil tussen de jaren 2024 en 2025.
 Het scenario waarbij we een jaar-tot-jaar variatie overeenkomstig een factor 5 verschil tussen jaren, is dus wellicht meer realistisch wanneer we de berekeningen hadden gebaseerd op de veelvoorkomende soorten in plaats van de soortengroepen.
 We kunnen het effect van $\propto 1/\sqrt{S}$ echter niet direct aflezen uit de resultaten die we nu hebben op soortengroep niveau ($S = 3$ stijgt naar $S = 9$).
 We kunnen deze effecten wel bij benadering inschatten door de trend die we zouden detecteren wanneer we overstappen van een multi-soortengroepindex (MSGI) naar een multi-soortenindex (MSI) als volgt te benaderen:
 
-$$T_{MSI} \approx T_{MSGI}\frac{\sigma_{S}}{\sigma_{SG}}\frac{\sqrt{n_{SG}}{\sqrt{n_{S}}} = T_{MSGI}\frac{0.4}{0.15}\frac{\sqrt{3}}{\sqrt{9}} = T_{MSGI}1.54$$
+$$T_{MSI} \approx T_{MSGI} \frac{\sigma_{S}}{\sigma_{SG}} \frac{\sqrt{n_{SG}}}{\sqrt{n_{S}}} = T_{MSGI} \frac{0.4}{0.15} \frac{\sqrt{3}}{\sqrt{9}} = T_{MSGI} 1.54$$
 
-Dus verwachten we dat we ongeveer `r round((0.4/0.15 * sqrt(3) / sqrt(9))^2, 1)` keer meer lokaties nodig zouden hebben voor een MSI gebaseerd op de veelvoorkomende soorten.
+Dus verwachten we dat we ongeveer $1.54^2 =$ `r round((0.4/0.15 * sqrt(3) / sqrt(9))^2, 1)` keer meer lokaties nodig zouden hebben voor een MSI gebaseerd op de veelvoorkomende soorten.
 Dit is echter een conclusie getrokken op basis van de kleine set van 9 veelvoorkomende soorten in onze pilootdata.
 Als we het aantal locaties vergroten zal ook het aantal "veelvoorkomende" soorten stijgen en kan deze balans tussen toegenomen ruis versus het uitmiddelingseffect anders uitvallen.
+
+In @tbl-effect-n-veelvoorkomende geven we het effect op de steekproefgrootte indien het aantal veelvoorkomende soorten in de finale dataset hoger ligt.
+Bij 20 soorten bekomen we dan ongeveer dezelfde steekproefgrootte als in onze berekeningen op basis van soortengroepen.
+Voor 40 veelvoorkomende soorten, kunnen we een $\frac{1}{\sqrt{2}}$ kleinere trend detecteren bij dezelfde steekproefgrootte.
+
+**Conclusies**
+
+-   De aanbevelingen uit de NHV steunen op een voldoende grote poel van veelvoorkomende soorten die gemodelleerd kunnen worden, zodat dit leidt tot een uitmiddeling in de MSI om een relatief kleine jaarlijkse trend op de geaggregeerde abundantiedata te kunnen dectereren. Om het aantal soorten dat voldoet aan de definitie van veelvoorkomend zo hoog mogelijk te krijgen moet de meetinspanning hoog zijn en het aantal locaties hoog. Dit is waarom er de aanbeveling is om (1) de transectlengte 1000 m te nemen en (2) het aantal herhaalde tellingen in een seizoen op te krikken tot minstens 6 à 8. Het zou foutief zijn om dit aantal te verhogen door de transecten / locaties zo te kiezen dat ze in de meer kansrijke delen liggen (dan is de steekproef niet meer representatief). 
+-   Op basis van simulaties en onze pilootdata vinden we dat we na 6 jaar nog geen relatief kleine jaarlijkse trends kunnen detecteren. Wanneer we het aantal veelvoorkomende soorten kunnen verhogen tot een 40-tal (bv door 1000 m transecten lopen, minstens 6 keer te tellen in het seizoen en dit op 60 lokaties), zullen we na 6 jaar vrijwel zeker een 5% jaarlijkse trend kunnen detecteren.
+-   Op basis van onze simulaties vinden we na 12 jaar voldoende onderscheidend vermogen om 2% jaarlijkse trends te detecteren met 60 lokaties. Na 24 jaar zijn ook 1% jaarlijkse trends detecteerbaar.
+-   Wil men 1% jaarlijkse trends detecteren na 6 jaar, dan zal dit enkel mogelijk zijn als het aantal "veelvoorkomende" soorten sterk hoger uitvalt (> 300 soorten). Dit lijkt geen realistische piste. Wellicht is de grootte van de soortenpoel en/of de kans op aanwezigheid (zie inleiding) waarvan in bijlage II van de gedelegeerde verordening bij de NHV en @potts2024 van uit gaan een overschatting van de huidige toestand, althans in onze doorsnee landbouwgebieden.
+
+
+```{r}
+#| label: tbl-effect-n-veelvoorkomende
+
+n_veelvoorkomend <- 10 * c(1, 2, 4, 8, 16, 32)
+ruisfactor <- 0.4 / 0.15
+uitmiddelingsfactor <- sqrt(3) / sqrt(n_veelvoorkomend)
+effect_foutenmarge <- ruisfactor * uitmiddelingsfactor
+steekproefgroottte_factor <- effect_foutenmarge^2
+
+df <- data.frame(
+  n_veelvoorkomend = n_veelvoorkomend,
+  ruisfactor = ruisfactor,
+  uitmiddelingsfactor = uitmiddelingsfactor,
+  trend_msi_factor = effect_foutenmarge,
+  steekproefgroottte_factor = steekproefgroottte_factor
+)
+
+df |>
+  kable(digits = 2)
+```
+
+
+
 
 ```{r}
 #| label: fig-gai-power-samplesize
