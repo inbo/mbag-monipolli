@@ -417,6 +417,12 @@ all_by_group |>
 ```{r}
 all_by_group_zonder_syr <- all_by_group |> 
   filter(order != "Zweefvliegen") |>
+  mutate(order = factor(
+    order,
+    c("Vogels", "Wilde bijen en wespen", "Dagvlinders"),
+    c("Vogels", "Wilde bijen", "Dagvlinders")
+    )
+  ) |> 
   droplevels()
 all_by_group_zonder_syr |> 
   ggplot() +
@@ -442,12 +448,22 @@ summary(m)
 ```
 
 ```{r}
-marginaleffects::plot_predictions(
+p <- marginaleffects::plot_predictions(
   m,
   condition = c("openheid", "beheer", "order"),
   vcov = TRUE
 ) +
   labs(y = "Aantal soorten")
+p
+
+ggsave(
+  filename = here::here("figure/eindrapportage_1.png"),
+  plot = p,
+  units = "cm",
+  width = 15,
+  height = 10,
+  )
+
 ```
 
 ```{r}
@@ -565,6 +581,15 @@ nd |>
 #### Univariaat model
 
 ```{r}
+all_by_group <- all_by_group |>
+  mutate(
+    order = factor(
+      order,
+      c("Vogels", "Wilde bijen en wespen", "Dagvlinders", "Zweefvliegen"),
+      c("Vogels", "Wilde bijen", "Dagvlinders", "Zweefvliegen")
+    )
+  )
+
 all_by_group |> 
   ggplot() +
   geom_density(aes(x = n_ind, fill = order), alpha = 0.3)
@@ -588,13 +613,21 @@ ms
 ```
 
 ```{r}
-marginaleffects::plot_predictions(
+p <- marginaleffects::plot_predictions(
   m,
   condition = c("openheid", "beheer", "order"),
   vcov = TRUE
 ) +
   labs(
     y = "Aantal individuen"
+  )
+p
+ggsave(
+  filename = here::here("figure/eindrapportage_2.png"),
+  plot = p,
+  units = "cm",
+  width = 15,
+  height = 10,
   )
 ```
 
