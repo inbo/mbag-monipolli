@@ -1,0 +1,162 @@
+---
+references:
+- id: potts2024
+  accessed: "12:33:44"
+  author:
+  - family: Potts
+    given: Simon G.
+  - family: Bartomeus
+    given: Ignasi
+  - family: Biesmeijer
+    given: Koos
+  - family: Breeze
+    given: Tom
+  - family: Casino
+    given: Ana
+  - family: Dauber
+    given: Jens
+  - family: Dieker
+    given: Petra
+  - family: Hochkirch
+    given: Axel
+  - family: Høye
+    given: Toke
+  - family: Isaac
+    given: Nick
+  - family: Kleijn
+    given: David
+  - family: Laikre
+    given: Linda
+  - family: Mandelik
+    given: Yael
+  - family: Montagna
+    given: Matteo
+  - family: Montero
+    given: CASTAÑO Ana
+  - family: Öckinger
+    given: Erik
+  - family: Oteman
+    given: Bas
+  - family: Pardo
+    given: VALLE Adara
+  - family: Polce
+    given: Chiara
+  - family: Povellato
+    given: Andrea
+  - family: Quaranta
+    given: Marino
+  - family: Roy
+    given: David
+  - family: Schweiger
+    given: Oliver
+  - family: Settele
+    given: Josef
+  - family: Ståhls-Mäkelä
+    given: Gunilla
+  - family: Tamborra
+    given: Marialuisa
+  - family: Troost
+    given: Gerard
+  - family: Van
+    given: DER WAL René
+  - family: Vujić
+    given: Ante
+  - family: Zhang
+    given: Jie
+  container-title: JRC Publications Repository
+  DOI: 10.2760/2005545
+  ISBN: 9789268213292
+  ISSN: 1831-9424
+  issued: 2024
+  key: 92NTMHKN
+  language: en
+  libraryID: 1
+  providerKey: 2509FBBE-5BB0-44C4-B119-6083A81ED673
+  title: Refined proposal for an EU pollinator monitoring scheme
+  type: webpage
+  URL: "https://publications.jrc.ec.europa.eu/repository/handle/JRC138660"
+- id: dennis2016
+  accessed: "15:33:13"
+  author:
+  - family: Dennis
+    given: Emily B.
+  - family: Morgan
+    given: Byron J. T.
+  - family: Freeman
+    given: Stephen N.
+  - family: Brereton
+    given: Tom M.
+  - family: Roy
+    given: David B.
+  container-title: Biometrics
+  container-title-short: Biometrics
+  DOI: 10.1111/biom.12506
+  ISSN: 0006-341X
+  issue: 4
+  issued: 2016-12-01
+  key: 3MSK7GQQ
+  libraryID: 1
+  page: 1305-1314
+  providerKey: 2509FBBE-5BB0-44C4-B119-6083A81ED673
+  source: Silverchair
+  title: A Generalized Abundance Index for Seasonal Invertebrates
+  type: article-journal
+  URL: "https://doi.org/10.1111/biom.12506"
+  volume: 72
+- id: dennis2022
+  _eprint: "https://onlinelibrary.wiley.com/doi/pdf/10.1002/ece3.9200"
+  accessed: "14:25:35"
+  author:
+  - family: Dennis
+    given: Emily B.
+  - family: Fagard-Jenkin
+    given: Calliste
+  - family: Morgan
+    given: Byron J. T.
+  container-title: Ecology and Evolution
+  DOI: 10.1002/ece3.9200
+  ISSN: 2045-7758
+  issue: 8
+  issued: 2022
+  key: 8XU7NFST
+  language: en
+  libraryID: 1
+  note: "\\_eprint:
+    https://onlinelibrary.wiley.com/doi/pdf/10.1002/ece3.9200"
+  page: e9200
+  providerKey: 2509FBBE-5BB0-44C4-B119-6083A81ED673
+  rights: © 2022 The Authors. Ecology and Evolution published by John
+    Wiley & Sons Ltd.
+  source: Wiley Online Library
+  title: "rGAI: An R package for fitting the generalized abundance index
+    to seasonal count data"
+  title-short: rGAI
+  type: article-journal
+  URL: "https://onlinelibrary.wiley.com/doi/abs/10.1002/ece3.9200"
+  volume: 12
+- id: gelman2014
+  accessed: 2016-09-30
+  author:
+  - family: Gelman
+    given: Andrew
+  - family: Carlin
+    given: John
+  citationKey: gelman2014
+  container-title: "Perspectives on psychological science : a journal of
+    the Association for Psychological Science"
+  DOI: 10.1177/1745691614551642
+  ISSN: 1745-6924
+  issue: 6
+  issued: 2014-11
+  key: J4GY34DX
+  libraryID: 1
+  page: 641-51
+  PMID: 26186114
+  providerKey: 2509FBBE-5BB0-44C4-B119-6083A81ED673
+  publisher: SAGE Publications
+  title: "Beyond Power Calculations: Assessing Type S (Sign) and Type M
+    (Magnitude) Errors."
+  type: article-journal
+  URL: "http://www.ncbi.nlm.nih.gov/pubmed/26186114"
+  volume: 9
+...

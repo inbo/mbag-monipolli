@@ -1,20 +1,21 @@
 ---
 title: "MONIPOLLI - MAS 2024"
-author: "Emma Cartuyvels"
+author: "Emma Cartuyvels, Hans Van Calster"
 format: 
   html:
     code-fold: true
     toc: true
     toc_float: true
     embed-resources: true
-editor: visual
 editor_options: 
   chunk_output_type: console
 ---
 
 ```{r}
-knitr::opts_chunk$set(message = FALSE,
-                      warning = FALSE)
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE
+)
 ```
 
 ```{r set-up}
@@ -24,19 +25,20 @@ library(ggpubr)
 library(lme4)
 library(tidyverse)
 library(INBOtheme)
-
+library(glmmTMB)
+library(emmeans)
 conflicted::conflicts_prefer(dplyr::filter)
 ```
 
 ## Read data
 
 ```{r}
-beheer_data <- read_csv(here("data", "processed", "bestuivers_2024"))
+beheer_data <- read_csv(here("data", "processed", "bestuivers_2024.csv"))
 ```
 
 ```{r}
-mas_data <- read.csv(here("data", "mas_data_vlaanderen_2018_2024.csv")) |> 
-  filter(is_mas_sample == TRUE, #(om enkel correcte MAS-protocol data te behouden)
+mas_data <- read_csv(here("data", "mas_data_vlaanderen_2018_2024.csv")) |> 
+  filter(occurrenceRemarks == "mas_protocol_sample", #(om enkel correcte MAS-protocol data te behouden)
          year == 2024)
 ```
 
@@ -46,9 +48,14 @@ locations <- beheer_data |>
   pull()
 
 mas_filtered <- mas_data |>
-  filter(locationID %in% locations,
-         organismQuantityType != "individuals") |>
+  filter(
+    locationID %in% locations,
+    !grepl("^Individual", behavior )
+  ) |>
   mutate(organismQuantity = 1)
+
+
+
 ```
 
 ```{r}
@@ -64,6 +71,7 @@ grouped_mas <- mas_filtered |>
 ```
 
 ## Verkennende analyses
+
 ### Wilde bijen versus vogels
 
 ```{r}
@@ -200,6 +208,8 @@ mod_dat <- mas_filtered |>
   left_join(ver_var, by = c("locationID" = "pointid"))
 ```
 
+### Aantal vogelsoorten versus aantal individuen bestuivers
+
 ```{r}
 hist(log(mod_dat$n_ind_pol))
 
@@ -209,7 +219,6 @@ ggplot(mod_dat, aes(x = n_ind_pol, y =n_spec_bird)) +
   geom_point() +
   geom_smooth()
 ```
-
 
 ```{r}
 model1 <- glmer(n_spec_bird ~ n_ind_pol + (1|locationID) + (1|periode_in_jaar),
@@ -225,6 +234,7 @@ performance::check_model(model1)
 summary(model1)
 ```
 
+### Aantal individuen akkervogels versus aantal individuen bestuivers
 
 ```{r}
 model2 <- glmer(n_ind_bird ~ n_ind_pol + openheid_sbp + (1|locationID) +
@@ -241,6 +251,7 @@ performance::check_model(model2)
 summary(model2)
 ```
 
+### Aantal vogelsoorten i.f.v. aantal individuen bestuivers per stratum
 
 ```{r}
 test <- glmer(n_spec_bird ~ scale(n_ind_pol) * openheid_sbp +
@@ -250,11 +261,9 @@ test <- glmer(n_spec_bird ~ scale(n_ind_pol) * openheid_sbp +
 
 summary(test)
 
-marginaleffects::plot_predictions(model = test, condition = c("n_ind_pol", "openheid_sbp"))
-
-ggplot(mod_dat, aes(x = n_ind_pol, y =n_spec_bird, colour = openheid_sbp, group = openheid_sbp)) +
-  geom_point() +
-  geom_smooth(method = "lm") + theme_minimal()
+marginaleffects::plot_predictions(
+  model = test, condition = c("n_ind_pol", "openheid_sbp"), points = 0.5
+)
 ```
 
 ```{r}
@@ -289,5 +298,712 @@ ggplot(mod_dat, aes(x = n_ind_pol, y = n_ind_bird)) +
   ) +
   labs(x = "Totaal aantal bestuivers", y = "Totaal aantal vogels") +
   theme_minimal()
+```
+
+### Aantal soorten per soortengroep, openheid en beheer
+
+Kunnen we met de data van de zandstreek 2024 aantonen dat als het landschap goed is voor de ene soortengroep het misschien ook goed is voor een andere soortengroep. We vragen ons hier dus niet af of er een ecologische relatie is tussen vogels en pollinatoren, bv door de trofische relatie tussen insectenetende vogels en bestuivers als mogelijke prooi (meest plausibel voor rupsen van vlinders).
+
+De vraag is gewoon of de maximaal geobserveerde soortenrijkdom of aantal individuen op een locatie in een bepaald jaar voor die soortengroepen verschillen tussen de strata en of de soortengroepen onderling gelijkaardige patronen vertonen.
+
+Hiervoor gaan we de data verder aggregeren zodat we per locatie en per soortengroep één waarde per jaar bekomen. Voor de vogels betekent dit een aggregatie over de telperiodes. Hiervoor nemen we het maximum. Voor de bestuivers is het een aggregatie over de verschillende maanden en we nemen hiervoor ook het maximum.
+
+De data waarmee we verder werken zijn dus de maximaal aantal geobserveerde individuen of soorten van een soortengroep in een jaar (enkel 2024).
+
+Voor de aantallen soorten laten we de zweefvliegen buiten beschouwing omdat deze nog niet tot op soortniveau gedetermineerd werden.
+
+```{r aggregatie}
+polli <- beheer_data |> 
+  select(pointid, order, species_nm, n_ind, beheer, openheid, maand) |>
+  mutate(source = "bestuivers")
+
+mas <- mas_filtered |>
+   mutate(
+    datum = ymd(eventDate),
+    periode_in_jaar = case_when(
+      datum %within% interval(
+        ymd(paste(jaar, "04-01", sep = "-")),
+        ymd(paste(jaar, "04-20", sep = "-"))
+      ) ~ "R1",
+      datum %within% interval(
+        ymd(paste(jaar, "04-21", sep = "-")),
+        ymd(paste(jaar, "05-10", sep = "-"))
+      ) ~ "R2",
+      datum %within% interval(
+        ymd(paste(jaar, "05-11", sep = "-")),
+        ymd(paste(jaar, "06-10", sep = "-"))
+      ) ~ "R3",
+      datum %within% interval(
+        ymd(paste(jaar, "06-21", sep = "-")),
+        ymd(paste(jaar, "07-15", sep = "-"))
+      ) ~ "R4"
+    )
+  ) |>
+  select(
+    pointid = locationID, periode_in_jaar, n_ind = organismQuantity,
+    species_nm = vernacularName
+  ) |>
+  mutate(source = "akkervogels")
+
+mas_aggregated <- mas |>
+  summarise(
+    n_ind = sum(n_ind),
+    .by = c(pointid, species_nm, source, periode_in_jaar)
+  ) |>
+  summarise(
+    n_ind = max(n_ind),
+    .by = c(pointid, species_nm, source)
+  ) |>
+  complete(pointid, species_nm, source, fill = list(n_ind = 0))
+
+polli_aggregated <- polli |>
+  summarise(
+    n_ind = sum(n_ind),
+    .by = c(pointid, species_nm, source, maand, order, beheer, openheid)
+  ) |>
+  summarise(
+    n_ind = max(n_ind),
+    .by = c(pointid, species_nm, source, order, beheer, openheid)
+  ) |>
+  complete(
+    nesting(pointid, beheer, openheid),
+    nesting(species_nm, source, order),
+    fill = list(n_ind = 0)
+  )
+
+attribs <- polli_aggregated |>
+  distinct(pointid, beheer, openheid)
+
+mas_aggregated <- mas_aggregated |>
+  inner_join(attribs, by = join_by(pointid))
+
+all_aggregated <- bind_rows(
+  mas_aggregated |> mutate(order = "Aves"),
+  polli_aggregated
+) |>
+  mutate(
+    order = factor(
+      order,
+      levels = c("Aves", "Apoidea", "Lepidoptera", "Syrphidae"),
+      labels = c(
+        "Vogels", "Wilde bijen en wespen", "Dagvlinders", "Zweefvliegen"
+      )
+    )
+  )
+
+# even further aggregation at order level
+all_by_group <- all_aggregated |>
+  group_by(pointid, beheer, openheid, order) |>
+  summarize(
+    n_spec = sum(n_ind > 0),
+    n_ind = sum(n_ind)
+  )
+```
+
+```{r}
+glimpse(all_by_group)
+head(all_by_group)
+all_by_group |>
+  group_by(order) |>
+  reframe(
+    across(
+      c(n_spec, n_ind),
+      \(x) data.frame(mean = mean(x), var = var(x)),
+      .unpack = TRUE
+    )
+  )
+```
+
+#### Univariaat model
+
+```{r}
+all_by_group_zonder_syr <- all_by_group |> 
+  filter(order != "Zweefvliegen") |>
+  mutate(order = factor(
+    order,
+    c("Vogels", "Wilde bijen en wespen", "Dagvlinders"),
+    c("Vogels", "Wilde bijen", "Dagvlinders")
+    )
+  ) |> 
+  droplevels()
+all_by_group_zonder_syr |> 
+  ggplot() +
+  geom_density(aes(x = n_spec, fill = order), alpha = 0.3)
+
+
+m <- glmmTMB(
+  n_spec ~
+    beheer * openheid * order + (1 | pointid),
+  family = poisson(link = "log"),
+  data = all_by_group_zonder_syr
+)
+```
+
+```{r}
+performance::check_model(m)
+```
+
+The Poisson distribution appears to be appropriate for the number of species.
+
+```{r}
+summary(m)
+```
+
+```{r}
+p <- marginaleffects::plot_predictions(
+  m,
+  condition = c("openheid", "beheer", "order"),
+  vcov = TRUE
+) +
+  labs(y = "Aantal soorten")
+p
+
+ggsave(
+  filename = here::here("figure/eindrapportage_1.png"),
+  plot = p,
+  units = "cm",
+  width = 15,
+  height = 10,
+  )
+
+```
+
+```{r}
+emm <- emmeans(m, ~ beheer | openheid + order)
+cm <- contrast(emm, "pairwise", type = "response") |> confint()
+cm
+
+contrast(emm, "pairwise")
+
+plot(cm, comparison = TRUE) +
+  coord_flip() +
+  geom_vline(xintercept = 1) +
+  facet_grid(cols = vars(openheid), rows = vars(order), scales = "free")
+```
+
+#### Multivariaat model
+
+```{r}
+library(brms)
+model_path <- here::here("source", "brms_models")
+fs::dir_create(model_path)
+fs::file_create(file.path(model_path, ".gitignore"))
+writeLines(
+  text = 
+"*
+!.gitignore
+",
+  con = file.path(model_path, ".gitignore")
+)
+m <- brm(
+  n_spec ~
+    beheer * openheid + (0 + order | pointid),
+  family = "poisson",
+  data = all_by_group_zonder_syr,
+  backend = "cmdstanr",
+  cores = 4,
+  file_refit = "on_change",
+  file = file.path(model_path, "n_spec_correlated_re")
+)
+
+
+# ~ beheer * openheid + (0 + order + openheid | pointid)
+# ook getest maar was niet beter obv AIC
+# ~ beheer * openheid + (0 + order*openheid | pointid)
+# convergeert niet
+```
+
+```{r}
+pp_check(m, type = "bars")
+```
+
+```{r}
+ms <- summary(m)
+ms
+```
+
+```{r}
+re_df <- ms$random$pointid |>
+  as_tibble(rownames = "component") |> 
+  filter(grepl("^cor", component)) |>
+  select(component, Estimate, `l-95% CI`, `u-95% CI`) 
+
+re_df |> 
+  knitr::kable(digits = 2)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  m,
+  condition = c("openheid", "beheer"),
+  vcov = TRUE
+) +
+  labs(y = "Aantal soorten (globaal over soortengroepen)")
+```
+
+```{r}
+nd <- all_by_group_zonder_syr |>
+  distinct(pointid, beheer, openheid, order) %>%
+  ungroup() %>%
+  filter(complete.cases(.))
+
+pp <- predict(
+  m,
+  newdata = nd,
+  se.fit = TRUE,
+  type = "response",
+  re.form = NULL
+)
+
+nd <- nd |>
+  bind_cols(pp)
+
+nd |>
+  group_by(beheer, openheid) |> 
+  mutate(
+    pointid = reorder(pointid, Estimate, \(x) mean(log(x)))
+  ) |> 
+  ggplot() +
+  geom_pointrange(
+    aes(
+      x = Estimate,
+      xmin = Q2.5,
+      xmax = Q97.5,
+      y = pointid,
+      colour = order
+    )
+  ) +
+  facet_wrap(
+    openheid ~ beheer, scales = "free"
+  ) +
+  labs(colour = "Soortengroep") +
+  scale_x_log10("Geschat aantal individuen (fixed + random effect)")
+```
+
+```{r}
+cordf <- re_df |>
+  mutate(
+    corlabel = sprintf("%.2f\n[%.2f, %.2f]", Estimate, `l-95% CI`, `u-95% CI`),
+    component = gsub("order" ,"", component),
+    component = gsub("cor\\(" ,"", component),
+    component = gsub("\\)" ,"", component),
+    bold = ifelse(!between(rep(0, n()), `l-95% CI`, `u-95% CI`), "bold", "plain")
+  ) |>
+  separate_wider_delim(
+    cols = component, names = c("var1", "var2"), delim = ","
+  ) |>
+  select(
+    var1, var2, corlabel, bold,
+    est = Estimate, lwr = `l-95% CI`, upr = `u-95% CI`
+  ) |>
+  mutate(
+    var1 = factor(
+      var1,
+      c("Vogels", "Wildebijen"),
+      c("Vogels", "Wilde bijen")
+    ),
+    var2 = factor(
+      var2,
+      c("Dagvlinders", "Wildebijen"),
+      c("Dagvlinders", "Wilde bijen")
+    )
+  )
+
+p <- cordf |>
+  ggplot(aes(x = var1, y = var2)) +
+  geom_tile(aes(fill = est), color = "white", linewidth = 1) + 
+  geom_text(
+    aes(label = corlabel, fontface = bold),
+    colour = "black",
+    size = 4
+  ) +
+  scale_fill_gradient2(
+    low = "#B2182B", mid = "white", high = "#2166AC", 
+    midpoint = 0, limits = c(-1, 1), name = "Correlatie"
+  ) +
+  coord_fixed() + 
+  theme_minimal() +
+  labs(x = NULL, y = NULL) +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    axis.text.x = element_text(
+      angle = 45, vjust = 1, hjust = 1,
+      color = "black", size = 11),
+    axis.text.y = element_text(color = "black", size = 11),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+p
+
+ggsave(
+  filename = here::here("figure/eindrapportage_fig8_3.png"),
+  plot = p,
+  units = "cm",
+  width = 15,
+  height = 15,
+  dpi = 300
+)
+```
+
+
+### Aantal individuen per soortengroep, openheid en beheer
+
+#### Univariaat model
+
+```{r}
+all_by_group <- all_by_group |>
+  mutate(
+    order = factor(
+      order,
+      c("Vogels", "Wilde bijen en wespen", "Dagvlinders", "Zweefvliegen"),
+      c("Vogels", "Wilde bijen", "Dagvlinders", "Zweefvliegen")
+    )
+  )
+
+all_by_group |> 
+  ggplot() +
+  geom_density(aes(x = n_ind, fill = order), alpha = 0.3)
+
+m <- glmmTMB(
+  n_ind ~
+    beheer * openheid * order + (1 | pointid),
+  family = "nbinom2",
+  data = all_by_group
+)
+```
+
+```{r}
+performance::check_model(m)
+performance::check_overdispersion(m)
+```
+
+```{r}
+ms <- summary(m)
+ms
+```
+
+```{r}
+p <- marginaleffects::plot_predictions(
+  m,
+  condition = c("openheid", "beheer", "order"),
+  vcov = TRUE
+) +
+  labs(
+    y = "Aantal individuen"
+  )
+p
+ggsave(
+  filename = here::here("figure/eindrapportage_2.png"),
+  plot = p,
+  units = "cm",
+  width = 15,
+  height = 10,
+  )
+```
+
+```{r}
+emm <- emmeans(m, ~ beheer | openheid + order)
+cm <- contrast(emm, "pairwise", type = "response") |> confint()
+cm
+
+contrast(emm, "pairwise")
+
+plot(cm, comparison = TRUE) +
+  coord_flip() +
+  geom_vline(xintercept = 1) +
+  facet_grid(cols = vars(openheid), rows = vars(order), scales = "free")
+```
+
+#### Multivariaat model
+
+We kunnen tot slot ook een gelijkaardig model fitten waar we rekening houden met correlaties tussen de soortengroepen doordat elke locatie zowel metingen heeft van vlinders, zweefvliegen, wilde bijen en vogels.
+
+```{r}
+library(brms)
+m <- brm(
+  n_ind ~
+    beheer * openheid + (0 + order | pointid),
+  family = "poisson",
+  data = all_by_group,
+  backend = "cmdstanr",
+  file_refit = "on_change",
+  cores = 4,
+  file = file.path(model_path, "n_ind_correlated_re")
+)
+
+
+# ~ beheer * openheid + (0 + order + openheid | pointid)
+# ook getest maar was niet beter obv AIC
+# ~ beheer * openheid + (0 + order*openheid | pointid)
+# convergeert niet
+```
+
+```{r}
+pp_check(m, type = "bars")
+```
+
+```{r}
+ms <- summary(m)
+ms
+```
+
+```{r}
+re_df <- ms$random$pointid |>
+  as_tibble(rownames = "component") |> 
+  filter(grepl("^cor", component)) |>
+  mutate(
+    component = gsub("order", "", component)
+  ) |> 
+  select(component, Estimate, `l-95% CI`, `u-95% CI`) 
+
+re_df |> 
+  knitr::kable(digits = 2)
+```
+
+```{r}
+marginaleffects::plot_predictions(
+  m,
+  condition = c("openheid", "beheer"),
+  vcov = TRUE
+) +
+  labs(y = "Aantal individuen (globaal over soortengroepen)")
+```
+
+```{r}
+nd <- all_by_group |>
+  distinct(pointid, beheer, openheid, order) %>%
+  ungroup() %>%
+  filter(complete.cases(.))
+
+pp <- predict(
+  m,
+  newdata = nd,
+  se.fit = TRUE,
+  type = "response",
+  re.form = NULL
+)
+
+nd <- nd |>
+  bind_cols(pp)
+
+nd_df <- nd |>
+  group_by(beheer, openheid) |> 
+  mutate(
+    pointid = reorder(pointid, Estimate, \(x) mean(log(x)))
+  )
+
+nd_df |> 
+  ggplot() +
+  geom_pointrange(
+    aes(
+      x = Estimate,
+      xmin = Q2.5,
+      xmax = Q97.5,
+      y = pointid,
+      colour = order
+    )
+  ) +
+  facet_wrap(
+    openheid ~ beheer, scales = "free"
+  ) +
+  labs(colour = "Soortengroep") +
+  scale_x_log10("Geschat aantal individuen (fixed + random effect)")
+```
+
+
+```{r}
+cordf <- re_df |>
+  mutate(
+    corlabel = sprintf("%.2f\n[%.2f, %.2f]", Estimate, `l-95% CI`, `u-95% CI`),
+    component = gsub("cor\\(" ,"", component),
+    component = gsub("\\)" ,"", component),
+    bold = ifelse(!between(rep(0, n()), `l-95% CI`, `u-95% CI`), "bold", "plain")
+  ) |>
+  separate_wider_delim(
+    cols = component, names = c("var1", "var2"), delim = ","
+  ) |>
+  select(
+    var1, var2, corlabel, bold,
+    est = Estimate, lwr = `l-95% CI`, upr = `u-95% CI`
+  ) |>
+  mutate(
+    var1 = factor(
+      var1,
+      c("Vogels", "Wildebijen", "Dagvlinders"),
+      c("Vogels", "Wilde bijen", "Dagvlinders")
+    ),
+    var2 = factor(
+      var2,
+      c("Zweefvliegen", "Dagvlinders", "Wildebijen"),
+      c("Zweefvliegen", "Dagvlinders", "Wilde bijen")
+    )
+  )
+
+p <- cordf |>
+  ggplot(aes(x = var1, y = var2)) +
+  geom_tile(aes(fill = est), color = "white", linewidth = 1) + 
+  geom_text(
+    aes(label = corlabel, fontface = bold),
+    colour = "black",
+    size = 4
+  ) +
+  scale_fill_gradient2(
+    low = "#B2182B", mid = "white", high = "#2166AC", 
+    midpoint = 0, limits = c(-1, 1), name = "Correlatie"
+  ) +
+  coord_fixed() + 
+  theme_minimal() +
+  labs(x = NULL, y = NULL) +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    axis.text.x = element_text(
+      angle = 45, vjust = 1, hjust = 1,
+      color = "black", size = 11),
+    axis.text.y = element_text(color = "black", size = 11),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+p
+
+ggsave(
+  filename = here::here("figure/eindrapportage_fig8_2.png"),
+  plot = p,
+  units = "cm",
+  width = 15,
+  height = 15,
+  dpi = 300
+)
+```
+
+
+```{r eval=FALSE}
+m <- glmmTMB(
+  n_ind ~ beheer*openheid*order
+  + rr(species_nm + 0 | pointid, 2),
+  family = "poisson",
+  data = polli_aggregated
+)
+
+summary(m)
+marginaleffects::plot_predictions(
+  m,
+  condition = c("beheer", "openheid", "order"),
+  vcov = TRUE
+)
+
+m <- glmmTMB(
+  n_ind ~ beheer*openheid
+  + rr(species_nm + 0 | pointid, 2),
+  family = "poisson",
+  data = mas_aggregated
+)
+
+summary(m)
+marginaleffects::plot_predictions(
+  m,
+  condition = c("beheer", "openheid"),
+  vcov = TRUE
+)
+
+
+m <- glmmTMB(
+  n_ind ~ beheer*openheid*order
+  + rr(species_nm + 0 | pointid, 2),
+  ziformula = ~ order + (1 | species_nm),
+  family = "poisson",
+  data = all_aggregated
+)
+
+summary(m)
+marginaleffects::plot_predictions(
+  m,
+  condition = c("beheer", "openheid", "order"),
+  vcov = TRUE
+)
+
+rf <- as_tibble(ranef(m))
+
+re <- rf |>
+  mutate(
+    lwr = condval - 2 * condsd,
+    upr = condval + 2 * condsd,
+    species_nm = gsub("species_nm", "", term)
+  ) |> 
+  rename(pointid = grp) |>
+  mutate(pointid = as.character(pointid)) |>
+  inner_join(all_aggregated)
+
+re <- re |>
+  group_by(species_nm, source, order, beheer, openheid) |>
+  summarize(
+    condval = mean(condval),
+    condsd = sqrt(mean(condsd^2)),
+    n_ind = mean(n_ind),
+    .groups = "drop"
+  ) |> 
+  mutate(
+    lwr = condval - 2 * condsd,
+    upr = condval + 2 * condsd
+  ) |>
+  mutate(
+    species_nm = reorder(as.character(species_nm), condval),
+    .by = "order"
+  )
+
+
+
+m <- glmmTMB(
+  n_ind ~ order
+  + rr(species_nm + 0 | pointid, 2),
+  ziformula = ~ order + (1 | species_nm),
+  family = "poisson",
+  data = all_aggregated
+)
+
+
+source(system.file("misc", "extract_rr.R", package = "glmmTMB"))
+rr_info <- extract_rr(m)
+lapply(rr_info, dim)
+# fl = species factor loadings
+# b = latent variables by site
+par(las = 1)
+afac <- 4
+sp_names <- abbreviate(gsub("species_nm", "", rownames(rr_info$fl)))
+plot(
+  rr_info$fl[,1],
+  rr_info$fl[,2],
+  xlab = "factor 1",
+  ylab = "factor 2",
+  pch = 16,
+  cex = 2
+)
+text(
+  rr_info$b[,1]*afac*1.05,
+  rr_info$b[,2]*afac*1.05,
+  rownames(rr_info$b)
+)
+arrows(
+  0,
+  0,
+  rr_info$b[,1]*afac,
+  rr_info$b[,2]*afac
+)
+text(
+  rr_info$fl[,1],
+  rr_info$fl[,2],
+  sp_names,
+  pos = 3,
+  col = 2
+)
+
+
 ```
 

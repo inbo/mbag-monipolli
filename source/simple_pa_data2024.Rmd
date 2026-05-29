@@ -31,8 +31,25 @@ library(simr)
 
 At this moment we only have a limited data set to determine our coefficients from.
 
-```{r gegevens 2024}
-bestuivers_2024 <- read_csv(here("data", "processed", "bestuivers_2024"))
+```{r gegevens-2024}
+bestuivers_2024 <- read_csv(here("data", "processed", "bestuivers_2024.csv"))
+
+bestuivers_2024_by_order <- bestuivers_2024 |>
+  rename(location = location_code,
+         month = maand) |>
+  filter(
+    species_nm != "Apis mellifera",
+    method_cd == "TS"
+  ) |>
+  group_by(order, location, month) |>
+  summarise(n_ind = sum(n_ind, na.rm = TRUE)) |>
+  # correct for shorter transects compared to proposed protocol
+  # length new transects / length old transects = (1000 * 3) / (160 * 4) ~= 5
+  mutate(
+    n_ind = n_ind * 5,
+    month = as.factor(month)
+  )
+  
 
 bestuivers_2024 <- bestuivers_2024 |>
   rename(location = location_code,
@@ -45,35 +62,76 @@ bestuivers_2024 <- bestuivers_2024 |>
   summarise(n_ind = sum(n_ind, na.rm = TRUE)) |>
   # correct for shorter transects compared to proposed protocol
   # length new transects / length old transects = (1000 * 3) / (160 * 4) ~= 5
-  mutate(n_ind = n_ind * 5,
-         month = as.factor(month))
+  mutate(
+    n_ind = n_ind * 5,
+    month = as.factor(month)
+  )
 ```
 
-```{r}
-model1 <- glmer(n_ind ~ month + (1 | location),
+```{r glmer-model-pilotdata}
+model1 <- glmer(
+  n_ind ~ month + (1 | location),
   family = "poisson",
   data = bestuivers_2024
 )
 summary(model1)
 
-attr(VarCorr(model1)$location, "stddev")
+sd_loc <- attr(VarCorr(model1)$location, "stddev")
+sd_loc
 ```
+
 ```{r}
-emmeans::emmeans(model1, ~month)
+emmeans::emmeans(model1, ~ month)
 ```
+
+```{r}
+performance::check_overdispersion(model1)
+performance::check_convergence(model1)
+performance::check_outliers(model1)
+performance::check_zeroinflation(model1)
+performance::check_predictions(model1)
+performance::check_group_variation(model1) |> summary()
+
+```
+
+```{r glmer-model-pilotdata-negbinom}
+model2 <- glmer.nb(
+  formula = n_ind ~ month + (1 | location),
+  data = bestuivers_2024
+)
+summary(model2)
+
+sd_loc <- attr(VarCorr(model2)$location, "stddev")
+sd_loc
+```
+
+```{r}
+emmeans::emmeans(model2, ~ month)
+```
+
+```{r}
+performance::check_overdispersion(model2)
+performance::check_convergence(model2)
+performance::check_outliers(model2)
+performance::check_predictions(model2)
+performance::check_group_variation(model2) |> summary()
+```
+
+
+
 
 ## Design Setup
 
-```{r}
+```{r fun-generate-design}
 # Define design variables
-generate_data <- function(n_locations, n_years) {
+generate_design <- function(n_locations, n_years) {
   # Design variables
   years <- as.numeric(1:n_years)
   months <- as.factor(4:9)
   locs <- paste0("loc_", 1:n_locations)
 
   # Base: 1 visit per month per year per location
-  data <- expand.grid(
+  design <- expand.grid(
     location = locs,
     year = years,
     month = months,
@@ -81,8 +139,8 @@ generate_data <- function(n_locations, n_years) {
     stringsAsFactors = FALSE
   )
 
-  data$month <- factor(data$month, levels = levels(months))
-  return(data)
+  design$month <- factor(design$month, levels = levels(months))
+  return(design)
 }
 ```
 
@@ -91,48 +149,62 @@ generate_data <- function(n_locations, n_years) {
 ```{r}
 #' Fixed effects: Intercept (month 4), month 5-9, year (placeholder at index 7)
 #' Month 4 and 5 based on SPRING data
-fixed_base <- c(1.674776, 0,
-                unname(coef(summary(model1))[1, 1]) - 1.674776,
-                unname(coef(summary(model1))[2:4, 1]) +
-                  unname(coef(summary(model1))[1, 1]) - 1.674776,
-                NA)
+fixed_base <- c(
+  1.674776,
+  0,
+  unname(coef(summary(model1))[1, 1]) - 1.674776,
+  unname(coef(summary(model1))[2:4, 1]) +
+    unname(coef(summary(model1))[1, 1]) - 1.674776,
+  NA
+)
 
 # Random effect variance for location and year
 rand_loc <- attr(VarCorr(model1)$location, "stddev")
 rand_year <- 0.15
-
-varcorrmat1 <- list(
-  location = c(rand_loc^2),
-  year = c(rand_year^2)
-)
 ```
 
 ## Power Analysis Function
 
-```{r}
-run_power_analysis <- function(year_slope_percent,
-                               n_locations,
-                               n_years,
-                               nsim = 100) {
-  data <- generate_data(n_locations, n_years)
-
+```{r fun-run-power-analysis}
+run_power_analysis <- function(
+    year_slope_percent,
+    n_locations,
+    n_years,
+    nsim = 100,
+    fixed_effects = fixed_base,
+    sd_rand_year,
+    sd_rand_location = rand_loc
+) {
+  design <- generate_design(n_locations, n_years)
+  
   # Convert percent trend to log scale
   year_slope <- log(1 + year_slope_percent / 100)
-  fixed <- fixed_base
+  fixed <- fixed_effects
   fixed[7] <- year_slope
+  
+  # random components
+  var_corr <- list(
+    location = c(sd_rand_location ^ 2),
+    year = c(sd_rand_year ^ 2)
+  )
 
   # Simulated model with defined structure
   model <- makeGlmer(
     formula = n_ind ~ month + year + (1 | location) + (1 | year),
     family = poisson,
     fixef = fixed,
-    VarCorr = varcorrmat1,
-    data = data
+    VarCorr = var_corr,
+    data = design
   )
 
-  test <- powerSim(model,
-    nsim = nsim, test = fixed("year", "z"),
-    progress = FALSE
+  test <- powerSim(
+    model,
+    nsim = nsim,
+    # maybe change "z" (Wald test) to Likelihood ratio test ("lr")
+    # lr is more precise, but will increase computation time
+    # b/c model needs to be fitted twice, with/without year
+    test = fixed("year", "lr"),
+    progress = TRUE
   )
 
   return(test)
@@ -141,54 +213,131 @@ run_power_analysis <- function(year_slope_percent,
 
 ## Run Power Simulations
 
-```{r}
-# Define trends and locations
-trends <- c(0.5, 1, 2)
-locations <- c(250, 500)
-n_years_v  <- c(6, 8, 10, 12)
+```{r run-simulations}
+library(mirai)
 
-# Run all combinations
-results <- list()
+# 1. Setup Daemons
+n_cores <- parallel::detectCores(logical = FALSE)
+daemons(n_cores, dispatcher = FALSE)
 
-for (ny in n_years_v) {
-  for (t in trends) {
-    for (l in locations) {
-      message(sprintf("n_years %d | trend %.1f%% | locations %d", ny, t, l))
-      result <- run_power_analysis(t, l, n_years = ny, nsim = 500)
-      results[[paste0("ny", ny, "_trend", t, "_loc", l)]] <- result
+# 2. Define Parameter Grid (Flatten the loops)
+trends <- c(1, 2)
+locations <- c(15, 30, 60, 120, 240)
+n_years_v  <- c(6, 12, 24)
+sd_year <- c(0.01, 0.05, 0.15)
+
+param_grid <- expand.grid(
+  sdy = sd_year,
+  ny = n_years_v,
+  t = trends,
+  l = locations,
+  stringsAsFactors = FALSE
+)
+
+pr <- fs::dir_create(
+  here::here("source", "powercalc_results")
+)
+
+# delete saved results?
+delete <- FALSE
+if (delete) fs::file_delete(pr)
+
+# Store promises here
+tasks <- list()
+
+for (i in 1:nrow(param_grid)) {
+  
+  # Extract parameters for this specific row
+  p <- param_grid[i, ]
+  
+  # Construct filename
+  fname <- file.path(
+    pr, 
+    paste0("sdy", p$sdy ,"_ny", p$ny, "_trend", p$t, "_loc", p$l, ".rds")
+  )
+  
+  # Submit to mirai
+  tasks[[i]] <- mirai({
+    library(here)
+    library(lme4)
+    library(simr)
+    # Check cache
+    if (file.exists(fname)) {
+      res <- readRDS(fname)
+      return(summary(res))
     }
-  }
+    
+    # Run Analysis
+    result <- run_power_analysis(
+      year_slope_percent = p$t,
+      n_locations = p$l,
+      n_years = p$ny,
+      nsim = 100, # Per scenario
+      fixed_effects = fixed_base,
+      sd_rand_year = p$sdy,
+      sd_rand_location = rand_loc
+    )
+    
+    # Save and return powerSim object
+    saveRDS(result, file = fname)
+    return(summary(result)) 
+  }, 
+  # Pass parameters and functions
+  environment()
+  )
 }
+
 ```
+
+
 
 ## Summarize Results
 
-```{r}
-# Print summaries
-power_df <- bind_rows(
-  lapply(names(results), function(name) {
-    summary(results[[name]]) |>
-      mutate(
-        year  = as.numeric(str_extract(name, "(?<=ny)\\d+")),
-        trend = str_extract(name, "(?<=trend)\\d+(?:\\.\\d+)?"),
-        points = as.numeric(str_extract(name, "(?<=loc)\\d+"))
-      ) |>
-      select(year, trend, points, everything())
-  })
-)
+```{r collect-results}
+# call_mirai blocks until all tasks are done
+results_collected <- lapply(tasks, call_mirai)
 
+# Attach results back to the grid
+power_df <- param_grid |>
+  bind_cols(
+    lapply(results_collected, \(x) x$data) |> bind_rows()
+  ) |>
+  as_tibble() |>
+  rename(
+    sd_year = sdy,
+    n_years = ny,
+    trend = t,
+    locations = l
+  ) |>
+  mutate(
+    trend = factor(trend)
+  )
+
+# View Results
 power_df
+
+# Clean up
+daemons(0)
 ```
+
 
 ## Extract and Plot Power Results
 
-```{r}
-# Plot power curve
+```{r plot-power-curves}
 library(ggplot2)
-ggplot(power_df, aes(x = points, y = mean, color = trend)) +
-  geom_line(size = 1.2) +
-  geom_ribbon(aes(ymin = lower, ymax = upper, fill = trend, colour = NULL),
-    alpha = 0.1
+ggplot(
+  power_df,
+  aes(x = locations, y = mean, color = trend)
+) +
+  geom_line(linewidth = 1.2) +
+  geom_ribbon(
+    aes(
+      ymin = lower,
+      ymax = upper,
+      fill = trend,
+      colour = NULL
+    ),
+    alpha = 0.2
   ) +
   geom_point() +
   geom_hline(
@@ -197,13 +346,16 @@ ggplot(power_df, aes(x = points, y = mean, color = trend)) +
     color = "darkgrey"
   ) +
   scale_y_continuous(limits = c(0, 1)) +
+  scale_x_continuous(breaks = locations) +
+  guides(x = guide_axis(check.overlap = TRUE)) +
   labs(
     title = "Power to Detect Yearly Trends",
     x = "Number of Locations",
     y = "Power"
   ) +
-  theme_minimal() +
-  facet_grid(~year)
+  facet_grid(
+    sprintf("SD jaar: %.02f", sd_year) ~ sprintf("Aantal jaren: %02d", n_years)
+  )
 ```
 
 # Wild bees

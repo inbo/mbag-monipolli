@@ -33,6 +33,9 @@ conflicted::conflicts_prefer(dplyr::filter)
 ```
 
 ```{r read data}
+# zandstreek_2024.xlsx is missing
+# Kevin via mail: Database_zandstreek_2024_voor_Emma_Hans.xlsx
+# toegevoegd en hernoemt 
 identifications <- read_excel(here("data", "zandstreek_2024.xlsx"),
   sheet = "identifications"
 )
@@ -43,22 +46,31 @@ samples <- read_excel(here("data", "zandstreek_2024.xlsx"),
 
 locations <- read_excel(here("data", "zandstreek_2024.xlsx"),
   sheet = "locations-localities"
-)
+) |> 
+  janitor::clean_names()
 ```
 
 ```{r read point data}
 locations <- locations |>
   mutate(pointid = str_extract(location_nm, "Zn_.*")) |>
-  select(location_id, location_code, Crops, pointid)
+  select(location_id, location_code, starts_with("crops"), pointid)
 
-punten <- read_sf(here("data", "steekproef_zandstreek_avimap.gpkg")) |>
+punten <- git2rdata::read_vc(
+  file = "steekproef_zandstreek_avimap",
+  root = here("data")
+  ) |>
+  sf::st_as_sf(wkt = "WKT", crs = 4326) |> 
+  st_transform(crs = 31370) |> 
   right_join(locations, by = "pointid") |>
-  separate_wider_delim(openheid_sbp,
-                       names = c("openheid", "beheer"),
-                       delim = " ",
-                       too_many = "merge",
-                       cols_remove = FALSE)
+  separate_wider_delim(
+    openheid_sbp,
+    names = c("openheid", "beheer"),
+    delim = " ",
+    too_many = "merge",
+    cols_remove = FALSE
+  )
 ```
+
 
 We filteren de data om enkel wilde bijen over te houden, dus geen honingbijen.
 
@@ -66,13 +78,17 @@ We filteren de data om enkel wilde bijen over te houden, dus geen honingbijen.
 identifications <- identifications |>
   janitor::clean_names() |>
   select(sample_id, sample_code, method,
-         order, species_nm, n_ind = mm_ff) |>
-  mutate(n_ind = ifelse(is.na(n_ind),
-                        0,
-                        n_ind)
+         order, species_nm,
+         n_males = mm,
+         n_females = ff) |>
+  mutate(
+    n_males = ifelse(is.na(n_males), 0, n_males),
+    n_females = ifelse(is.na(n_females), 0, n_females),
+    n_ind = n_males + n_females
   ) |>
   filter(species_nm != "Apis mellifera",
-         str_detect(sample_code, "2024"))
+         str_detect(sample_code, "2024")) |> 
+  select(-n_males, -n_females)
 
 samples <- samples |>
   filter(str_detect(sample_code, "2024"),
@@ -107,6 +123,38 @@ dat_2024 <- identifications |>
   mutate(maand = as.character(month(date_b))) |>
   mutate(maand = ifelse(maand == 10, 9, maand))
 ```
+
+
+
+
+```{r}
+all_species <- identifications |>
+  distinct(species_nm)
+
+# get order from gbif
+gbif <- purrr::map(
+  all_species$species_nm,
+  \(x) rgbif::name_backbone(name = x)
+)
+
+gbif_df <- bind_rows(gbif) |>
+  rename(species_nm = verbatim_name) |>
+  filter(matchType != "NONE") |> 
+  select(
+    species_nm,
+    scientificName,
+    rank,
+    status,
+    confidence,
+    matchType,
+    order,
+    family,
+    genus,
+    species
+  )
+
+```
+
 
 # Proefopzet
 
@@ -157,6 +205,38 @@ venn <- function(data, group,
 ```
 
 ## Per orde
+
+```{r}
+dat_2024 |>
+  count(order, species_nm, name = "frequentie") |>
+  arrange(order, -frequentie) |>
+  knitr::kable()
+```
+
+
+```{r}
+dat_2024 |>
+  left_join(
+    gbif_df, by = join_by(species_nm),
+    suffix = c("_orig", "_gbif")
+  ) |> 
+  count(order_orig, order_gbif, family, name = "frequentie") |>
+  arrange(order_orig, -frequentie) |>
+  knitr::kable()
+```
+
+
+```{r}
+dat_2024 |>
+  left_join(
+    gbif_df, by = join_by(species_nm),
+    suffix = c("_orig", "_gbif")
+  ) |> 
+  count(order_orig, order_gbif, family, genus, name = "frequentie") |>
+  arrange(order_orig, -frequentie) |>
+  knitr::kable()
+```
+
 
 ```{r}
 #| label: fig-order-ind
@@ -259,10 +339,11 @@ dat_2024 |>
 
 ```{r}
 beheer_data <- dat_2024 |>
-  left_join(punten, by = "location_code")
+  left_join(punten, by = c("location_code"))
 
+fs::dir_create(here("data", "processed"))
 write_csv(beheer_data,
-          here("data", "processed", "bestuivers_2024"))
+          here("data", "processed", "bestuivers_2024.csv"))
 ```
 
 ```{r}
@@ -426,7 +507,7 @@ Er lijkt interactie op te treden.
 ```{r}
 sum_dat <- beheer_data |>
   mutate(maand = as.factor(month(date_b))) |>
-  group_by(maand, order, location_code, openheid, beheer, method_cd, Crops) |>
+  group_by(maand, order, location_code, openheid, beheer, method_cd, crops) |>
   summarise(n_ind = sum(n_ind),
             n_spec = n_distinct(species_nm, na.rm = TRUE)) |>
   ungroup()
@@ -438,9 +519,32 @@ mod_dat <- sum_dat |>
   right_join(aanvul)
 ```
 
+
+## Interpretatie figuren over contrasten
+
+::: {.callout-note}
+De zwarte punten zijn de (teruggetransformeerde) gemiddelden.
+De brede blauwe lijnen zijn de 95% betrouwbaarheidsintervallen.
+De rode pijlen kunnen worden gebruikt om visueel in te schatten of twee groepen significant van elkaar verschillen.
+Als de rode pijlen van de twee groepen elkaar niet overlappen, dan verschillen de twee groepen significant van elkaar op significantieniveau 5% (na correctie voor multiple testing).
+
+De exacte schatting en p-waarden van de verschillen tussen de groepen is telkens weergegeven in de tabel boven deze figuren. 
+
+Voor meer informatie zie:
+
+-   <https://rvlenth.github.io/emmeans/articles/comparisons.html#graphical>
+-   <https://rvlenth.github.io/emmeans/articles/xplanations.html#arrows>
+:::
+
+
 ## Aantal soorten
 
+Analyse zonder Syrphidae want meeste waarnemingen zijn niet op soortnaam gebracht.
+
+
 ```{r}
+mod_dat_zonder_syr <- mod_dat |> filter(order != "Syrphidae")
+
 model1 <- glmmTMB(
   n_spec ~
     (maand
@@ -449,9 +553,11 @@ model1 <- glmmTMB(
   family = "poisson",
   ziformula = ~method_cd * order,
   na.action = na.omit,
-  data = mod_dat |> filter(order != "Syrphidae")
+  data = mod_dat_zonder_syr
 )
 ```
+
+
 
 ```{r}
 summary(model1)
@@ -463,15 +569,97 @@ performance::check_model(model1)
 performance::check_overdispersion(model1)
 ```
 
+### Contrast methode
+
 ```{r}
-#| label: model1-method
+em <- emmeans::emmeans(model1, pairwise ~ (method_cd | order + maand))
+em$contrasts
+```
+
+```{r}
+#| label: model1-method-order
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van methode."
+
+p <- plot(em, comparison = TRUE, type = "response", ) +
+  coord_flip() +
+  facet_grid(cols = vars(maand), rows = vars(order), scales = "free")
+
+p +
+  labs(x = "Voorspeld aantal soorten")
+```
+
+### Contrast openheid landschap
+
+```{r}
+em <- emmeans::emmeans(model1, pairwise ~ (openheid | order + method_cd))
+em$contrasts
+```
+
+```{r}
+#| label: model1-openheid-method-order
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van openheid landschap."
+
+p <- plot(em, comparison = TRUE, type = "response", ) +
+  coord_flip() +
+  facet_grid(cols = vars(method_cd), rows = vars(order), scales = "free")
+
+p +
+  labs(x = "Voorspeld aantal soorten")
+```
+
+
+### Contrast beheer
+
+```{r}
+em <- emmeans::emmeans(model1, pairwise ~ (beheer | order + method_cd))
+em$contrasts
+```
+
+```{r}
+#| label: model1-beheer-method-order
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van beheer."
+
+p <- plot(em, comparison = TRUE, type = "response", ) +
+  coord_flip() +
+  facet_grid(cols = vars(method_cd), rows = vars(order), scales = "free")
+
+p +
+  labs(x = "Voorspeld aantal soorten")
+```
+
+
+### Contrast maand
+
+```{r}
+em <- emmeans::emmeans(model1, pairwise ~ (maand | order + method_cd))
+em$contrasts
+```
+
+```{r}
+#| label: model1-maand_signif_ap
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand."
+
+p <- plot(em, comparison = TRUE, type = "response", ) +
+  coord_flip() +
+  facet_grid(cols = vars(method_cd), rows = vars(order), scales = "free")
+
+p +
+  labs(x = "Voorspeld aantal soorten")
+```
+
+
+
+### Verdere figuren
+
+```{r}
+#| label: model1-method-maand-order
 #| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en
 #|  methode van inzamelen."
 #| fig-width: 12
 
 marginaleffects::plot_predictions(
   model1,
-  condition = c("maand", "method_cd", "order"),
+  condition = c("method_cd", "maand", "order"),
   type = "response",
   vcov = TRUE
 ) +
@@ -479,29 +667,30 @@ marginaleffects::plot_predictions(
 ```
 
 ```{r}
-#| label: model1-openheid
-#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en
+#| label: model1-openheid-methode-orde
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van methode, soortgroep en
 #|  openheid landschap."
 #| fig-width: 12
 
 marginaleffects::plot_predictions(
   model1,
-  condition = c("maand", "openheid", "order"),
+  condition = c( "method_cd","openheid", "order"),
   type = "response",
   vcov = TRUE
 ) +
   labs(y = "Aantal soorten")
 ```
 
+
 ```{r}
-#| label: model1-beheer
-#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van maand, soortgroep en of
+#| label: model1-beheer-method-order-2
+#| fig-cap: "Gemodelleerd aantal soorten afhankelijk van methode, soortgroep en of
 #|  de locatie al dan niet binnen een beheerplan valt."
 #| fig-width: 12
 
 marginaleffects::plot_predictions(
   model1,
-  condition = c("maand", "beheer", "order"),
+  condition = c("method_cd","beheer", "order"),
   type = "response",
   vcov = TRUE
 ) +
@@ -537,155 +726,87 @@ performance::check_overdispersion(model2)
 ```
 
 ### Contrast methode
+
 ```{r}
-em <- emmeans::emmeans(model2, pairwise ~ (method_cd | order))
+em <- emmeans::emmeans(model2, pairwise ~ (method_cd | order + maand))
 em$contrasts
+```
+
+```{r}
+#| label: model2-method-order
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van methode."
+
+p <- plot(em, comparison = TRUE, type = "response", ) +
+  coord_flip() +
+  facet_grid(cols = vars(maand), rows = vars(order), scales = "free")
+
+p +
+  labs(x = "Voorspeld aantal individuen")
 ```
 
 ### Contrast openheid landschap
+
 ```{r}
-em <- emmeans::emmeans(model2, pairwise ~ (openheid | order))
+em <- emmeans::emmeans(model2, pairwise ~ (openheid | order + method_cd))
 em$contrasts
 ```
+
+```{r}
+#| label: model2-openheid-method-order
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van openheid landschap."
+
+p <- plot(em, comparison = TRUE, type = "response", ) +
+  coord_flip() +
+  facet_grid(cols = vars(method_cd), rows = vars(order), scales = "free")
+
+p +
+  labs(x = "Voorspeld aantal individuen")
+```
+
 
 ### Contrast beheer
+
 ```{r}
-em <- emmeans::emmeans(model2, pairwise ~ (beheer | order))
+em <- emmeans::emmeans(model2, pairwise ~ (beheer | order + method_cd))
 em$contrasts
 ```
 
-### Contrast maand en figuren
 ```{r}
-em <- emmeans::emmeans(model2, pairwise ~ (maand | order))
+#| label: model2-beheer-method-order
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van beheer."
+
+p <- plot(em, comparison = TRUE, type = "response", ) +
+  coord_flip() +
+  facet_grid(cols = vars(method_cd), rows = vars(order), scales = "free")
+
+p +
+  labs(x = "Voorspeld aantal individuen")
+```
+
+
+### Contrast maand
+
+```{r}
+em <- emmeans::emmeans(model2, pairwise ~ (maand | order + method_cd))
 em$contrasts
 ```
 
 ```{r}
 #| label: model2-maand_signif_ap
-#| fig-cap: "Gemodelleerd aantal individuen wilde bijen afhankelijk van maand."
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand."
 
-pred_ind <- marginaleffects::plot_predictions(
-  model2,
-  condition = c("maand", "order"),
-  type = "response",
-  vcov = TRUE,
-  draw = FALSE
-)
+p <- plot(em, comparison = TRUE, type = "response", ) +
+  coord_flip() +
+  facet_grid(cols = vars(method_cd), rows = vars(order), scales = "free")
 
-pred_ind |>
-  filter(order == "Apoidea") |>
-  ggplot(aes(
-    x = maand,
-    y = estimate
-  )) +
-  geom_pointrange(
-    aes(
-      ymin = conf.low,
-      ymax = conf.high
-    ),
-    color = "cornflowerblue",
-    position = position_dodge(width = 0.5)
-  ) +
-  labs(
-    y = "Number of individuals",
-    x = "Maand"
-  ) +
-  geom_signif(
-    comparisons = list(
-      c(1, 4),
-      c(2, 3),
-      c(2, 4),
-      c(3, 4)
-    ),
-    annotations = c(
-      "***", "***",
-      "***", "***"
-    ),
-    y_position = c(10.2, 9.4, 9.8, 9.4),
-    tip_length = 0.01,
-    vjust = 0.5
-  )
+p +
+  labs(x = "Voorspeld aantal individuen")
 ```
 
-```{r}
-#| label: model2-maand_signif_syr
-#| fig-cap: "Gemodelleerd aantal individuen zweefvliegen afhankelijk van maand."
-
-pred_ind |>
-  filter(order == "Syrphidae") |>
-  ggplot(aes(
-    x = maand,
-    y = estimate
-  )) +
-  geom_pointrange(
-    aes(
-      ymin = conf.low,
-      ymax = conf.high
-    ),
-    color = "cornflowerblue",
-    position = position_dodge(width = 0.5)
-  ) +
-  labs(
-    y = "Number of individuals",
-    x = "Maand"
-  ) +
-  geom_signif(
-    comparisons = list(
-      c(1, 2),
-      c(1, 4),
-      c(2, 3),
-      c(2, 4)
-    ),
-    annotations = c(
-      "*", "*",
-      "***", "***"
-    ),
-    y_position = c(33, 35, 33, 34),
-    tip_length = 0.01,
-    vjust = 0.5
-  )
-```
-
-```{r}
-#| label: model2-maand_signif_lep
-#| fig-cap: "Gemodelleerd aantal individuen vlinders afhankelijk van maand."
-
-pred_ind |>
-  filter(order == "Lepidoptera") |>
-  ggplot(aes(
-    x = maand,
-    y = estimate
-  )) +
-  geom_pointrange(
-    aes(
-      ymin = conf.low,
-      ymax = conf.high
-    ),
-    color = "cornflowerblue",
-    position = position_dodge(width = 0.5)
-  ) +
-  labs(
-    y = "Number of individuals",
-    x = "Maand"
-  ) +
-  geom_signif(
-    comparisons = list(
-      c(1, 2),
-      c(1, 3),
-      c(2, 4),
-      c(3, 4)
-    ),
-    annotations = c(
-      "*", "***",
-      "*", "**"
-    ),
-    y_position = c(4.8,5,5.25,4.8),
-    tip_length = 0.01,
-    vjust = 0.5
-  )
-```
 
 ### Verdere figuren
+
+
 ```{r}
 #| label: model2-method
 #| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
@@ -694,7 +815,7 @@ pred_ind |>
 
 marginaleffects::plot_predictions(
   model2,
-  condition = c("maand", "method_cd", "order"),
+  condition = c("method_cd", "maand","order"),
   type = "response",
   vcov = TRUE
 ) +
@@ -703,13 +824,13 @@ marginaleffects::plot_predictions(
 
 ```{r}
 #| label: model2-openheid
-#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van methode, soortgroep en
 #|  openheid landschap."
 #| fig-width: 12
 
 marginaleffects::plot_predictions(
   model2,
-  condition = c("maand", "openheid", "order"),
+  condition = c("method_cd", "openheid", "order"),
   type = "response",
   vcov = TRUE
 ) +
@@ -718,13 +839,13 @@ marginaleffects::plot_predictions(
 
 ```{r}
 #| label: model2-beheer
-#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep en
+#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van methode, soortgroep en
 #|  of de locatie al dan niet binnen een beheerplan valt."
 #| fig-width: 12
 
 marginaleffects::plot_predictions(
   model2,
-  condition = c("maand", "beheer", "order"),
+  condition = c("method_cd", "beheer", "order"),
   type = "response",
   vcov = TRUE
 ) +
@@ -733,15 +854,18 @@ marginaleffects::plot_predictions(
 
 ```{r}
 #| label: model2-methode-openheid
-#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep, 
-#| methode van inzamelen en openheid landschap."
+#| fig-cap: |
+#|   Gemodelleerd aantal individuen afhankelijk van maand, soortgroep, 
+#|   methode van inzamelen en openheid landschap.
 #| fig-width: 12
 
-predictions <- marginaleffects::avg_predictions(model2,
-                                                by = c("maand",
-                                                       "openheid",
-                                                       "method_cd",
-                                                       "order"))
+predictions <- marginaleffects::avg_predictions(
+  model2,
+  by = c("maand",
+         "openheid",
+         "method_cd",
+         "order")
+)
 
 ggplot(predictions,
        aes(x = maand,
@@ -757,16 +881,19 @@ ggplot(predictions,
 
 ```{r}
 #| label: model2-methode-beheer
-#| fig-cap: "Gemodelleerd aantal individuen afhankelijk van maand, soortgroep, 
-#| methode van inzamelen en of de locatie al dan niet binnen een beheerplan 
-#| valt."
+#| fig-cap: |
+#|   Gemodelleerd aantal individuen afhankelijk van maand, soortgroep, 
+#|   methode van inzamelen en of de locatie al dan niet binnen een beheerplan 
+#|   valt.
 #| fig-width: 12
 
-predictions <- marginaleffects::avg_predictions(model2,
-                                                by = c("maand",
-                                                       "beheer",
-                                                       "method_cd",
-                                                       "order"))
+predictions <- marginaleffects::avg_predictions(
+  model2,
+  by = c("maand",
+         "beheer",
+         "method_cd",
+         "order")
+)
 
 ggplot(predictions,
        aes(x = maand,

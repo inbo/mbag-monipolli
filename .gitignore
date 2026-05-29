@@ -22,4 +22,5 @@ libs
 output
 renv/library
 figure
-source/data_analysis_spring/data_analysis_spring_2023_cache/**
+*_cache/
+.positai
