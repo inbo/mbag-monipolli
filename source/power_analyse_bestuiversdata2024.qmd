@@ -2147,6 +2147,64 @@ power_df_gai |>
 
 
 ```{r}
+#| label: fig-gai-power-sdjaar-0.15-varpart0.1-english
+#| fig-cap: Sample size as a function of power for the most likely scenario
+#|  (variance between years = 0.15² of which 90% species independent).
+#|  When power exceeded 0.80, more powerfull designs were extrapolated.
+power_df_gai |>
+  filter(sd_jaar_tot == 0.15, varpart_jaar == 0.1) |> 
+  mutate(
+    n_jaren = factor(n_jaren)
+  ) |>
+  ungroup() |>
+  complete(
+    trend, n_jaren, n_herhalingen
+  ) |>
+  mutate(
+    power_mean = ifelse(is.na(power_mean), 1, power_mean),
+    power_lower = ifelse(is.na(power_lower), 1, power_lower),
+    power_upper = ifelse(is.na(power_upper), 1, power_upper),
+    Calculation = ifelse(is.na(sd_jaar_tot), "extrapolated", "simulated")
+  ) |>
+  ggplot(
+    aes(x = n_herhalingen * 4,
+        y = power_mean,
+        ymin = power_lower,
+        ymax = power_upper)
+  ) +
+  geom_line(
+    aes(colour = n_jaren),
+    linewidth = 1.2, alpha = 0.2) +
+  geom_ribbon(
+    aes(
+      fill = n_jaren,
+      colour = NULL
+    ),
+    alpha = 0.1
+  ) +
+  geom_pointrange(aes(colour = n_jaren, shape = Calculation)) +
+  geom_hline(
+    yintercept = 0.8,
+    linetype = 2,
+    color = "darkgrey"
+  ) +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_continuous() +
+  guides(x = guide_axis(check.overlap = TRUE)) +
+  labs(
+    x = "Number of locations",
+    y = "Power",
+    colour = "Number of years",
+    fill = "Number of years"
+  ) +
+  facet_grid(
+    vars(sprintf("Trend: %.d%%", trend))
+  )
+```
+
+
+
+```{r}
 #| label: fig-type-m-fout
 #| fig-cap: Type M fout. Wanneer een meetnet te weinig onderscheidend vermogen
 #|   heeft en er toch significante effecten worden gevonden, zijn dit
