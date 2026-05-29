@@ -23,3 +23,4 @@ output
 renv/library
 figure
 *_cache/
+.positai
