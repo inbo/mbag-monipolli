@@ -1,6 +1,6 @@
 ---
 title: "MONIPOLLI - MAS 2024"
-author: "Emma Cartuyvels"
+author: "Emma Cartuyvels, Hans Van Calster"
 format: 
   html:
     code-fold: true
@@ -12,8 +12,10 @@ editor_options:
 ---
 
 ```{r}
-knitr::opts_chunk$set(message = FALSE,
-                      warning = FALSE)
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE
+)
 ```
 
 ```{r set-up}
@@ -521,10 +523,12 @@ ms
 ```
 
 ```{r}
-ms$random$pointid |>
+re_df <- ms$random$pointid |>
   as_tibble(rownames = "component") |> 
   filter(grepl("^cor", component)) |>
-  select(component, Estimate, `l-95% CI`, `u-95% CI`) |> 
+  select(component, Estimate, `l-95% CI`, `u-95% CI`) 
+
+re_df |> 
   knitr::kable(digits = 2)
 ```
 
@@ -575,6 +579,76 @@ nd |>
   labs(colour = "Soortengroep") +
   scale_x_log10("Geschat aantal individuen (fixed + random effect)")
 ```
+
+```{r}
+cordf <- re_df |>
+  mutate(
+    corlabel = sprintf("%.2f\n[%.2f, %.2f]", Estimate, `l-95% CI`, `u-95% CI`),
+    component = gsub("order" ,"", component),
+    component = gsub("cor\\(" ,"", component),
+    component = gsub("\\)" ,"", component),
+    bold = ifelse(!between(rep(0, n()), `l-95% CI`, `u-95% CI`), "bold", "plain")
+  ) |>
+  separate_wider_delim(
+    cols = component, names = c("var1", "var2"), delim = ","
+  ) |>
+  select(
+    var1, var2, corlabel, bold,
+    est = Estimate, lwr = `l-95% CI`, upr = `u-95% CI`
+  ) |>
+  mutate(
+    var1 = factor(
+      var1,
+      c("Vogels", "Wildebijen"),
+      c("Vogels", "Wilde bijen")
+    ),
+    var2 = factor(
+      var2,
+      c("Dagvlinders", "Wildebijen"),
+      c("Dagvlinders", "Wilde bijen")
+    )
+  )
+
+p <- cordf |>
+  ggplot(aes(x = var1, y = var2)) +
+  geom_tile(aes(fill = est), color = "white", linewidth = 1) + 
+  geom_text(
+    aes(label = corlabel, fontface = bold),
+    colour = "black",
+    size = 4
+  ) +
+  scale_fill_gradient2(
+    low = "#B2182B", mid = "white", high = "#2166AC", 
+    midpoint = 0, limits = c(-1, 1), name = "Correlatie"
+  ) +
+  coord_fixed() + 
+  theme_minimal() +
+  labs(x = NULL, y = NULL) +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    axis.text.x = element_text(
+      angle = 45, vjust = 1, hjust = 1,
+      color = "black", size = 11),
+    axis.text.y = element_text(color = "black", size = 11),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+p
+
+ggsave(
+  filename = here::here("figure/eindrapportage_fig8_3.png"),
+  plot = p,
+  units = "cm",
+  width = 15,
+  height = 15,
+  dpi = 300
+)
+```
+
 
 ### Aantal individuen per soortengroep, openheid en beheer
 
@@ -678,13 +752,15 @@ ms
 ```
 
 ```{r}
-ms$random$pointid |>
+re_df <- ms$random$pointid |>
   as_tibble(rownames = "component") |> 
   filter(grepl("^cor", component)) |>
   mutate(
     component = gsub("order", "", component)
   ) |> 
-  select(component, Estimate, `l-95% CI`, `u-95% CI`) |> 
+  select(component, Estimate, `l-95% CI`, `u-95% CI`) 
+
+re_df |> 
   knitr::kable(digits = 2)
 ```
 
@@ -714,11 +790,13 @@ pp <- predict(
 nd <- nd |>
   bind_cols(pp)
 
-nd |>
+nd_df <- nd |>
   group_by(beheer, openheid) |> 
   mutate(
     pointid = reorder(pointid, Estimate, \(x) mean(log(x)))
-  ) |> 
+  )
+
+nd_df |> 
   ggplot() +
   geom_pointrange(
     aes(
@@ -735,6 +813,76 @@ nd |>
   labs(colour = "Soortengroep") +
   scale_x_log10("Geschat aantal individuen (fixed + random effect)")
 ```
+
+
+```{r}
+cordf <- re_df |>
+  mutate(
+    corlabel = sprintf("%.2f\n[%.2f, %.2f]", Estimate, `l-95% CI`, `u-95% CI`),
+    component = gsub("cor\\(" ,"", component),
+    component = gsub("\\)" ,"", component),
+    bold = ifelse(!between(rep(0, n()), `l-95% CI`, `u-95% CI`), "bold", "plain")
+  ) |>
+  separate_wider_delim(
+    cols = component, names = c("var1", "var2"), delim = ","
+  ) |>
+  select(
+    var1, var2, corlabel, bold,
+    est = Estimate, lwr = `l-95% CI`, upr = `u-95% CI`
+  ) |>
+  mutate(
+    var1 = factor(
+      var1,
+      c("Vogels", "Wildebijen", "Dagvlinders"),
+      c("Vogels", "Wilde bijen", "Dagvlinders")
+    ),
+    var2 = factor(
+      var2,
+      c("Zweefvliegen", "Dagvlinders", "Wildebijen"),
+      c("Zweefvliegen", "Dagvlinders", "Wilde bijen")
+    )
+  )
+
+p <- cordf |>
+  ggplot(aes(x = var1, y = var2)) +
+  geom_tile(aes(fill = est), color = "white", linewidth = 1) + 
+  geom_text(
+    aes(label = corlabel, fontface = bold),
+    colour = "black",
+    size = 4
+  ) +
+  scale_fill_gradient2(
+    low = "#B2182B", mid = "white", high = "#2166AC", 
+    midpoint = 0, limits = c(-1, 1), name = "Correlatie"
+  ) +
+  coord_fixed() + 
+  theme_minimal() +
+  labs(x = NULL, y = NULL) +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    axis.text.x = element_text(
+      angle = 45, vjust = 1, hjust = 1,
+      color = "black", size = 11),
+    axis.text.y = element_text(color = "black", size = 11),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+p
+
+ggsave(
+  filename = here::here("figure/eindrapportage_fig8_2.png"),
+  plot = p,
+  units = "cm",
+  width = 15,
+  height = 15,
+  dpi = 300
+)
+```
+
 
 ```{r eval=FALSE}
 m <- glmmTMB(
